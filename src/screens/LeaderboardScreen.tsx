@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DepartmentRanking, UserProfile, Post } from '../types';
-import { TOP_LEADERBOARD_USERS, INITIAL_USER_PROFILE } from '../data/initialData';
+import { TOP_LEADERBOARD_USERS, INITIAL_USER_PROFILE, WEEKLY_CAMPUS_RANKINGS } from '../data/initialData';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { 
@@ -12,7 +12,13 @@ import {
   Medal, 
   ShieldCheck,
   Send,
-  CheckCircle2
+  CheckCircle2,
+  TrendingUp,
+  ThumbsUp,
+  MessageSquare,
+  FileText,
+  Flame,
+  Star
 } from 'lucide-react';
 
 interface LeaderboardScreenProps {
@@ -38,7 +44,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   departmentRankings = DEFAULT_DEPARTMENTS,
   onSubmitVerificationRequest,
 }) => {
-  const [activeLeaderTab, setActiveLeaderTab] = useState<'students' | 'departments' | 'badges' | 'verify'>('students');
+  const [activeLeaderTab, setActiveLeaderTab] = useState<'students' | 'weekly' | 'departments' | 'badges' | 'verify'>('weekly');
+  const [weeklySubCategory, setWeeklySubCategory] = useState<'engaging' | 'helpful' | 'trending'>('engaging');
   const [verifCategory, setVerifCategory] = useState('Trusted Student Leader (Clinical Skills Mentor)');
   const [verifStatement, setVerifStatement] = useState('');
   const [verifSubmitted, setVerifSubmitted] = useState(false);
@@ -80,6 +87,18 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       {/* Tabs */}
       <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-none">
         <button
+          onClick={() => setActiveLeaderTab('weekly')}
+          className={`flex items-center gap-2 py-3 px-5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+            activeLeaderTab === 'weekly'
+              ? 'border-amber-600 text-amber-700 bg-amber-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Flame size={18} className="text-amber-600" />
+          Weekly Campus Rankings
+        </button>
+
+        <button
           onClick={() => setActiveLeaderTab('students')}
           className={`flex items-center gap-2 py-3 px-5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all cursor-pointer ${
             activeLeaderTab === 'students'
@@ -88,7 +107,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           }`}
         >
           <Crown size={18} />
-          Top Student Contributors
+          All-Time Honor Roll
         </button>
 
         <button
@@ -127,6 +146,180 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           Apply for Verification
         </button>
       </div>
+
+      {/* TAB 0: WEEKLY CAMPUS RANKINGS */}
+      {activeLeaderTab === 'weekly' && (
+        <div className="space-y-6">
+          {/* Sub-navigation pill selector */}
+          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit border border-slate-200">
+            <button
+              onClick={() => setWeeklySubCategory('engaging')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                weeklySubCategory === 'engaging'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Flame size={14} />
+              <span>🥇 Top 10 Most Engaging</span>
+            </button>
+
+            <button
+              onClick={() => setWeeklySubCategory('helpful')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                weeklySubCategory === 'helpful'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ThumbsUp size={14} />
+              <span>🥈 Top 10 Most Helpful</span>
+            </button>
+
+            <button
+              onClick={() => setWeeklySubCategory('trending')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                weeklySubCategory === 'trending'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <TrendingUp size={14} />
+              <span>🥉 Top 10 Trending Posts</span>
+            </button>
+          </div>
+
+          <p className="text-xs text-slate-500 font-medium">
+            🔒 Privacy Guarantee: Campus rankings display strictly student handles/nicknames (e.g. <span className="font-bold text-amber-800">@FutureDoctor</span>, <span className="font-bold text-teal-800">@MedBoss</span>). Real names remain strictly hidden.
+          </p>
+
+          {/* Sub-view 1: Top 10 Most Engaging Users */}
+          {weeklySubCategory === 'engaging' && (
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-2">
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <Flame size={20} className="text-amber-500" />
+                  <span>Weekly Campus Leaders — Most Engaging Students</span>
+                </h3>
+                <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                  Updated Live
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {WEEKLY_CAMPUS_RANKINGS.topEngaging.map((user) => (
+                  <div key={user.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-lg font-extrabold text-xs flex items-center justify-center ${
+                        user.rank === 1 ? 'bg-amber-400 text-amber-950' :
+                        user.rank === 2 ? 'bg-slate-300 text-slate-800' :
+                        user.rank === 3 ? 'bg-amber-700 text-amber-100' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        #{user.rank}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 text-xs sm:text-sm">{user.nickname}</span>
+                          <VerificationBadge badgeType={user.badgeType} />
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-extrabold text-xs text-amber-700 block">{user.metricValue}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{user.changeTag}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view 2: Top 10 Most Helpful Contributors */}
+          {weeklySubCategory === 'helpful' && (
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-2">
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <ThumbsUp size={20} className="text-teal-600" />
+                  <span>Top Academic Contributors — Verified Resources & Study Guides</span>
+                </h3>
+                <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
+                  Academic Leaderboard
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {WEEKLY_CAMPUS_RANKINGS.topHelpful.map((user) => (
+                  <div key={user.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-lg font-extrabold text-xs flex items-center justify-center ${
+                        user.rank === 1 ? 'bg-teal-600 text-white' :
+                        user.rank === 2 ? 'bg-teal-100 text-teal-900' :
+                        user.rank === 3 ? 'bg-teal-50 text-teal-800' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        #{user.rank}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 text-xs sm:text-sm">{user.nickname}</span>
+                          <VerificationBadge badgeType={user.badgeType} />
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-extrabold text-xs text-teal-800 block">{user.metricValue}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{user.changeTag}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view 3: Top 10 Trending Posts */}
+          {weeklySubCategory === 'trending' && (
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-2">
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <TrendingUp size={20} className="text-purple-600" />
+                  <span>Top 10 Trending Campus Discussions</span>
+                </h3>
+                <span className="text-[11px] font-bold text-purple-800 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                  Viral Trends
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {WEEKLY_CAMPUS_RANKINGS.topTrendingPosts.map((post) => (
+                  <div key={post.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 rounded-lg bg-purple-100 text-purple-900 font-black text-xs flex items-center justify-center shrink-0">
+                        #{post.rank}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-bold text-slate-900 text-xs">{post.nickname}</span>
+                          <span className="text-[9px] font-extrabold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">
+                            {post.category}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 font-medium line-clamp-1">{post.snippet}</p>
+                      </div>
+                    </div>
+
+                    <span className="text-xs font-bold text-purple-800 shrink-0 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
+                      {post.engagement}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* TAB 1: TOP STUDENTS */}
       {activeLeaderTab === 'students' && (
@@ -242,28 +435,70 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       {/* TAB 3: BADGES & RULES */}
       {activeLeaderTab === 'badges' && (
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
-          <h3 className="font-extrabold text-slate-900 text-lg mb-4">How Reputation Points Work</h3>
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-lg">Reputation Levels & Verification Rules</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              FUHSI Connect uses a background reputation score to maintain quality and unlock eligibility for official Admin Verification.
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
-            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
-              <div className="font-bold text-emerald-900 text-sm mb-1">+10 Points</div>
-              <p className="text-emerald-800">When your post or comment receives likes from peers.</p>
+            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 space-y-1">
+              <div className="font-bold text-emerald-950 text-sm">🟢 0–499 Points</div>
+              <p className="text-emerald-900 font-bold">New Member</p>
+              <p className="text-slate-600 text-[11px]">Welcome to FUHSI campus community! Explore, read notes, and start interacting.</p>
             </div>
 
-            <div className="bg-teal-50 p-4 rounded-xl border border-teal-200">
-              <div className="font-bold text-teal-900 text-sm mb-1">+15 Points</div>
-              <p className="text-teal-800">When you upload a verified lecture summary or past question paper.</p>
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-1">
+              <div className="font-bold text-blue-950 text-sm">🔵 500–1,499 Points</div>
+              <p className="text-blue-900 font-bold">Active Member</p>
+              <p className="text-slate-600 text-[11px]">Active participant in campus discussions and academic note sharing.</p>
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-              <div className="font-bold text-blue-900 text-sm mb-1">+50 Points</div>
-              <p className="text-blue-800">When you achieve student leader or tutor verification status.</p>
+            <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 space-y-1">
+              <div className="font-bold text-purple-950 text-sm">🟣 1,500–2,999 Points</div>
+              <p className="text-purple-900 font-bold">Trusted Member</p>
+              <p className="text-slate-600 text-[11px]">Established contributor with strong peer upvotes and clean safety history.</p>
             </div>
 
-            <div className="bg-rose-50 p-4 rounded-xl border border-rose-200">
-              <div className="font-bold text-rose-900 text-sm mb-1">-20 Points</div>
-              <p className="text-rose-800">If your post is reported and verified to violate code of conduct.</p>
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-1">
+              <div className="font-bold text-amber-950 text-sm">🟡 3,000+ Points</div>
+              <p className="text-amber-900 font-bold">Eligible for Admin Verification</p>
+              <p className="text-slate-600 text-[11px]">Unlocks chance for Admin Review! Reaching 3,000 points enters the queue for official verification badge review.</p>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+              <span className="font-bold text-slate-900 block">➕ How You Earn Points:</span>
+              <ul className="space-y-1 text-slate-700 text-[11px]">
+                <li>• 📅 Daily login: <span className="font-bold text-teal-700">+2 pts</span></li>
+                <li>• 📝 Create a quality post: <span className="font-bold text-teal-700">+3 pts</span></li>
+                <li>• 👍 Receive a peer like: <span className="font-bold text-teal-700">+1 pt</span></li>
+                <li>• 💬 Receive a meaningful comment: <span className="font-bold text-purple-700">+2 pts</span></li>
+                <li>• 🔄 Receive a repost/share: <span className="font-bold text-purple-700">+2 pts</span></li>
+                <li>• 👤 Complete full profile: <span className="font-bold text-blue-700">+20 pts (one time)</span></li>
+                <li>• 🚩 Helpful report leading to action: <span className="font-bold text-blue-700">+10 pts</span></li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-rose-50/70 rounded-xl border border-rose-200 space-y-2">
+              <span className="font-bold text-rose-950 block">➖ Deductions & Anti-Cheating Protection:</span>
+              <ul className="space-y-1 text-rose-900 text-[11px]">
+                <li>• 🚫 Posting spam: <span className="font-bold text-rose-700">-30 pts</span></li>
+                <li>• ❌ Offensive post: <span className="font-bold text-rose-700">-50 pts</span></li>
+                <li>• ⚠️ Multiple valid community reports: <span className="font-bold text-rose-700">-20 pts</span></li>
+                <li>• ⛔ Temporary account suspension: <span className="font-bold text-rose-700">-100 pts</span></li>
+                <li>• 🛡️ Anti-Farm: Likes from same user count only once. Accounts &lt; 7 days old cannot award engagement points.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="p-4 bg-teal-50 border border-teal-200/80 rounded-xl text-xs text-teal-900 space-y-1">
+            <span className="font-bold block">⭐ Final Verification Criteria (Required for Admin Approval):</span>
+            <p className="leading-relaxed">
+              ✅ At least 3,000 reputation points • ✅ Account age older than 2 months (60+ days) • ✅ Clean record with 0 serious violations • ✅ Positive long-term engagement • ✅ Final approval by FUHSI Admin team.
+            </p>
           </div>
         </div>
       )}

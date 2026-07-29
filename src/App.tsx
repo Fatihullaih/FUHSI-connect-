@@ -16,11 +16,14 @@ import { ModerationScreen } from './screens/ModerationScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { CreatePostModal } from './components/CreatePostModal';
 import { PostDetailModal } from './components/PostDetailModal';
+import { PWAInstallModal } from './components/PWAInstallModal';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon, ShieldIcon, BadgeIcon } from './components/NavIcons';
+import { Smartphone, Download } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Navigation State
   const [navIndex, setNavIndex] = useState(0);
+  const [showPwaModal, setShowPwaModal] = useState(false);
 
   // App Core State
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
@@ -57,13 +60,15 @@ export const App: React.FC = () => {
   // Redact sensitive patterns from text
   const sanitizeText = (text: string): string => {
     let sanitized = text;
-    const phoneRegex = /(\+?234|0)[789][01]\d{8}/g;
-    const urlRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|www\.[^\s]+)/gi;
+    const phoneRegex = /(\+?234|0)[\s-]*[789][01][\s-]*\d{3,4}[\s-]*\d{4}/g;
+    const genericDigitsRegex = /\b\d{4}[\s-]?\d{3,4}[\s-]?\d{3,4}\b/g;
+    const urlRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|t\.me\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(com|ng|edu|org|net|io|me)\b[^\s]*)/gi;
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
-    sanitized = sanitized.replace(phoneRegex, '(******)');
     sanitized = sanitized.replace(urlRegex, '(******)');
     sanitized = sanitized.replace(emailRegex, '(******)');
+    sanitized = sanitized.replace(phoneRegex, '(******)');
+    sanitized = sanitized.replace(genericDigitsRegex, '(******)');
     return sanitized;
   };
 
@@ -298,6 +303,29 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] flex flex-col justify-between selection:bg-teal-500 selection:text-white">
+      {/* Top App Header with Install App Option */}
+      <header className="sticky top-0 z-30 bg-teal-800 text-white shadow-xs border-b border-teal-900/40">
+        <div className="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-teal-600 border border-teal-400/30 flex items-center justify-center font-black text-white text-sm shadow-xs">
+              FC
+            </div>
+            <div>
+              <h1 className="font-extrabold text-sm tracking-tight text-white leading-tight">FUHSI Connect</h1>
+              <p className="text-[10px] text-teal-200 font-medium">Campus Twitter Network • Ila-Orangun</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowPwaModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700/80 hover:bg-teal-700 text-teal-100 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs"
+          >
+            <Smartphone size={14} className="text-teal-300" />
+            <span>Install App</span>
+          </button>
+        </div>
+      </header>
+
       {/* Main Screen Body */}
       <main className="flex-1">
         {navIndex === 0 && (
@@ -404,6 +432,12 @@ export const App: React.FC = () => {
           checkDoxxingThreats={checkDoxxingThreats}
         />
       )}
+
+      {/* PWA App Install Modal */}
+      <PWAInstallModal
+        isOpen={showPwaModal}
+        onClose={() => setShowPwaModal(false)}
+      />
 
       {/* Bottom Sticky Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-lg">

@@ -94,50 +94,131 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSav
         </div>
       </div>
 
-      {/* Reputation & Verification Progress Meter */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
+      {/* Engagement Verification & Reputation Progress Meter */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-            <h2 className="font-bold text-slate-900 text-sm">Verification Progress & Reputation</h2>
+            <div>
+              <h2 className="font-bold text-slate-900 text-sm">Reputation & Verification Progress</h2>
+              <p className="text-[11px] text-slate-500">Calculated in background via quality posts, peer upvotes & moderation score</p>
+            </div>
           </div>
-          <span className="font-extrabold text-xs text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
-            {repScore >= 3000 ? '🟡 Verification Eligible' : repScore >= 1500 ? '🟣 Trusted Member' : '🔵 Active Member'}
+          <span className="font-extrabold text-xs text-purple-800 bg-purple-50 px-3 py-1 rounded-full border border-purple-200 shadow-2xs">
+            {repScore >= 3000 ? '🟡 3,000+ Pts: Eligible for Admin Verification' : repScore >= 1500 ? '🟣 Level 3: Trusted Member' : repScore >= 500 ? '🔵 Level 2: Active Member' : '🟢 Level 1: New Member'}
           </span>
         </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs font-extrabold text-slate-800">
-            <span>⭐ {repScore} / {targetScore} Points</span>
-            <span className="text-teal-700">{scoreProgressPct}%</span>
+        {/* Engagement Stats Grid */}
+        <div className="grid grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-center">
+          <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-500 block">👍 Likes Received</span>
+            <span className="text-base font-black text-teal-700">184 (+1 pt ea)</span>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
-            <div
-              className="bg-gradient-to-r from-teal-500 to-purple-600 h-2.5 rounded-full transition-all duration-300"
-              style={{ width: `${scoreProgressPct}%` }}
-            />
+          <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-500 block">💬 Comments Sparked</span>
+            <span className="text-base font-black text-purple-700">62 (+2 pts ea)</span>
+          </div>
+          <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-500 block">🔥 Background Rep Score</span>
+            <span className="text-base font-black text-amber-600">{repScore} pts</span>
           </div>
         </div>
 
-        {/* Reputation Levels & Points Formula Collapsible/Card */}
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
-          <p className="font-bold text-teal-950">📈 Reputation Scale & Point Rewards Formula:</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600">
-            <div className="space-y-1">
-              <p className="font-semibold text-slate-800">Levels Thresholds:</p>
-              <p>🟢 0–499 pts: New Member</p>
-              <p>🔵 500–1,499 pts: Active Member</p>
-              <p>🟣 1,500–2,999 pts: Trusted Member</p>
-              <p>🟡 3,000+ pts: Unlock Admin Review</p>
+        {/* Profile Verification Progress Bar */}
+        <div className="space-y-1.5 p-3 bg-amber-50/50 rounded-xl border border-amber-200/70">
+          <div className="flex justify-between text-xs font-extrabold text-slate-800">
+            <span className="flex items-center gap-1">
+              ⭐ Verification Progress: <span className="text-amber-800 font-extrabold">{repScore} / {targetScore} Reputation Points</span>
+            </span>
+            <span className="text-teal-700">{scoreProgressPct}%</span>
+          </div>
+          <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden border border-slate-300">
+            <div
+              className="bg-gradient-to-r from-teal-500 via-purple-600 to-amber-500 h-3 rounded-full transition-all duration-300"
+              style={{ width: `${scoreProgressPct}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-amber-900 font-medium">
+            {repScore >= 3000
+              ? '🎉 Target reached! Your profile is automatically unlocked for Admin Verification Review.'
+              : `Earn ${targetScore - repScore} more points to reach 3,000 pts and unlock Admin Verification Review.`}
+          </p>
+        </div>
+
+        {/* Multi-Factor Verification & Reputation Formula */}
+        <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50/50 border border-amber-200/90 space-y-3 text-xs">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="font-extrabold text-amber-950 flex items-center gap-1.5 text-sm">
+              <Award className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Multi-Factor Verification Formula & Point System</span>
+            </p>
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300">
+              🟡 3,000 Pts Threshold
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
+            <div className="space-y-1.5 bg-white/80 p-2.5 rounded-lg border border-amber-100">
+              <p className="font-bold text-slate-900">Reputation Tiers:</p>
+              <p>🟢 0–499 pts: <span className="font-semibold text-slate-800">New Member</span></p>
+              <p>🔵 500–1,499 pts: <span className="font-semibold text-slate-800">Active Member</span></p>
+              <p>🟣 1,500–2,999 pts: <span className="font-semibold text-slate-800">Trusted Member</span></p>
+              <p>🟡 3,000+ pts: <span className="font-bold text-amber-900">Eligible to Apply for Admin Verification</span></p>
             </div>
-            <div className="space-y-1">
-              <p className="font-semibold text-slate-800">Points Rewards:</p>
-              <p>📅 Daily Login: +2 pts</p>
-              <p>📝 Quality Post: +3 pts</p>
-              <p>💬 Comment Received: +2 pts</p>
-              <p>👍 Like Received: +1 pt</p>
+
+            <div className="space-y-1.5 bg-white/80 p-2.5 rounded-lg border border-amber-100">
+              <p className="font-bold text-slate-900">Points Formula:</p>
+              <p>📅 Daily login: +2 | 📝 Quality post: +3</p>
+              <p>👍 Receive a like: +1 | 💬 Receive comment: +2</p>
+              <p>🔄 Repost/share: +2 | 👤 Complete profile: +20</p>
+              <p>🚩 Actionable report: +10</p>
             </div>
           </div>
+
+          <div className="p-2.5 bg-rose-50/80 rounded-lg border border-rose-200 text-rose-900 space-y-1 text-[11px]">
+            <p className="font-bold">⚠️ Deductions & Anti-Cheating Safeguards:</p>
+            <p>• Spam: -30 pts | Offensive post: -50 pts | Valid reports: -20 pts | Suspension: -100 pts</p>
+            <p>• Anti-Farm: Likes from same user count only once. Accounts &lt; 7 days old do not award points.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Campus Achievements & Badges Hub */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Award className="w-5 h-5 text-purple-600" />
+            <div>
+              <h2 className="font-bold text-slate-900 text-sm">Achievements & Campus Badges</h2>
+              <p className="text-[11px] text-slate-500">Earn recognition for helping peers and starting positive discussions</p>
+            </div>
+          </div>
+          <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
+            7 / 7 Badges Unlocked
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[
+            { title: '🌟 Rising Star', desc: '100+ rep points in first month on campus', unlocked: true, pts: '+50 pts' },
+            { title: '🔥 Trending Creator', desc: 'Sparked a post with 25+ peer comments', unlocked: true, pts: '+100 pts' },
+            { title: '🎓 Academic Helper', desc: 'Uploaded 5 verified lecture summaries', unlocked: true, pts: '+150 pts' },
+            { title: '💬 Top Commenter', desc: 'Contributed 50+ constructive answers', unlocked: true, pts: '+100 pts' },
+            { title: '❤️ Most Appreciated', desc: 'Received 100+ likes on study guides', unlocked: true, pts: '+120 pts' },
+            { title: '🏆 Campus Influencer', desc: 'Ranked Top 10 on Weekly Campus Rankings', unlocked: true, pts: '+200 pts' },
+            { title: '✔️ Verified Student', desc: 'Passed admin multi-factor verification', unlocked: true, pts: '+300 pts' },
+          ].map((badge, idx) => (
+            <div key={idx} className="p-3.5 rounded-xl border bg-slate-50 border-slate-200/90 hover:border-slate-300 transition-all space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-xs text-slate-900">{badge.title}</span>
+                <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                  Unlocked ({badge.pts})
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-snug">{badge.desc}</p>
+            </div>
+          ))}
         </div>
       </div>
 

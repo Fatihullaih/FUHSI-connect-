@@ -71,6 +71,9 @@ export interface Post {
   isBookmarked?: boolean;
   userVote?: 'up' | 'down' | null;
   isGhostMode?: boolean;
+  isSponsored?: boolean;
+  sponsorName?: string;
+  sponsorActionUrl?: string;
   pollQuestion?: string;
   pollOptA?: string;
   pollOptB?: string;
@@ -100,6 +103,28 @@ export interface MarketplaceItem {
   adminNote?: string;
   sellerRatingStars?: number;
   sellerRatingTag?: string;
+  isFeatured?: boolean;
+  featuredDays?: number;
+}
+
+export interface CommunityFundSummary {
+  totalFundRaised: number;
+  currentMonthBalance: number;
+  activeDonorsCount: number;
+  lastAuditDate: string;
+  allocationBreakdown: {
+    serversAndMaintenancePct: number; // 40%
+    featureDevelopmentPct: number;    // 30%
+    campusActivitiesPct: number;       // 20%
+    emergencyReservePct: number;       // 10%
+  };
+  recentExpenditures: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    category: string;
+    date: string;
+  }>;
 }
 
 export interface VerificationRequest {
@@ -174,6 +199,49 @@ export interface Resource {
   downloads: number;
   rating: number;
   dateAdded: string;
+}
+
+export interface AchievementBadge {
+  id: string;
+  title: string;
+  icon: string;
+  description: string;
+  isUnlocked: boolean;
+  progressPct: number;
+  unlockedAt?: string;
+  category: 'Engagement' | 'Academic' | 'Community' | 'Verification';
+  rewardPoints: number;
+}
+
+export interface VerificationEligibilityCandidate {
+  id: string;
+  nickname: string;
+  realName: string;
+  matricNumber: string;
+  emergencyHomePhone: string;
+  department: string;
+  level: string;
+  accountAgeDays: number;
+  reputationScore: number;
+  likesReceived: number;
+  commentsCount: number;
+  qualityPostsCount: number;
+  strikes: number;
+  status: 'ELIGIBLE_PENDING_ADMIN' | 'APPROVED_VERIFIED' | 'REJECTED';
+  submittedAt: string;
+}
+
+export interface WeeklyRankingItem {
+  rank: number;
+  nickname: string;
+  department: string;
+  level: string;
+  avatarKey: string;
+  badgeType: BadgeType;
+  badgeTitle?: string;
+  metricLabel: string;
+  metricValue: string;
+  changeTag?: string;
 }
 
 export interface CampusEvent {

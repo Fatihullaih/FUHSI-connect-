@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key } from 'lucide-react';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
+import { INITIAL_VERIFICATION_CANDIDATES } from '../data/initialData';
 
 interface ModerationScreenProps {
   userProfile: UserProfile | null;
@@ -64,6 +65,9 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [badgeTitleInput, setBadgeTitleInput] = useState(userProfile?.badgeTitle || 'Class Rep & Tech Lead');
   const [reputationInput, setReputationInput] = useState(userProfile?.reputationScore || 2450);
   const [adminUpdateToast, setAdminUpdateToast] = useState(false);
+
+  // Verification Candidates Queue State
+  const [verifCandidates, setVerifCandidates] = useState(INITIAL_VERIFICATION_CANDIDATES);
 
   // Price Advisory Modal State
   const [advisoryItem, setAdvisoryItem] = useState<MarketplaceItem | null>(null);
@@ -284,6 +288,98 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Multi-Factor Verification Candidates Review Queue */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div>
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-800">
+              <UserCheck className="w-4 h-4 text-teal-600" /> Automated Verification Eligibility Queue
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Students who met multi-factor formula (90+ days tenure, 0 strikes, 1200+ rep score, quality posts)
+            </p>
+          </div>
+          <span className="text-xs font-extrabold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+            {verifCandidates.filter(c => c.status === 'ELIGIBLE_PENDING_ADMIN').length} Pending Approval
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {verifCandidates.map((cand) => (
+            <div key={cand.id} className={`p-3.5 rounded-xl border space-y-2.5 text-xs ${
+              cand.status === 'APPROVED_VERIFIED' ? 'bg-emerald-50/60 border-emerald-200' :
+              cand.status === 'REJECTED' ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-slate-900 text-sm">{cand.nickname}</span>
+                    <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
+                      {cand.department} ({cand.level})
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                    👤 Encrypted Identity: <span className="font-bold text-slate-900">{cand.realName}</span> • Matric: <span className="font-mono text-slate-800">{cand.matricNumber}</span>
+                  </p>
+                </div>
+
+                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
+                  cand.status === 'APPROVED_VERIFIED' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                  cand.status === 'REJECTED' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
+                }`}>
+                  {cand.status === 'APPROVED_VERIFIED' ? '✔️ VERIFIED BY ADMIN' :
+                   cand.status === 'REJECTED' ? '❌ REJECTED' : '🔔 AUTO-ELIGIBLE: PENDING ADMIN'}
+                </span>
+              </div>
+
+              {/* Metrics grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 text-center text-[11px]">
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Tenure</span>
+                  <span className="font-black text-slate-800">{cand.accountAgeDays} days</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Rep Score</span>
+                  <span className="font-black text-amber-600">{cand.reputationScore} pts</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Likes / Comments</span>
+                  <span className="font-black text-teal-700">{cand.likesReceived} 👍 / {cand.commentsCount} 💬</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Violations</span>
+                  <span className="font-black text-emerald-600">{cand.strikes} strikes (Clean)</span>
+                </div>
+              </div>
+
+              {cand.status === 'ELIGIBLE_PENDING_ADMIN' && (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setVerifCandidates(prev => prev.map(c => c.id === cand.id ? { ...c, status: 'APPROVED_VERIFIED' } : c));
+                      onUpdateBadge('GOLD', 'Verified Gold Campus Contributor');
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Approve Official Verification</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setVerifCandidates(prev => prev.map(c => c.id === cand.id ? { ...c, status: 'REJECTED' } : c));
+                    }}
+                    className="px-4 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Admin Badge & Reputation Manager */}
