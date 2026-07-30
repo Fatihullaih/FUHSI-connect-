@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck } from 'lucide-react';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { INITIAL_VERIFICATION_CANDIDATES } from '../data/initialData';
 
@@ -56,7 +56,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   // Admin Hotline Chat State
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'admin'; text: string; time: string }>>([
-    { sender: 'admin', text: 'FUHSI Admin Hotline active. How can we assist with your campus safety or verification?', time: '10:00 AM' }
+    { sender: 'admin', text: 'FUHSI Admin Hotline active. How can we assist with your campus safety, trade requests, or verification?', time: '10:00 AM' }
   ]);
   const [chatInput, setChatInput] = useState('');
 
@@ -66,13 +66,119 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [reputationInput, setReputationInput] = useState(userProfile?.reputationScore || 2450);
   const [adminUpdateToast, setAdminUpdateToast] = useState(false);
 
-  // Verification Candidates Queue State
-  const [verifCandidates, setVerifCandidates] = useState(INITIAL_VERIFICATION_CANDIDATES);
+  // Pending Student Registrations Approval State
+  const [pendingRegistrations, setPendingRegistrations] = useState<UserProfile[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_users_db');
+      if (stored) {
+        const list: UserProfile[] = JSON.parse(stored);
+        const unapproved = list.filter((u) => u.isApproved === false);
+        if (unapproved.length > 0) return unapproved;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return [
+      {
+        id: 'usr_pending_demo_1',
+        nickname: '@FreshMedStudent',
+        realName: 'Adegoke Emmanuel Temitope',
+        matricNumber: '25/MBS/088',
+        emergencyHomePhone: '08023456789',
+        department: 'Medicine and Surgery (MBBS)',
+        level: '100L',
+        bio: 'Fresh 100L MBBS Student seeking account approval.',
+        isApproved: false,
+        isVerified: false,
+      },
+      {
+        id: 'usr_pending_demo_2',
+        nickname: '@NurseGrace_Ila',
+        realName: 'Olanrewaju Grace Omowumi',
+        matricNumber: '24/NSC/412',
+        emergencyHomePhone: '08134567890',
+        department: 'Nursing Science (NSC)',
+        level: '200L',
+        bio: '200L Nursing student registered on FUHSI Connect.',
+        isApproved: false,
+        isVerified: false,
+      },
+    ];
+  });
+
+  const [approvalToast, setApprovalToast] = useState<string | null>(null);
+
+  const handleApproveRegistration = (userId: string, nick: string) => {
+    try {
+      const stored = localStorage.getItem('fuhsi_users_db');
+      if (stored) {
+        let list: UserProfile[] = JSON.parse(stored);
+        list = list.map((u) => u.id === userId ? { ...u, isApproved: true, isVerified: true, badgeTitle: 'Verified Student' } : u);
+        localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+      }
+      const activeStored = localStorage.getItem('fuhsi_active_user');
+      if (activeStored) {
+        const active: UserProfile = JSON.parse(activeStored);
+        if (active.id === userId) {
+          localStorage.setItem('fuhsi_active_user', JSON.stringify({ ...active, isApproved: true, isVerified: true, badgeTitle: 'Verified Student' }));
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    setPendingRegistrations((prev) => prev.filter((u) => u.id !== userId));
+    setApprovalToast(`✓ Registration approved for ${nick}! Student account is now active & verified.`);
+    setTimeout(() => setApprovalToast(null), 3500);
+  };
+
+  const handleRejectRegistration = (userId: string, nick: string) => {
+    try {
+      const stored = localStorage.getItem('fuhsi_users_db');
+      if (stored) {
+        let list: UserProfile[] = JSON.parse(stored);
+        list = list.filter((u) => u.id !== userId);
+        localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    setPendingRegistrations((prev) => prev.filter((u) => u.id !== userId));
+    setApprovalToast(`Registration declined for ${nick}.`);
+    setTimeout(() => setApprovalToast(null), 3000);
+  };
 
   // Price Advisory Modal State
   const [advisoryItem, setAdvisoryItem] = useState<MarketplaceItem | null>(null);
   const [suggestedPrice, setSuggestedPrice] = useState<number>(0);
   const [advisoryMsg, setAdvisoryMsg] = useState('');
+
+  // Admin Marketplace Middleman Trade Desk State
+  const [adminTradeRequests, setAdminTradeRequests] = useState([
+    {
+      id: 'req_1',
+      buyerNickname: '@MedBoss',
+      itemTitle: '3M Littmann Classic III Stethoscope',
+      sellerNickname: '@IlaMedHero',
+      price: 38000,
+      meetupPoint: 'Main Library Entrance',
+      timestamp: '10 mins ago',
+      status: 'PENDING_SELLER_CHECK' as 'PENDING_SELLER_CHECK' | 'SELLER_CONTACTED' | 'CONFIRMED_AVAILABLE' | 'UNAVAILABLE' | 'PENALIZED',
+      adminNote: 'Buyer pledge logged. Awaiting seller confirmation.'
+    },
+    {
+      id: 'req_2',
+      buyerNickname: '@NurseQueen_Ila',
+      itemTitle: 'Guyton and Hall Medical Physiology Textbook',
+      sellerNickname: '@BookWorm_Ila',
+      price: 16000,
+      meetupPoint: 'Matriculation Pavilion',
+      timestamp: '25 mins ago',
+      status: 'CONFIRMED_AVAILABLE' as 'PENDING_SELLER_CHECK' | 'SELLER_CONTACTED' | 'CONFIRMED_AVAILABLE' | 'UNAVAILABLE' | 'PENALIZED',
+      adminNote: 'Seller confirmed available. Both parties notified for safe meet-up.'
+    }
+  ]);
 
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +247,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
           <div>
             <h1 className="font-extrabold text-base">FUHSI Safety & Moderation Council</h1>
             <p className="text-xs text-indigo-200">
-              Anti-Doxxing Safeguards, Admin Identity Vault & Moderation Controls
+              Marketplace Trade Middleman Desk, Anti-Doxxing Safeguards & Identity Vault
             </p>
           </div>
         </div>
@@ -191,6 +297,179 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
               {profanityShield ? 'ACTIVE' : 'OFF'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* PENDING STUDENT ACCOUNT REGISTRATIONS APPROVAL DESK */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div>
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
+              <UserCheck className="w-4 h-4 text-teal-600" /> Pending Student Account Approvals ({pendingRegistrations.length})
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Review and approve new student registrations before full campus posting privileges are enabled.
+            </p>
+          </div>
+          <span className="text-xs font-extrabold bg-amber-50 text-amber-900 px-2.5 py-1 rounded-full border border-amber-200">
+            {pendingRegistrations.length} Pending Approval
+          </span>
+        </div>
+
+        {approvalToast && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl animate-in fade-in">
+            {approvalToast}
+          </div>
+        )}
+
+        {pendingRegistrations.length === 0 ? (
+          <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+            <CheckCircle2 size={24} className="mx-auto text-teal-600 mb-1" />
+            <p className="font-bold text-slate-800">All registered student accounts are approved!</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">New account registrations submitted by students will appear here for admin sign-off.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingRegistrations.map((user) => (
+              <div key={user.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+                <div className="flex items-start justify-between flex-wrap gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 text-sm">{user.nickname}</span>
+                      <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
+                        {user.department} ({user.level})
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-700 font-medium mt-0.5">
+                      👤 Student Real Name: <span className="font-bold text-slate-900">{user.realName}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-600">
+                      Matric Number: <span className="font-mono font-bold text-slate-800">{user.matricNumber || '24/MBS/012'}</span> • Phone: <span className="font-bold text-teal-700">{user.emergencyHomePhone || 'N/A'}</span>
+                    </p>
+                  </div>
+
+                  <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full border bg-amber-100 text-amber-900 border-amber-300">
+                    ⏳ AWAITING ADMIN APPROVAL
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600">
+                  <span className="font-bold text-slate-800">Bio:</span> {user.bio}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => handleApproveRegistration(user.id, user.nickname)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Approve Student Registration</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleRejectRegistration(user.id, user.nickname)}
+                    className="py-2 px-4 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ADMIN MARKETPLACE MIDDLEMAN TRADE DESK */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div>
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
+              <ShoppingBag className="w-4 h-4 text-teal-600" /> Admin Marketplace Middleman Control Desk ({adminTradeRequests.length})
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Admin acts as trusted middleman: contact sellers privately, verify availability, & arrange safe campus meet-ups.
+            </p>
+          </div>
+          <span className="text-xs font-bold bg-teal-50 text-teal-800 px-2.5 py-1 rounded-full border border-teal-200">
+            Zero Escrow / Safe Meetups
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {adminTradeRequests.map((req) => (
+            <div key={req.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between items-start flex-wrap gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-slate-900 text-sm">{req.buyerNickname}</span>
+                    <span className="text-[10px] text-slate-500">wants to buy</span>
+                    <span className="font-extrabold text-teal-800">{req.itemTitle}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Listed by <span className="font-bold text-slate-800">{req.sellerNickname}</span> for <span className="font-bold text-teal-700">₦{req.price.toLocaleString()}</span> • Meet-up: <span className="font-bold">{req.meetupPoint}</span>
+                  </p>
+                </div>
+
+                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
+                  req.status === 'CONFIRMED_AVAILABLE' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                  req.status === 'SELLER_CONTACTED' ? 'bg-indigo-100 text-indigo-900 border-indigo-300' :
+                  req.status === 'UNAVAILABLE' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
+                }`}>
+                  {req.status === 'CONFIRMED_AVAILABLE' ? '✅ AVAILABLE & MEET-UP ARRANGED' :
+                   req.status === 'SELLER_CONTACTED' ? '📲 SELLER CONTACTED PRIVATELY' :
+                   req.status === 'UNAVAILABLE' ? '❌ ITEM UNAVAILABLE' : '🔔 PENDING ADMIN SELLER CHECK'}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-lg bg-white border border-slate-200/80 text-[11px] text-slate-700">
+                <span className="font-bold text-slate-900">Admin Log:</span> {req.adminNote}
+              </div>
+
+              {/* Admin Actions */}
+              <div className="flex gap-2 pt-1 flex-wrap">
+                <button
+                  onClick={() => {
+                    setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
+                      ...r,
+                      status: 'SELLER_CONTACTED',
+                      adminNote: `Admin sent private prompt to ${req.sellerNickname}: 'A verified student (${req.buyerNickname}) is ready to buy your ${req.itemTitle} for ₦${req.price.toLocaleString()}. Do you still have it available?'`
+                    } : r));
+                  }}
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                >
+                  <PhoneCall size={13} />
+                  <span>Contact Seller Privately</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
+                      ...r,
+                      status: 'CONFIRMED_AVAILABLE',
+                      adminNote: `Seller ${req.sellerNickname} confirmed item is available! Both buyer and seller notified for safe campus exchange at ${req.meetupPoint}.`
+                    } : r));
+                  }}
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Confirm & Schedule Meet-up</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
+                      ...r,
+                      status: 'UNAVAILABLE',
+                      adminNote: `Seller informed Admin item was sold elsewhere. Buyer ${req.buyerNickname} notified.`
+                    } : r));
+                  }}
+                  className="py-1.5 px-3 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
+                >
+                  Mark Unavailable
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -252,7 +531,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             type="text"
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
-            placeholder="Enter @nickname or Matric No (e.g. 2023/1042)..."
+            placeholder="Enter @nickname or Matric No..."
             className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800"
           />
           <button
@@ -453,7 +732,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         </button>
       </div>
 
-      {/* Marketplace Price Review & Negotiate Queue */}
+      {/* Marketplace Price Review & Benchmark Queue */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
           🛍️ Marketplace Price Review & Benchmark Queue ({pendingMarketplaceItems.length})

@@ -17,6 +17,7 @@ import {
 interface AvatarIconProps {
   avatarId?: string;
   avatarKey?: string;
+  avatarUrl?: string;
   className?: string;
   sizeClassName?: string;
   size?: number;
@@ -25,10 +26,25 @@ interface AvatarIconProps {
 export const AvatarIcon: React.FC<AvatarIconProps> = ({
   avatarId,
   avatarKey,
+  avatarUrl,
   className = '',
   sizeClassName = '',
   size = 20,
 }) => {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt="Profile Avatar"
+        className={`rounded-full object-cover shrink-0 ${sizeClassName || ''} ${className || ''}`}
+        style={{ width: `${size}px`, height: `${size}px` }}
+        onError={(e) => {
+          (e.currentTarget as HTMLElement).style.display = 'none';
+        }}
+      />
+    );
+  }
+
   const key = avatarKey || avatarId || 'caduceus';
   const combinedClass = `${sizeClassName} ${className}`.trim();
 

@@ -20,12 +20,14 @@ export interface UserProfile {
   bio: string;
   avatarKey?: string;
   avatarId?: string;
+  avatarUrl?: string;
   badgeType?: BadgeType;
   badgeTitle?: string;
   badge?: string;
   reputationScore?: number;
   reputationPoints?: number;
   isVerified?: boolean;
+  isApproved?: boolean;
   isPremiumUser?: boolean;
   strikes?: number;
   isBanned?: boolean;
@@ -55,8 +57,11 @@ export interface Post {
   authorDepartment?: string;
   authorLevel?: string;
   department?: string;
+  targetDepartment?: string;
+  isDepartmentPriority?: boolean;
   category?: PostCategory;
   content: string;
+  imageUrl?: string;
   imageResName?: string;
   videoUri?: string;
   timestamp: string;
@@ -125,6 +130,33 @@ export interface CommunityFundSummary {
     category: string;
     date: string;
   }>;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderNickname: string;
+  receiverNickname: string;
+  text: string;
+  timestamp: string;
+  itemId?: string;
+  itemTitle?: string;
+  itemPrice?: number;
+  meetupPoint?: string;
+  isPledgeConfirmed?: boolean;
+}
+
+export interface ChatConversation {
+  id: string;
+  otherUserNickname: string;
+  otherUserAvatarKey?: string;
+  lastMessage: string;
+  lastTimestamp: string;
+  itemId?: string;
+  itemTitle?: string;
+  itemPrice?: number;
+  meetupPoint?: string;
+  unreadCount: number;
 }
 
 export interface VerificationRequest {

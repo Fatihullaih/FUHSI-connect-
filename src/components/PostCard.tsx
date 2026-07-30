@@ -14,9 +14,10 @@ import {
   CheckCircle2, 
   X,
   AlertTriangle,
-  Ghost,
   BarChart2,
-  Check
+  Check,
+  Zap,
+  Maximize2
 } from 'lucide-react';
 
 interface PostCardProps {
@@ -27,6 +28,7 @@ interface PostCardProps {
   onCommentClick?: (post: Post) => void;
   onVotePoll?: (post: Post, option: 'A' | 'B') => void;
   onReportPost?: (post: Post, reason: string) => void;
+  onAuthorClick?: (post: Post) => void;
   // Alternative legacy props
   onVote?: (postId: string, voteType: 'up' | 'down') => void;
   onBookmark?: (postId: string) => void;
@@ -42,6 +44,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   onCommentClick,
   onVotePoll,
   onReportPost,
+  onAuthorClick,
   onVote,
   onBookmark,
   onAddComment,
@@ -133,14 +136,24 @@ export const PostCard: React.FC<PostCardProps> = ({
         {/* Post Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-teal-50 border-teal-200/80">
+            <button
+              type="button"
+              onClick={() => onAuthorClick?.(post)}
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-teal-50 border-teal-200/80 hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+              title={`View ${post.authorNickname}'s profile details`}
+            >
               <AvatarIcon avatarKey={avatarKey} size={20} />
-            </div>
+            </button>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-slate-900 text-sm hover:text-teal-700 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => onAuthorClick?.(post)}
+                  className="font-bold text-slate-900 text-sm hover:text-teal-700 cursor-pointer focus:outline-none focus:underline"
+                  title={`View ${post.authorNickname}'s profile details`}
+                >
                   {post.authorNickname}
-                </span>
+                </button>
 
                 {post.authorBadgeType && (
                   <VerificationBadge 
@@ -175,9 +188,31 @@ export const PostCard: React.FC<PostCardProps> = ({
         </div>
 
         {/* Post Content */}
-        <p className="mt-3 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal">
+        <p className="mt-2 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal">
           {post.content}
         </p>
+
+        {/* Attached Image */}
+        {(post.imageUrl || post.imageResName) && (
+          <div className="mt-3.5 rounded-xl overflow-hidden border border-slate-200/90 bg-slate-950 group relative">
+            <img
+              src={post.imageUrl || post.imageResName}
+              alt="Post visual attachment"
+              className="w-full max-h-96 object-cover group-hover:scale-102 transition-transform duration-300"
+            />
+          </div>
+        )}
+
+        {/* Attached Video (Premium Feature) */}
+        {post.videoUri && (
+          <div className="mt-3.5 rounded-xl overflow-hidden border border-indigo-200/90 bg-slate-950 relative">
+            <video
+              src={post.videoUri}
+              controls
+              className="w-full max-h-96 object-contain"
+            />
+          </div>
+        )}
 
         {/* Optional Poll Component */}
         {post.pollQuestion && (

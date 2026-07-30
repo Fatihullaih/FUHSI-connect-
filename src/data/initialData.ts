@@ -27,7 +27,7 @@ export const INITIAL_POSTS: Post[] = [
     authorAvatarKey: 'caduceus',
     department: 'All Campus',
     content: '📢 OFFICIAL SUG NOTICE: Shuttle buses will resume early morning campus pickups tomorrow by 7:00 AM sharp at Ila Main Gate. Please ensure you have your FUHSI Student ID card displayed clearly.',
-    timestamp: '10 mins ago',
+    timestamp: '10m ago',
     likesCount: 84,
     commentsCount: 12,
     isLikedByMe: false,
@@ -48,7 +48,7 @@ export const INITIAL_POSTS: Post[] = [
     authorAvatarKey: 'caduceus',
     department: 'Medicine & Surgery',
     content: 'Anatomy CA 2 past questions summary for 300L MB;BS has been uploaded to the student drive. Good luck to everyone revising Upper Limb neurovasculature tonight! Stay focused!',
-    timestamp: '45 mins ago',
+    timestamp: '45m ago',
     likesCount: 39,
     commentsCount: 7,
     isLikedByMe: true,
@@ -64,7 +64,7 @@ export const INITIAL_POSTS: Post[] = [
     authorAvatarKey: 'stethoscope',
     department: 'Nursing Science',
     content: 'Practical examination reminders for 200L Nursing students: Sterile gloving & vitals assessment station checklist is available at the lab entrance bulletin board. Practice with your study partner today! 💉🩺',
-    timestamp: '2 hours ago',
+    timestamp: '2h ago',
     likesCount: 52,
     commentsCount: 9,
     isLikedByMe: false,
@@ -80,7 +80,7 @@ export const INITIAL_POSTS: Post[] = [
     authorAvatarKey: 'microscope',
     department: 'Medical Lab Science',
     content: 'Found a black Littmann Stethoscope near the General Science Lecture Theater after BCH 201 lecture. Please verify your name tag with Admin to retrieve it at the MLS Departmental office.',
-    timestamp: '4 hours ago',
+    timestamp: '4h ago',
     likesCount: 28,
     commentsCount: 5,
     isLikedByMe: false,
@@ -140,11 +140,13 @@ export const INITIAL_MARKETPLACE_ITEMS: MarketplaceItem[] = [
     askingPrice: 38000,
     adminApprovedPrice: 38000,
     conditionTag: 'Like New (Used 2 Weeks)',
-    description: 'Original Littmann Classic III Stethoscope purchased from certified medical distributor. High acoustic sensitivity, dual-sided chestpiece. Includes extra ear tips.',
+    description: 'Original Littmann Classic III Stethoscope purchased from certified medical distributor. High acoustic sensitivity, dual-sided chestpiece. Includes extra ear tips, original box & warranty card.',
     meetupPoint: 'Main Library Entrance',
     imageUrls: [
       'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80'
+      'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80'
     ],
     viewCount: 142,
     status: 'APPROVED',
@@ -167,7 +169,10 @@ export const INITIAL_MARKETPLACE_ITEMS: MarketplaceItem[] = [
     description: 'Essential textbook for 200L & 300L Physiology & Medicine. Hardcover with clear protective film. Free summary PDF notes included.',
     meetupPoint: 'School Main Gate Pavilion',
     imageUrls: [
-      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80'
+      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=600&q=80'
     ],
     viewCount: 98,
     status: 'APPROVED',
@@ -175,6 +180,30 @@ export const INITIAL_MARKETPLACE_ITEMS: MarketplaceItem[] = [
     adminNote: 'Price adjusted slightly to reflect minor highlighted pages.',
     sellerRatingStars: 5,
     sellerRatingTag: 'Prompt Delivery ⭐⭐⭐⭐⭐'
+  },
+  {
+    id: 'item_4',
+    title: 'Digital Sphygmomanometer Blood Pressure Monitor',
+    category: 'Medical Equipment',
+    sellerNickname: '@NurseQueen_Ila',
+    sellerPhone: '08055554444',
+    askingPrice: 18500,
+    adminApprovedPrice: 18000,
+    conditionTag: 'Brand New (Sealed)',
+    description: 'Fully automatic digital arm BP monitor. Highly accurate readings for clinical posting practice. Battery operated & USB powered.',
+    meetupPoint: 'Medical Faculty Reception',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=600&q=80'
+    ],
+    viewCount: 210,
+    status: 'SOLD',
+    buyerDmIntentsCount: 6,
+    adminNote: 'Transaction completed safely at Medical Faculty Reception.',
+    sellerRatingStars: 5,
+    sellerRatingTag: 'Item Matched Description ⭐⭐⭐⭐⭐'
   }
 ];
 
@@ -191,7 +220,10 @@ export const INITIAL_PENDING_MARKETPLACE_ITEMS: MarketplaceItem[] = [
     description: 'Ideal for Medical Lab Science & Microbiology practicals. Crisp illumination, smooth coarse/fine adjustment knobs.',
     meetupPoint: 'Faculty Reception Hall',
     imageUrls: [
-      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'
+      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80'
     ],
     viewCount: 15,
     status: 'PENDING',

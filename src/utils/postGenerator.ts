@@ -83,8 +83,21 @@ export const generateMorePosts = (count: number = 5, startOffset: number = 0): P
     const tpl = POST_TEMPLATES[templateIndex];
     const author = SAMPLE_AUTHORS[authorIndex];
 
-    const minutesAgo = (startOffset + i + 1) * 7 + Math.floor(Math.random() * 5);
-    const timeStr = minutesAgo < 60 ? `${minutesAgo} mins ago` : `${Math.floor(minutesAgo / 60)} hour${Math.floor(minutesAgo / 60) > 1 ? 's' : ''} ago`;
+    const minutesAgo = (startOffset + i + 1) * 12 + Math.floor(Math.random() * 5);
+    let timeStr = '30s ago';
+    if (minutesAgo < 1) {
+      timeStr = `${Math.floor(Math.random() * 45) + 10}s ago`;
+    } else if (minutesAgo < 60) {
+      timeStr = `${minutesAgo}m ago`;
+    } else if (minutesAgo < 1440) {
+      const hours = Math.floor(minutesAgo / 60);
+      timeStr = `${hours}h ago`;
+    } else if (minutesAgo < 5760) {
+      const days = Math.floor(minutesAgo / 1440);
+      timeStr = `${days}d ago`;
+    } else {
+      timeStr = `(22/07/2026)`;
+    }
 
     newPosts.push({
       id: `generated_post_${startOffset + i}_${Date.now()}`,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   INITIAL_USER_PROFILE,
   INITIAL_POSTS,
@@ -14,16 +14,23 @@ import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { CampusHubScreen } from './screens/CampusHubScreen';
 import { ModerationScreen } from './screens/ModerationScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { SearchScreen } from './screens/SearchScreen';
+import { NotificationScreen } from './screens/NotificationScreen';
 import { CreatePostModal } from './components/CreatePostModal';
 import { PostDetailModal } from './components/PostDetailModal';
+import { AuthorProfileModal } from './components/AuthorProfileModal';
 import { PWAInstallModal } from './components/PWAInstallModal';
-import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon, ShieldIcon, BadgeIcon } from './components/NavIcons';
-import { Smartphone, Download } from 'lucide-react';
+import { AuthModal } from './components/AuthModal';
+import { AvatarIcon } from './components/AvatarIcon';
+import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
+import { Smartphone, Search, Bell, Trophy, LogIn, User, Shield, X, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Navigation State
   const [navIndex, setNavIndex] = useState(0);
   const [showPwaModal, setShowPwaModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // App Core State
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
@@ -34,9 +41,30 @@ export const App: React.FC = () => {
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>(INITIAL_VERIFICATION_REQUESTS);
   const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
 
+  // Check initial login session or show register/login modal on first visit
+  useEffect(() => {
+    try {
+      const activeUserJson = localStorage.getItem('fuhsi_active_user');
+      if (activeUserJson) {
+        const parsed = JSON.parse(activeUserJson);
+        if (parsed && parsed.nickname) {
+          setUserProfile(parsed);
+        } else {
+          setShowAuthModal(true);
+        }
+      } else {
+        // First time visiting website - trigger account registration / login
+        setShowAuthModal(true);
+      }
+    } catch {
+      setShowAuthModal(true);
+    }
+  }, []);
+
   // Filter & Selected Item Modals
   const [selectedFilter, setSelectedFilter] = useState('All Campus');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [selectedAuthorPost, setSelectedAuthorPost] = useState<Post | null>(null);
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
 
   // Anti-doxxing helper function: checks phone numbers, email, links, or matric numbers
@@ -135,7 +163,9 @@ export const App: React.FC = () => {
   const handleCreatePost = (data: {
     content: string;
     department: string;
+    targetDepartment?: string;
     category?: string;
+    imageUrl?: string;
     imageResName?: string;
     videoUri?: string;
     pollQuestion?: string;
@@ -143,6 +173,8 @@ export const App: React.FC = () => {
     pollOptB?: string;
   }) => {
     const cleanContent = sanitizeText(data.content);
+    const targetDept = data.targetDepartment || 'General Campus';
+    const isPriority = targetDept !== 'General Campus';
 
     const newPost: Post = {
       id: `post_${Date.now()}`,
@@ -150,9 +182,14 @@ export const App: React.FC = () => {
       authorBadgeType: userProfile.badgeType,
       authorBadgeTitle: userProfile.badgeTitle,
       authorAvatarKey: userProfile.avatarKey,
+      authorDepartment: userProfile.department,
+      authorLevel: userProfile.level,
       department: data.department || 'General',
+      targetDepartment: targetDept,
+      isDepartmentPriority: isPriority,
       category: (data.category as any) || 'General',
       content: cleanContent,
+      imageUrl: data.imageUrl,
       imageResName: data.imageResName,
       videoUri: data.videoUri,
       isGhostMode: false,
@@ -282,47 +319,112 @@ export const App: React.FC = () => {
     level: string,
     bio: string,
     avatarKey: string,
-    emergencyPhone: string
+    emergencyPhone: string,
+    avatarUrl?: string
   ): string | null => {
     const lowerNick = nickname.toLowerCase();
     if (lowerNick.includes('anonymous') || lowerNick.includes('anon')) {
       return 'Error: Nicknames containing "Anonymous" or "Anon" are forbidden. Please choose a unique student handle.';
     }
 
-    setUserProfile((prev) => ({
-      ...prev,
-      nickname,
-      department,
-      level,
-      bio,
-      avatarKey,
-      emergencyHomePhone: emergencyPhone,
-    }));
+    setUserProfile((prev) => {
+      const updated = {
+        ...prev,
+        nickname,
+        department,
+        level,
+        bio,
+        avatarKey,
+        avatarUrl: avatarUrl || prev.avatarUrl,
+        emergencyHomePhone: emergencyPhone,
+      };
+
+      try {
+        localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+        const storedUsers = localStorage.getItem('fuhsi_users_db');
+        if (storedUsers) {
+          let list: UserProfile[] = JSON.parse(storedUsers);
+          list = list.map((u) => (u.id === updated.id ? updated : u));
+          localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+        }
+      } catch (e) {
+        console.error('Error persisting user profile update:', e);
+      }
+
+      return updated;
+    });
     return null;
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] flex flex-col justify-between selection:bg-teal-500 selection:text-white">
-      {/* Top App Header with Install App Option */}
+      {/* Top App Header with Twitter-style Profile Picture Avatar on Left */}
       <header className="sticky top-0 z-30 bg-teal-800 text-white shadow-xs border-b border-teal-900/40">
-        <div className="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-teal-600 border border-teal-400/30 flex items-center justify-center font-black text-white text-sm shadow-xs">
-              FC
-            </div>
-            <div>
-              <h1 className="font-extrabold text-sm tracking-tight text-white leading-tight">FUHSI Connect</h1>
-              <p className="text-[10px] text-teal-200 font-medium">Campus Twitter Network • Ila-Orangun</p>
-            </div>
+        <div className="max-w-2xl mx-auto px-3.5 py-2 flex items-center justify-between">
+          {/* Top-Left Profile Picture Avatar Trigger (Twitter Style) */}
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="group relative flex items-center gap-2 p-1 rounded-full hover:bg-teal-700/80 transition-all text-left focus:outline-none focus:ring-2 focus:ring-teal-400/50"
+              title="Click to check your Student Profile"
+            >
+              <div className="relative">
+                <AvatarIcon
+                  avatarKey={userProfile?.avatarKey || '1'}
+                  className="w-9 h-9 rounded-full ring-2 ring-teal-300/60 shadow-xs group-hover:scale-105 transition-transform"
+                />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-teal-800 rounded-full" />
+              </div>
+              <div className="hidden sm:block leading-tight">
+                <h2 className="font-extrabold text-xs text-white group-hover:text-teal-100 flex items-center gap-1">
+                  <span>{userProfile?.nickname || '@Student'}</span>
+                  <CheckCircle2 size={12} className="text-teal-300" />
+                </h2>
+                <p className="text-[10px] text-teal-200/90 font-medium">{userProfile?.department || 'FUHSI'} • Check Profile</p>
+              </div>
+            </button>
           </div>
 
-          <button
-            onClick={() => setShowPwaModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700/80 hover:bg-teal-700 text-teal-100 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs"
-          >
-            <Smartphone size={14} className="text-teal-300" />
-            <span>Install App</span>
-          </button>
+          {/* App Title */}
+          <div className="text-center hidden md:block">
+            <h1 className="font-black text-sm tracking-tight text-white">FUHSI Connect</h1>
+            <p className="text-[10px] text-teal-200 font-medium">Campus Twitter Network</p>
+          </div>
+
+          {/* Header Right Actions */}
+          <div className="flex items-center gap-2">
+            {(userProfile?.isAdmin || userProfile?.badgeType === 'GOLD' || userProfile?.badgeTitle?.toLowerCase().includes('admin')) && (
+              <button
+                onClick={() => setNavIndex(5)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm ${
+                  navIndex === 5
+                    ? 'bg-amber-400 text-slate-900 ring-2 ring-amber-300'
+                    : 'bg-amber-500/90 hover:bg-amber-400 text-slate-950'
+                }`}
+                title="Open FUHSI Moderation Council Portal"
+              >
+                <Shield size={14} className="fill-slate-900 shrink-0" />
+                <span>Admin Console</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700/80 hover:bg-teal-700 text-teal-100 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs"
+              title="Sign In or Switch Account"
+            >
+              <LogIn size={14} className="text-teal-300" />
+              <span>{userProfile?.nickname ? userProfile.nickname : 'Sign In'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowPwaModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700/80 hover:bg-teal-700 text-teal-100 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs"
+            >
+              <Smartphone size={14} className="text-teal-300" />
+              <span className="hidden sm:inline">Install</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -337,6 +439,7 @@ export const App: React.FC = () => {
             onLikeClick={handleLikeClick}
             onBookmarkClick={handleBookmarkClick}
             onCommentClick={(post) => setSelectedPost(post)}
+            onAuthorClick={(post) => setSelectedAuthorPost(post)}
             onVotePoll={handleVotePoll}
             onReportPost={handleReportPost}
             onCreatePostClick={() => setShowCreatePostModal(true)}
@@ -344,10 +447,14 @@ export const App: React.FC = () => {
         )}
 
         {navIndex === 1 && (
-          <LeaderboardScreen
+          <SearchScreen
             userProfile={userProfile}
-            activePosts={posts}
-            onSubmitVerificationRequest={handleSubmitVerificationRequest}
+            posts={posts}
+            marketplaceItems={marketplaceItems}
+            onSelectPost={(post) => setSelectedPost(post)}
+            onLikeClick={handleLikeClick}
+            onBookmarkClick={handleBookmarkClick}
+            onCommentClick={(post) => setSelectedPost(post)}
           />
         )}
 
@@ -368,47 +475,68 @@ export const App: React.FC = () => {
         )}
 
         {navIndex === 3 && (
-          <ModerationScreen
-            userProfile={userProfile}
-            flaggedPosts={posts.filter((p) => p.isFlagged)}
-            reports={reports}
-            verificationRequests={verificationRequests}
-            pendingMarketplaceItems={pendingMarketplaceItems}
-            onToggleAntiDoxxing={() => {}}
-            onToggleProfanityShield={() => {}}
-            onDismissReport={(repId, postId) => {
-              setReports((prev) => prev.filter((r) => r.id !== repId));
-            }}
-            onQuarantinePost={(repId, postId) => {
-              setPosts((prev) => prev.filter((p) => p.id !== postId));
-              setReports((prev) => prev.filter((r) => r.id !== repId));
-            }}
-            onDeletePost={(postId) => {
-              setPosts((prev) => prev.filter((p) => p.id !== postId));
-            }}
-            onUpdateBadge={(type, title) => {
-              setUserProfile((prev) => ({ ...prev, badgeType: type, badgeTitle: title }));
-            }}
-            onUpdateReputationScore={(score) => {
-              setUserProfile((prev) => ({ ...prev, reputationScore: score }));
-            }}
-            onUpdateVerificationRequestStatus={(id, status) => {
-              setVerificationRequests((prev) =>
-                prev.map((v) => (v.id === id ? { ...v, status } : v))
-              );
-            }}
-            onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
-            onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
-            onSendPriceAdvisory={(id, suggestedPrice, msg) => {
-              handleAdminApproveMarketplaceItem(id, suggestedPrice, `Price Advisory: ${msg}`);
-            }}
-          />
+          <NotificationScreen userProfile={userProfile} />
         )}
 
         {navIndex === 4 && (
-          <ProfileScreen userProfile={userProfile} onSaveProfile={handleSaveUserProfile} />
+          <LeaderboardScreen
+            userProfile={userProfile}
+            activePosts={posts}
+            onSubmitVerificationRequest={handleSubmitVerificationRequest}
+          />
+        )}
+
+        {navIndex === 5 && (
+          <ModerationScreen
+            userProfile={userProfile}
+            reports={reports}
+            pendingMarketplaceItems={pendingMarketplaceItems}
+            verificationRequests={verificationRequests}
+            onApproveItem={handleAdminApproveMarketplaceItem}
+            onRejectItem={handleAdminRejectMarketplaceItem}
+            onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
+            onApproveVerification={(reqId) => setVerificationRequests((prev) => prev.filter((v) => v.id !== reqId))}
+            onRejectVerification={(reqId) => setVerificationRequests((prev) => prev.filter((v) => v.id !== reqId))}
+          />
         )}
       </main>
+
+      {/* Profile Modal / Drawer (Triggered by Top-Left Profile Picture Avatar) */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
+            <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
+              <div className="flex items-center gap-2.5">
+                <AvatarIcon avatarKey={userProfile.avatarKey} className="w-8 h-8 rounded-full border border-teal-300" />
+                <div>
+                  <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
+                  <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-2 sm:p-4">
+              <ProfileScreen
+                userProfile={userProfile}
+                onSaveProfile={(updated) => {
+                  handleSaveUserProfile(updated);
+                  setShowProfileModal(false);
+                }}
+                onOpenAuthModal={() => {
+                  setShowProfileModal(false);
+                  setShowAuthModal(true);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Post Details Modal */}
       {selectedPost && (
@@ -420,6 +548,26 @@ export const App: React.FC = () => {
           onAddComment={(text) => handleAddComment(selectedPost.id, text)}
           onToggleLike={handleLikeClick}
           onToggleBookmark={handleBookmarkClick}
+        />
+      )}
+
+      {/* Author Profile Details Modal (When clicking author name or avatar) */}
+      {selectedAuthorPost && (
+        <AuthorProfileModal
+          authorNickname={selectedAuthorPost.authorNickname || selectedAuthorPost.nickname || 'Student'}
+          authorDepartment={selectedAuthorPost.authorDepartment || selectedAuthorPost.department}
+          authorAvatarKey={selectedAuthorPost.authorAvatarKey || '1'}
+          authorBadgeType={selectedAuthorPost.authorBadgeType as BadgeType}
+          authorBadgeTitle={selectedAuthorPost.authorBadgeTitle}
+          authorLevel={selectedAuthorPost.authorLevel}
+          allPosts={posts}
+          onClose={() => setSelectedAuthorPost(null)}
+          onLikeClick={handleLikeClick}
+          onBookmarkClick={handleBookmarkClick}
+          onCommentClick={(p) => {
+            setSelectedAuthorPost(null);
+            setSelectedPost(p);
+          }}
         />
       )}
 
@@ -439,57 +587,72 @@ export const App: React.FC = () => {
         onClose={() => setShowPwaModal(false)}
       />
 
-      {/* Bottom Sticky Navigation Bar */}
+      {/* Account Register & Login Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLoginSuccess={(user) => {
+          setUserProfile(user);
+          setShowAuthModal(false);
+        }}
+      />
+
+      {/* Bottom Footer Sticky Navigation Bar - Feed, Search, Hub&Fund, Notification, Ranking */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-lg">
-        <div className="max-w-md mx-auto flex items-center justify-around py-2 px-3">
+        <div className="max-w-md mx-auto flex items-center justify-around py-2 px-2">
+          {/* 1. Feed */}
           <button
             onClick={() => setNavIndex(0)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              navIndex === 0 ? 'text-teal-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              navIndex === 0 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <DynamicFeedIcon className="w-5 h-5" />
             <span className="text-[11px]">Feed</span>
           </button>
 
+          {/* 2. Search */}
           <button
             onClick={() => setNavIndex(1)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              navIndex === 1 ? 'text-teal-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              navIndex === 1 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <LeaderboardIcon className="w-5 h-5" />
-            <span className="text-[11px]">Rankings</span>
+            <Search className="w-5 h-5" />
+            <span className="text-[11px]">Search</span>
           </button>
 
+          {/* 3. Hub&Fund */}
           <button
             onClick={() => setNavIndex(2)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              navIndex === 2 ? 'text-teal-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              navIndex === 2 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <StorefrontIcon className="w-5 h-5" />
-            <span className="text-[11px]">Hub & Fund</span>
+            <span className="text-[11px]">Hub&Fund</span>
           </button>
 
+          {/* 4. Notification */}
           <button
             onClick={() => setNavIndex(3)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              navIndex === 3 ? 'text-teal-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              navIndex === 3 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <ShieldIcon className="w-5 h-5" />
-            <span className="text-[11px]">Safety</span>
+            <Bell className="w-5 h-5" />
+            <span className="text-[11px]">Notification</span>
           </button>
 
+          {/* 5. Ranking */}
           <button
             onClick={() => setNavIndex(4)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              navIndex === 4 ? 'text-teal-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              navIndex === 4 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <BadgeIcon className="w-5 h-5" />
-            <span className="text-[11px]">Profile</span>
+            <LeaderboardIcon className="w-5 h-5" />
+            <span className="text-[11px]">Ranking</span>
           </button>
         </div>
       </nav>

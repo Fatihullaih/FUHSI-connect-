@@ -5,15 +5,11 @@ import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { generateMorePosts } from '../utils/postGenerator';
 import { 
   Plus, 
-  Search, 
-  Filter, 
-  TrendingUp, 
-  Clock, 
-  Flame, 
-  Sparkles,
-  HeartHandshake,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  SquarePen,
+  ArrowUp,
+  Sparkles
 } from 'lucide-react';
 
 interface FeedScreenProps {
@@ -27,6 +23,7 @@ interface FeedScreenProps {
   onCommentClick?: (post: Post) => void;
   onVotePoll?: (post: Post, option: 'A' | 'B') => void;
   onReportPost?: (post: Post, reason: string) => void;
+  onAuthorClick?: (post: Post) => void;
   onCreatePostClick?: () => void;
 
   // Legacy / alternative props compatibility
@@ -49,7 +46,9 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   onCommentClick,
   onVotePoll,
   onReportPost,
+  onAuthorClick,
   onCreatePostClick,
+  onCreatePost,
   comments = {},
   onVote,
   onBookmark,
@@ -57,17 +56,45 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   onFlagPost,
 }) => {
   const [internalFilter, setInternalFilter] = useState<string>('All Campus');
-  const [sortBy, setSortBy] = useState<'trending' | 'latest' | 'upvoted'>('trending');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [autoRefreshNotice, setAutoRefreshNotice] = useState<string | null>(null);
 
-  // Endless scrolling state
+  // Finite scrolling state with clear end
   const [extraPosts, setExtraPosts] = useState<Post[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasReachedEnd, setHasReachedEnd] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const loadCountRef = useRef(0);
+  const MAX_LOAD_BATCHES = 3; // Stops at the last batch of posts
 
   const currentUser = userProfile || user || INITIAL_USER_PROFILE;
   const currentFilter = externalFilter !== undefined ? externalFilter : internalFilter;
+
+  // Handle scroll detection for Back to Top button
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-refresh interval (checks every 25 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAutoRefreshNotice('✨ Feed updated automatically with fresh campus posts');
+      setTimeout(() => setAutoRefreshNotice(null), 4000);
+    }, 25000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleSelectFilter = (cat: string) => {
     if (onFilterSelect) {
@@ -79,36 +106,54 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
 
   const filterOptions = [
     'All Campus',
-    'Medicine & Surgery',
-    'Nursing Science',
-    'Medical Lab Science',
-    'Biochemistry',
-    'Public Health',
-    'Pharmacy',
+    'MBBS',
+    'NSC',
+    'MLS',
+    'DPT',
+    'AUD',
+    'PHM',
+    'HND',
+    'ITH',
+    'MCB',
+    'BCH',
+    'BMB',
+    'EHS',
+    'PRT',
   ];
 
-  // Infinite Scroll Trigger Function
+  // Infinite Scroll Trigger Function with distinct end
   const loadMorePosts = useCallback(() => {
-    if (isLoadingMore) return;
+    if (isLoadingMore || hasReachedEnd) return;
+    if (loadCountRef.current >= MAX_LOAD_BATCHES) {
+      setHasReachedEnd(true);
+      return;
+    }
+
     setIsLoadingMore(true);
 
     setTimeout(() => {
-      const nextBatch = generateMorePosts(5, loadCountRef.current * 5);
+      const nextBatch = generateMorePosts(4, loadCountRef.current * 4);
       loadCountRef.current += 1;
       setExtraPosts((prev) => [...prev, ...nextBatch]);
       setIsLoadingMore(false);
-    }, 600);
-  }, [isLoadingMore]);
 
-  // Intersection Observer for endless Twitter-style scrolling
+      if (loadCountRef.current >= MAX_LOAD_BATCHES) {
+        setHasReachedEnd(true);
+      }
+    }, 600);
+  }, [isLoadingMore, hasReachedEnd]);
+
+  // Intersection Observer for scroll trigger
   useEffect(() => {
+    if (hasReachedEnd) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isLoadingMore) {
+        if (entries[0].isIntersecting && !isLoadingMore && !hasReachedEnd) {
           loadMorePosts();
         }
       },
-      { threshold: 0.1, rootMargin: '200px' }
+      { threshold: 0.1, rootMargin: '150px' }
     );
 
     const currentTarget = observerTarget.current;
@@ -121,244 +166,173 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
         observer.unobserve(currentTarget);
       }
     };
-  }, [observerTarget, isLoadingMore, loadMorePosts]);
+  }, [observerTarget, isLoadingMore, hasReachedEnd, loadMorePosts]);
 
-  // Combine initial posts and endless extra posts
+  // Helper to parse relative timestamp age in minutes for exact chronological sorting
+  const getTimestampAgeInMinutes = (timestampStr?: string): number => {
+    if (!timestampStr) return 0;
+    const str = timestampStr.toLowerCase().trim();
+    if (str.includes('just now') || str.includes('30s') || str.includes('sec')) return 0.5;
+    if (str.includes('min') || str.includes('m ago')) {
+      const match = str.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 3;
+    }
+    if (str.includes('hr') || str.includes('h ago') || str.includes('hour')) {
+      const match = str.match(/\d+/);
+      return match ? parseInt(match[0], 10) * 60 : 120;
+    }
+    if (str.includes('day') || str.includes('d ago')) {
+      const match = str.match(/\d+/);
+      return match ? parseInt(match[0], 10) * 1440 : 4320;
+    }
+    return 9999;
+  };
+
+  // Combine initial posts and extra loaded posts
   const allCombinedPosts = [...posts, ...extraPosts];
 
-  // Filter & Search
+  // Filter posts by selected department/category
   let filteredPosts = allCombinedPosts.filter((post) => {
     if (post.status === 'Removed') return false;
 
-    // Filter by department or category
     if (currentFilter !== 'All Campus' && currentFilter !== 'All') {
       const dept = post.department || post.authorDepartment || '';
+      const targetDept = post.targetDepartment || '';
       const cat = post.category || '';
-      if (dept !== currentFilter && cat !== currentFilter) return false;
-    }
 
-    // Search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const content = (post.content || '').toLowerCase();
-      const author = (post.authorNickname || '').toLowerCase();
-      const dept = (post.department || post.authorDepartment || '').toLowerCase();
-      return content.includes(query) || author.includes(query) || dept.includes(query);
+      const matchesFilter =
+        dept.toLowerCase().includes(currentFilter.toLowerCase()) ||
+        targetDept.toLowerCase().includes(currentFilter.toLowerCase()) ||
+        cat.toLowerCase() === currentFilter.toLowerCase();
+
+      if (!matchesFilter) return false;
     }
 
     return true;
   });
 
-  // Sort
-  filteredPosts = [...filteredPosts].sort((a, b) => {
-    const aLikes = a.likesCount ?? a.upvotes ?? 0;
-    const bLikes = b.likesCount ?? b.upvotes ?? 0;
-    const aComments = a.commentsCount ?? a.commentCount ?? 0;
-    const bComments = b.commentsCount ?? b.commentCount ?? 0;
-
-    if (sortBy === 'trending') return (bLikes + bComments * 2) - (aLikes + aComments * 2);
-    if (sortBy === 'upvoted') return bLikes - aLikes;
-    return 0; // default order
-  });
-
-  const nickname = currentUser?.nickname || '@FUHSIStudent';
-  const initial = nickname.replace('@', '').charAt(0) || 'F';
+  // Sort strictly chronologically: 3min ago -> 2hrs ago -> 3 days ago (newest first)
+  filteredPosts.sort((a, b) => getTimestampAgeInMinutes(a.timestamp) - getTimestampAgeInMinutes(b.timestamp));
 
   return (
-    <div className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-24">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Feed Column */}
-        <div className="lg:col-span-3 space-y-5">
-          {/* Create Post Bar Trigger */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center font-bold text-teal-800 shrink-0 uppercase">
-              {initial}
-            </div>
-            <button
-              onClick={() => onCreatePostClick && onCreatePostClick()}
-              className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl px-4 py-2.5 text-left text-xs sm:text-sm font-medium text-slate-500 transition-colors flex items-center justify-between group"
-            >
-              <span>Share an update, lecture tip, or confession with FUHSI...</span>
-              <Sparkles size={16} className="text-teal-600 group-hover:scale-110 transition-transform" />
-            </button>
-            <button
-              onClick={() => onCreatePostClick && onCreatePostClick()}
-              className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Plus size={16} />
-              <span className="hidden sm:inline">Post</span>
-            </button>
-          </div>
-
-          {/* Search & Sorting Controls */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-            {/* Search Input */}
-            <div className="relative w-full sm:w-72">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search posts or topics..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium focus:outline-none focus:border-teal-500 focus:bg-white"
-              />
-            </div>
-
-            {/* Sort Buttons */}
-            <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl w-full sm:w-auto justify-center">
-              <button
-                onClick={() => setSortBy('trending')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  sortBy === 'trending' ? 'bg-white text-teal-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Flame size={14} />
-                Trending
-              </button>
-              <button
-                onClick={() => setSortBy('latest')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  sortBy === 'latest' ? 'bg-white text-teal-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Clock size={14} />
-                Latest
-              </button>
-              <button
-                onClick={() => setSortBy('upvoted')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  sortBy === 'upvoted' ? 'bg-white text-teal-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <TrendingUp size={14} />
-                Most Liked
-              </button>
-            </div>
-          </div>
-
-          {/* Category / Department Horizontal Pill Selector */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {filterOptions.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => handleSelectFilter(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
-                  currentFilter === cat
-                    ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
-                    : 'bg-white text-slate-600 border-slate-200/90 hover:border-slate-300'
-                }`}
-              >
-                {cat === 'All Campus' ? '🌟 All Campus' : cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Posts List */}
-          <div className="space-y-4">
-            {filteredPosts.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <Filter size={24} />
-                </div>
-                <h3 className="text-slate-800 font-bold text-base mb-1">No posts found</h3>
-                <p className="text-slate-500 text-xs max-w-sm mx-auto mb-4">
-                  No campus posts match your filter or search criteria. Try selecting another topic or publish a new post.
-                </p>
-                <button
-                  onClick={() => { handleSelectFilter('All Campus'); setSearchQuery(''); }}
-                  className="text-xs font-bold text-teal-700 hover:underline"
-                >
-                  Reset Filters
-                </button>
-              </div>
-            ) : (
-              <>
-                {filteredPosts.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    comments={comments[post.id] || []}
-                    onLikeClick={onLikeClick}
-                    onBookmarkClick={onBookmarkClick}
-                    onCommentClick={onCommentClick}
-                    onVotePoll={onVotePoll}
-                    onReportPost={onReportPost}
-                    onVote={onVote}
-                    onBookmark={onBookmark}
-                    onAddComment={onAddComment}
-                    onFlagPost={onFlagPost}
-                  />
-                ))}
-
-                {/* Twitter / X Style Infinite Endless Scroll Trigger Element */}
-                <div ref={observerTarget} className="py-6 text-center flex flex-col items-center justify-center">
-                  {isLoadingMore ? (
-                    <div className="flex items-center gap-2 text-xs font-bold text-teal-700 bg-teal-50 px-4 py-2.5 rounded-full border border-teal-200/80 shadow-xs">
-                      <Loader2 size={16} className="animate-spin text-teal-600" />
-                      <span>Loading more campus posts...</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={loadMorePosts}
-                      className="text-xs font-bold text-slate-500 hover:text-teal-700 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
-                    >
-                      <RefreshCw size={14} />
-                      <span>Endless Feed • Click to fetch more updates</span>
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+    <div className="py-4 px-3 sm:px-4 max-w-2xl mx-auto pb-28 space-y-3">
+      {/* Auto-refresh Notification Toast */}
+      {autoRefreshNotice && (
+        <div className="sticky top-14 z-20 bg-teal-800 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center justify-between animate-in slide-in-from-top-2 border border-teal-600">
+          <span className="flex items-center gap-2">
+            <Sparkles size={15} className="text-teal-300" />
+            <span>{autoRefreshNotice}</span>
+          </span>
+          <button onClick={() => setAutoRefreshNotice(null)} className="text-teal-200 hover:text-white font-black text-sm">
+            ✕
+          </button>
         </div>
+      )}
 
-        {/* Sidebar Info & Shortcuts */}
-        <div className="space-y-5">
-          {/* FUHSI Campus Pulse Card */}
-          <div className="bg-gradient-to-br from-teal-900 to-emerald-950 text-white rounded-2xl p-5 shadow-lg border border-teal-800/50">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-300">FUHSI Campus Pulse</span>
-            </div>
-            <h3 className="font-extrabold text-lg text-white mb-2">Federal University of Health Sciences, Ila-Orangun</h3>
-            <p className="text-xs text-teal-100/80 leading-relaxed mb-4">
-              Building the future of Nigerian Healthcare & Medical Technology. Connect with peers safely via nickname identity.
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-center pt-2 border-t border-teal-800/80">
-              <div className="bg-teal-900/60 p-2 rounded-xl border border-teal-700/50">
-                <div className="text-lg font-extrabold text-emerald-300">{posts.length}</div>
-                <div className="text-[10px] text-teal-200">Active Posts</div>
-              </div>
-              <div className="bg-teal-900/60 p-2 rounded-xl border border-teal-700/50">
-                <div className="text-lg font-extrabold text-emerald-300">6</div>
-                <div className="text-[10px] text-teal-200">Faculties</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Guidelines Card */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs">
-            <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
-              <HeartHandshake size={16} className="text-teal-600" />
-              Community Code
-            </h4>
-            <ul className="text-xs space-y-2 text-slate-600 font-medium">
-              <li className="flex items-start gap-2">
-                <span className="text-teal-600 font-bold">•</span>
-                <span>Respect peer anonymity & nickname choices</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-teal-600 font-bold">•</span>
-                <span>Share verified academic materials & revision guides</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-teal-600 font-bold">•</span>
-                <span>Strict zero-tolerance for exam leaks or harassment</span>
-              </li>
-            </ul>
-          </div>
+      {/* Category / Department Horizontal Pill Selector */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-2.5 shadow-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {filterOptions.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => handleSelectFilter(cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                currentFilter === cat
+                  ? 'bg-teal-800 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat === 'All Campus' ? '🌟 All Campus' : cat}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Chronological Feed */}
+      <div className="space-y-3">
+        {filteredPosts.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            comments={comments[post.id] || []}
+            onLikeClick={onLikeClick}
+            onBookmarkClick={onBookmarkClick}
+            onCommentClick={onCommentClick}
+            onVotePoll={onVotePoll}
+            onReportPost={onReportPost}
+            onAuthorClick={onAuthorClick}
+            onVote={onVote}
+            onBookmark={onBookmark}
+            onAddComment={onAddComment}
+            onFlagPost={onFlagPost}
+          />
+        ))}
+
+        {/* End of Posts & Back to Top Handler */}
+        {!hasReachedEnd ? (
+          <div ref={observerTarget} className="py-6 text-center flex flex-col items-center justify-center space-y-3">
+            {isLoadingMore ? (
+              <div className="flex items-center gap-2 text-xs font-bold text-teal-800 bg-teal-50 px-4 py-2.5 rounded-full border border-teal-200/80 shadow-xs">
+                <Loader2 size={16} className="animate-spin text-teal-700" />
+                <span>Loading older campus posts...</span>
+              </div>
+            ) : (
+              <button
+                onClick={loadMorePosts}
+                className="text-xs font-bold text-slate-500 hover:text-teal-800 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <RefreshCw size={14} />
+                <span>Load older posts...</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="py-6 px-4 bg-white rounded-2xl border border-slate-200/90 text-center space-y-3 shadow-xs">
+            <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-full flex items-center justify-center mx-auto border border-teal-200">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-900">You've reached the last post on the feed!</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Click "Back to Top" below to return to the newest updates.</p>
+            </div>
+            <button
+              onClick={scrollToTop}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <ArrowUp size={15} />
+              <span>Back to Top</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Floating Back to Top Button (visible when scrolled down) */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-20 left-4 sm:left-8 z-40 bg-slate-900/90 hover:bg-slate-900 active:scale-95 text-white rounded-full p-3 shadow-xl flex items-center gap-1.5 transition-all border border-slate-700/60"
+          title="Back to Top"
+        >
+          <ArrowUp className="w-5 h-5 text-white" />
+          <span className="hidden sm:inline font-bold text-xs pr-1">Top</span>
+        </button>
+      )}
+
+      {/* Floating Action Button for Creating Posts */}
+      <button
+        onClick={() => {
+          if (onCreatePostClick) {
+            onCreatePostClick();
+          } else if (onCreatePost) {
+            onCreatePost('', 'GENERAL');
+          }
+        }}
+        className="fixed bottom-20 right-4 sm:right-8 z-40 bg-teal-700 hover:bg-teal-800 active:scale-95 text-white rounded-full p-4 sm:px-5 sm:py-3.5 shadow-2xl flex items-center gap-2 transition-all hover:scale-105 border border-teal-500/40 group"
+        title="Post to Campus Feed"
+      >
+        <SquarePen className="w-5 h-5 text-white transition-transform group-hover:rotate-6" />
+        <span className="hidden sm:inline font-black text-sm tracking-wide">Post</span>
+      </button>
     </div>
   );
 };

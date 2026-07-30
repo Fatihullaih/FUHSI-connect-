@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { User, Lock, Award, Star, School, ShieldAlert, CheckCircle2, Save, ChevronDown } from 'lucide-react';
+import { User, Lock, Award, Star, School, ShieldAlert, CheckCircle2, Save, ChevronDown, LogOut, UserPlus, Upload, Camera, Image as ImageIcon, Trash2, Link } from 'lucide-react';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
 
@@ -12,32 +12,42 @@ interface ProfileScreenProps {
     level: string,
     bio: string,
     avatarKey: string,
-    emergencyPhone: string
+    emergencyPhone: string,
+    avatarUrl?: string
   ) => string | null;
+  onOpenAuthModal?: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSaveProfile }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSaveProfile, onOpenAuthModal }) => {
   const [nickname, setNickname] = useState(userProfile?.nickname || '@IlaMedHero');
-  const [department, setDepartment] = useState(userProfile?.department || 'Medicine & Surgery');
+  const [department, setDepartment] = useState(userProfile?.department || 'Medicine and Surgery (MBBS)');
   const [level, setLevel] = useState(userProfile?.level || '300L');
   const [bio, setBio] = useState(userProfile?.bio || 'FUHSI Student | Learning & Saving Lives');
   const [emergencyPhone, setEmergencyPhone] = useState(userProfile?.emergencyHomePhone || '08031234567');
   const [selectedAvatarKey, setSelectedAvatarKey] = useState(userProfile?.avatarKey || 'caduceus');
+  const [avatarUrl, setAvatarUrl] = useState<string>(userProfile?.avatarUrl || '');
+  const [customUrlInput, setCustomUrlInput] = useState<string>('');
 
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [showSavedToast, setShowSavedToast] = useState(false);
 
   const departments = [
-    'Medicine & Surgery',
-    'Nursing Science',
-    'Medical Lab Science',
-    'Biochemistry',
-    'Public Health',
-    'Anatomy & Physiology',
-    'Pharmacy',
+    'Medicine and Surgery (MBBS)',
+    'Nursing Science (NSC)',
+    'Medical Laboratory Science (MLS)',
+    'Doctor of Physiotherapy (DPT)',
+    'Audiology (AUD)',
+    'Pharmacology (PHM)',
+    'Nutrition and Dietetics (HND)',
+    'Information Technology and Health Informatics (ITH)',
+    'Microbiology (MCB)',
+    'Biochemistry (BCH)',
+    'Biotechnology and Molecular Biology (BMB)',
+    'Environmental Health Science (EHS)',
+    'Prosthetics and Orthotics (PRT)',
   ];
 
-  const levels = ['100L', '200L', '300L', '400L', '500L', 'Postgraduate'];
+  const levels = ['100L', '200L', '300L', '400L', '500L'];
 
   const avatarOptions = [
     { key: 'caduceus', label: 'Medicine 🩺' },
@@ -51,15 +61,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSav
   const targetScore = 3000;
   const scoreProgressPct = Math.min(Math.round((repScore / targetScore) * 100), 100);
 
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setSaveErrorMessage('Image file size must be less than 5MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setAvatarUrl(reader.result);
+          setSaveErrorMessage(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setSaveErrorMessage(null);
     setShowSavedToast(false);
 
-    const error = onSaveProfile(nickname, department, level, bio, selectedAvatarKey, emergencyPhone);
+    const finalAvatarUrl = customUrlInput.trim() ? customUrlInput.trim() : avatarUrl;
+
+    const error = onSaveProfile(nickname, department, level, bio, selectedAvatarKey, emergencyPhone, finalAvatarUrl);
     if (error) {
       setSaveErrorMessage(error);
     } else {
+      setAvatarUrl(finalAvatarUrl);
+      setCustomUrlInput('');
       setShowSavedToast(true);
       setTimeout(() => setShowSavedToast(false), 3000);
     }
@@ -70,7 +102,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSav
       {/* Top Card: Student Profile Header */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-start gap-4">
-          <AvatarIcon avatarKey={selectedAvatarKey} sizeClassName="w-16 h-16" />
+          <div className="relative group shrink-0">
+            <AvatarIcon avatarKey={selectedAvatarKey} avatarUrl={avatarUrl} sizeClassName="w-16 h-16 rounded-full ring-2 ring-teal-500/30 object-cover" />
+            <label className="absolute -bottom-1 -right-1 bg-teal-600 hover:bg-teal-700 text-white p-1.5 rounded-full cursor-pointer shadow-md transition-all hover:scale-110">
+              <Camera size={12} />
+              <input type="file" accept="image/*" onChange={handleImageFileUpload} className="hidden" />
+            </label>
+          </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -226,26 +264,81 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSav
       <form onSubmit={handleSave} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
         <h2 className="font-bold text-slate-900 text-sm">Edit Nickname Profile Details</h2>
 
-        {/* Avatar Picker */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-2">Choose Your Campus Avatar</label>
-          <div className="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar">
-            {avatarOptions.map(({ key, label }) => {
-              const isSelected = selectedAvatarKey === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSelectedAvatarKey(key)}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all shrink-0 ${
-                    isSelected ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-500/20' : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  <AvatarIcon avatarKey={key} sizeClassName="w-10 h-10" />
-                  <span className="text-[10px] font-bold text-slate-700">{label}</span>
-                </button>
-              );
-            })}
+        {/* Profile Picture & Avatar Section */}
+        <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/90">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+              <Camera className="w-4 h-4 text-teal-600" />
+              <span>Profile Picture & Campus Avatar</span>
+            </label>
+            {avatarUrl && (
+              <button
+                type="button"
+                onClick={() => setAvatarUrl('')}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+              >
+                <Trash2 size={12} />
+                <span>Remove Custom Picture</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="shrink-0 relative">
+              <AvatarIcon
+                avatarKey={selectedAvatarKey}
+                avatarUrl={avatarUrl || customUrlInput}
+                sizeClassName="w-14 h-14 rounded-full ring-2 ring-teal-500/30 object-cover"
+              />
+            </div>
+
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors">
+                  <Upload size={14} />
+                  <span>Upload Picture</span>
+                  <input type="file" accept="image/*" onChange={handleImageFileUpload} className="hidden" />
+                </label>
+                <span className="text-[10px] text-slate-500">JPG, PNG or WEBP (Max 5MB)</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Link size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  <input
+                    type="url"
+                    value={customUrlInput}
+                    onChange={(e) => setCustomUrlInput(e.target.value)}
+                    placeholder="Or paste image web link..."
+                    className="w-full pl-7 pr-2.5 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-800 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Or Choose Built-in Department Icon:</label>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {avatarOptions.map(({ key, label }) => {
+                const isSelected = selectedAvatarKey === key && !avatarUrl && !customUrlInput;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAvatarKey(key);
+                    }}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all shrink-0 ${
+                      isSelected ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-500/20' : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <AvatarIcon avatarKey={key} sizeClassName="w-8 h-8" />
+                    <span className="text-[10px] font-bold text-slate-700">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -273,7 +366,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSav
             type="tel"
             value={emergencyPhone}
             onChange={(e) => setEmergencyPhone(e.target.value)}
-            placeholder="080XXXXXXXX (Hidden from public)"
+            placeholder="Enter Phone Number (Hidden from public)"
             className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-teal-500"
             required
           />
@@ -343,6 +436,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ userProfile, onSav
           <Save className="w-4 h-4" />
           Update Nickname Profile
         </button>
+
+        {/* Switch Account / Register New Account */}
+        {onOpenAuthModal && (
+          <div className="pt-2 border-t border-slate-100 mt-3 text-center">
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+            >
+              <UserPlus className="w-4 h-4 text-teal-600" />
+              <span>Switch Account / Register New Account</span>
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
