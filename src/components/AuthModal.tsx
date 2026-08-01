@@ -274,6 +274,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       reputationScore: 100,
       isVerified: false,
       isApproved: false, // Must wait for admin approval!
+      isAdmin: false,
       strikes: 0,
       isBanned: false,
     };
@@ -309,7 +310,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     // 1. Check Primary Executive Admin account handle (@modula) with password (ibraheem)
     if (
       (searchKey === '@modula' || searchKey === 'modula') &&
-      loginPassword.trim().toLowerCase() === 'ibraheem'
+      loginPassword.trim() === 'ibraheem'
     ) {
       const modulaAdmin: UserProfile = {
         id: 'usr_admin_modula',
@@ -334,28 +335,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // 2. Check if logging in as Admin via Admin Portal or Admin Keyword
-    if (isAdminPortal || searchKey.includes('admin') || searchKey === '@modula' || searchKey === 'modula') {
-      const adminProfile: UserProfile = {
-        id: 'usr_admin_fuhsi',
-        nickname: searchKey.startsWith('@') ? searchKey : `@${searchKey}`,
-        realName: 'FUHSI Executive Admin',
-        matricNumber: 'FUHSI/ADMIN/001',
-        department: 'FUHSI Administration',
-        level: 'Council',
-        bio: 'Official Executive Admin & Moderation Council Officer.',
-        avatarKey: '1',
-        badgeType: 'GOLD',
-        badgeTitle: 'Official Admin',
-        reputationScore: 9999,
-        isVerified: true,
-        isApproved: true,
-        isAdmin: true,
-      };
-
-      localStorage.setItem('fuhsi_active_user', JSON.stringify(adminProfile));
-      onLoginSuccess(adminProfile);
-      onClose();
+    if (searchKey === '@modula' || searchKey === 'modula') {
+      setErrorMessage('Incorrect password for Executive Admin (@modula).');
       return;
     }
 
@@ -376,8 +357,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     if (matchedUser) {
-      if (matchedUser.isApproved === false) {
-        setErrorMessage('Your account registration is still pending verification and approval by FUHSI Admin. Access is restricted until accepted.');
+      if (matchedUser.isApproved === false && !matchedUser.isAdmin) {
+        setErrorMessage('Access to the campus feed is restricted until your matric credentials are verified and accepted.');
         return;
       }
       localStorage.setItem('fuhsi_active_user', JSON.stringify(matchedUser));
@@ -452,7 +433,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               • Your account registration has been successfully recorded.
             </p>
             <p className="text-amber-800 leading-snug font-medium">
-              • Access to the campus feed is restricted until your matric credentials are verified and accepted by FUHSI Administration.
+              • Access to the campus feed is restricted until your matric credentials are verified and accepted.
             </p>
           </div>
 
@@ -479,21 +460,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-5 text-white shrink-0 relative">
           <div className="flex items-center justify-between">
             <div
-              onClick={handleSecretHeaderClick}
+              onDoubleClick={() => {
+                setIsAdminPortal((prev) => !prev);
+                setErrorMessage('');
+              }}
               className="flex items-center gap-2.5 cursor-pointer select-none group"
               title="FUHSI-Connect"
             >
-              <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-xs flex items-center justify-center text-teal-200 border border-white/20 group-active:scale-95 transition-transform">
-                <Stethoscope size={22} />
-              </div>
+              <img
+                src="/src/assets/images/fuhsi_logo_1785485694958.jpg"
+                alt="FUHSI Connect"
+                className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/30 group-active:scale-95 transition-transform shadow-xs"
+                referrerPolicy="no-referrer"
+              />
               <div>
                 <h2 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
                   <span>FUHSI-Connect</span>
-                  {isAdminUnlocked && (
-                    <span className="text-[10px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded-md shadow-xs animate-in zoom-in-50">
-                      🛡️ Admin Mode
-                    </span>
-                  )}
                 </h2>
               </div>
             </div>
@@ -711,38 +693,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               ) : (
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center justify-between gap-2">
                   <span>Enter your registered <span className="font-bold text-slate-900">Username (@nickname)</span> and password to sign in.</span>
-                  {/* Secret hidden shield button - triple click or click to toggle admin */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdminPortal(true);
-                      setLoginIdentifier('@Admin_FUHSI');
-                    }}
-                    className="p-1 text-slate-300 hover:text-amber-500 transition-colors shrink-0"
-                    title="FUHSI Security Node"
-                  >
-                    <ShieldCheck size={14} />
-                  </button>
                 </div>
               )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  {isAdminPortal ? 'Admin Username' : 'Username'} <span className="text-rose-500">*</span>
+                  Username <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <User size={15} className="absolute left-3 top-2.5 text-slate-400" />
                   <input
                     type="text"
                     value={loginIdentifier}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setLoginIdentifier(val);
-                      if (val.toLowerCase().includes('admin')) {
-                        setIsAdminPortal(true);
-                      }
-                    }}
-                    placeholder={isAdminPortal ? '@Admin_FUHSI' : 'Enter Username'}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                    placeholder="Enter Username"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
                     required
                   />

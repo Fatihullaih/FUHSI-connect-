@@ -8,7 +8,7 @@ import {
   INITIAL_VERIFICATION_REQUESTS,
   INITIAL_REPORTS,
 } from './data/initialData';
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType } from './types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { CampusHubScreen } from './screens/CampusHubScreen';
@@ -32,14 +32,113 @@ export const App: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // App Core State
+  // App Core State with Persistent LocalStorage Initialization
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
-  const [comments, setComments] = useState<Comment[]>(INITIAL_COMMENTS);
-  const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceItem[]>(INITIAL_MARKETPLACE_ITEMS);
-  const [pendingMarketplaceItems, setPendingMarketplaceItems] = useState<MarketplaceItem[]>(INITIAL_PENDING_MARKETPLACE_ITEMS);
-  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>(INITIAL_VERIFICATION_REQUESTS);
-  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
+  
+  const [posts, setPosts] = useState<Post[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_posts_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_POSTS;
+  });
+
+  const [comments, setComments] = useState<Comment[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_comments_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_COMMENTS;
+  });
+
+  const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_marketplace_approved_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_MARKETPLACE_ITEMS;
+  });
+
+  const [pendingMarketplaceItems, setPendingMarketplaceItems] = useState<MarketplaceItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_marketplace_pending_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_PENDING_MARKETPLACE_ITEMS;
+  });
+
+  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_verifications_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_VERIFICATION_REQUESTS;
+  });
+
+  const [reports, setReports] = useState<Report[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_reports_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_REPORTS;
+  });
+
+  // Auto Sync States to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(posts));
+    } catch (e) { console.error(e); }
+  }, [posts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_comments_db', JSON.stringify(comments));
+    } catch (e) { console.error(e); }
+  }, [comments]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(marketplaceItems));
+    } catch (e) { console.error(e); }
+  }, [marketplaceItems]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(pendingMarketplaceItems));
+    } catch (e) { console.error(e); }
+  }, [pendingMarketplaceItems]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_verifications_db', JSON.stringify(verificationRequests));
+    } catch (e) { console.error(e); }
+  }, [verificationRequests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_reports_db', JSON.stringify(reports));
+    } catch (e) { console.error(e); }
+  }, [reports]);
+
+  useEffect(() => {
+    if (userProfile && userProfile.nickname) {
+      try {
+        localStorage.setItem('fuhsi_active_user', JSON.stringify(userProfile));
+      } catch (e) { console.error(e); }
+    }
+  }, [userProfile]);
 
   // Check initial login session or show register/login modal on first visit
   useEffect(() => {
@@ -121,23 +220,89 @@ export const App: React.FC = () => {
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === post.id) {
-          return { ...p, isBookmarkedByMe: !p.isBookmarkedByMe };
+          return { ...p, isBookmarkedByMe: !p.isBookmarkedByMe, isBookmarked: !p.isBookmarkedByMe };
         }
         return p;
       })
     );
   };
 
-  const handleVotePoll = (post: Post, option: 'A' | 'B') => {
+  const handleDeletePost = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setComments((prev) => {
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+    if (selectedPost && selectedPost.id === postId) {
+      setSelectedPost(null);
+    }
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    setComments((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((postId) => {
+        next[postId] = next[postId].filter((c) => c.id !== commentId && c.parentId !== commentId);
+      });
+      return next;
+    });
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (selectedPost && p.id === selectedPost.id) {
+          return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) };
+        }
+        return p;
+      })
+    );
+  };
+
+  const handleVotePoll = (post: Post, optionId: string) => {
+    const currentNickname = (userProfile?.nickname || 'guest').toLowerCase();
+
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === post.id) {
-          if (p.userVotedOpt) return p; // Already voted
+          // Check if current user already voted on this account
+          const existingVote =
+            p.pollVotesByUser?.[currentNickname] ||
+            p.pollVotesByUser?.[userProfile?.nickname || ''];
+          if (existingVote) return p;
+
+          const updatedVotesByUser = {
+            ...(p.pollVotesByUser || {}),
+            [currentNickname]: optionId,
+          };
+
+          // Update pollOptions array
+          let updatedOptions = p.pollOptions;
+          if (updatedOptions && updatedOptions.length > 0) {
+            updatedOptions = updatedOptions.map((opt, idx) => {
+              if (
+                opt.id === optionId ||
+                `opt_${idx}` === optionId ||
+                opt.text === optionId ||
+                (optionId === 'A' && idx === 0) ||
+                (optionId === 'B' && idx === 1)
+              ) {
+                return { ...opt, votes: (opt.votes || 0) + 1 };
+              }
+              return opt;
+            });
+          }
+
+          let votesA = p.pollVotesA || 0;
+          let votesB = p.pollVotesB || 0;
+          if (optionId === 'A' || optionId === 'opt_0') votesA += 1;
+          if (optionId === 'B' || optionId === 'opt_1') votesB += 1;
+
           return {
             ...p,
-            userVotedOpt: option,
-            pollVotesA: option === 'A' ? p.pollVotesA + 1 : p.pollVotesA,
-            pollVotesB: option === 'B' ? p.pollVotesB + 1 : p.pollVotesB,
+            userVotedOpt: optionId,
+            pollVotesByUser: updatedVotesByUser,
+            pollOptions: updatedOptions,
+            pollVotesA: votesA,
+            pollVotesB: votesB,
           };
         }
         return p;
@@ -169,6 +334,7 @@ export const App: React.FC = () => {
     imageResName?: string;
     videoUri?: string;
     pollQuestion?: string;
+    pollOptions?: string[];
     pollOptA?: string;
     pollOptB?: string;
   }) => {
@@ -176,12 +342,28 @@ export const App: React.FC = () => {
     const targetDept = data.targetDepartment || 'General Campus';
     const isPriority = targetDept !== 'General Campus';
 
+    let formattedPollOptions: PollOption[] | undefined = undefined;
+    if (data.pollQuestion && data.pollOptions && data.pollOptions.length > 0) {
+      formattedPollOptions = data.pollOptions.map((optText, idx) => ({
+        id: `opt_${idx}`,
+        text: optText,
+        votes: 0,
+      }));
+    } else if (data.pollQuestion && (data.pollOptA || data.pollOptB)) {
+      formattedPollOptions = [
+        { id: 'A', text: data.pollOptA || 'Option A', votes: 0 },
+        { id: 'B', text: data.pollOptB || 'Option B', votes: 0 },
+      ];
+    }
+
     const newPost: Post = {
-      id: `post_${Date.now()}`,
+      id: `post_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       authorNickname: userProfile.nickname,
       authorBadgeType: userProfile.badgeType,
       authorBadgeTitle: userProfile.badgeTitle,
       authorAvatarKey: userProfile.avatarKey,
+      authorAvatarUrl: userProfile.avatarUrl,
+      authorPoints: (userProfile.reputationScore || 1250) + 3,
       authorDepartment: userProfile.department,
       authorLevel: userProfile.level,
       department: data.department || 'General',
@@ -193,14 +375,16 @@ export const App: React.FC = () => {
       imageResName: data.imageResName,
       videoUri: data.videoUri,
       isGhostMode: false,
-      timestamp: 'Just now',
+      timestamp: new Date().toISOString(),
       likesCount: 0,
       commentsCount: 0,
       isLikedByMe: false,
       isBookmarkedByMe: false,
       pollQuestion: data.pollQuestion,
-      pollOptA: data.pollOptA,
-      pollOptB: data.pollOptB,
+      pollOptions: formattedPollOptions,
+      pollVotesByUser: {},
+      pollOptA: data.pollOptA || (data.pollOptions ? data.pollOptions[0] : undefined),
+      pollOptB: data.pollOptB || (data.pollOptions ? data.pollOptions[1] : undefined),
       pollVotesA: 0,
       pollVotesB: 0,
       isFlagged: false,
@@ -208,28 +392,68 @@ export const App: React.FC = () => {
 
     setPosts((prev) => [newPost, ...prev]);
     // Award +3 reputation points for post creation
-    setUserProfile((prev) => ({ ...prev, reputationScore: prev.reputationScore + 3 }));
+    setUserProfile((prev) => ({ ...prev, reputationScore: (prev.reputationScore || 0) + 3 }));
   };
 
-  const handleAddComment = (postId: string, commentText: string) => {
+  const handleAddComment = (
+    postId: string,
+    commentText: string,
+    parentId?: string,
+    replyToNickname?: string
+  ) => {
     const cleanText = sanitizeText(commentText);
 
     const newComment: Comment = {
-      id: `c_${Date.now()}`,
+      id: `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       postId,
       authorNickname: userProfile.nickname,
       authorBadgeType: userProfile.badgeType,
       authorAvatarKey: userProfile.avatarKey,
+      authorAvatarUrl: userProfile.avatarUrl,
       content: cleanText,
-      timestamp: 'Just now',
+      timestamp: new Date().toISOString(),
+      parentId,
+      replyToNickname,
+      likesCount: 0,
+      isLikedByMe: false,
     };
 
     setComments((prev) => [...prev, newComment]);
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p))
+      prev.map((p) => (p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p))
     );
+    if (selectedPost && selectedPost.id === postId) {
+      setSelectedPost((prev) => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : null));
+    }
     // Award +2 reputation points for comment
-    setUserProfile((prev) => ({ ...prev, reputationScore: prev.reputationScore + 2 }));
+    setUserProfile((prev) => ({ ...prev, reputationScore: (prev.reputationScore || 0) + 2 }));
+  };
+
+  const handleLikeComment = (commentId: string) => {
+    setComments((prev) =>
+      prev.map((c) => {
+        if (c.id === commentId) {
+          const isLiked = !c.isLikedByMe;
+          return {
+            ...c,
+            isLikedByMe: isLiked,
+            likesCount: (c.likesCount || 0) + (isLiked ? 1 : -1),
+          };
+        }
+        return c;
+      })
+    );
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('fuhsi_active_user');
+    } catch (e) {
+      console.error(e);
+    }
+    setUserProfile(INITIAL_USER_PROFILE);
+    setShowProfileModal(false);
+    setShowAuthModal(true);
   };
 
   // Handlers for Marketplace
@@ -385,15 +609,27 @@ export const App: React.FC = () => {
             </button>
           </div>
 
-          {/* App Title */}
-          <div className="text-center hidden md:block">
-            <h1 className="font-black text-sm tracking-tight text-white">FUHSI Connect</h1>
-            <p className="text-[10px] text-teal-200 font-medium">Campus Twitter Network</p>
+          {/* App Title & Logo */}
+          <div
+            onClick={() => setNavIndex(0)}
+            className="flex items-center gap-2 cursor-pointer select-none"
+            title="FUHSI-Connect Campus Network"
+          >
+            <img
+              src="/src/assets/images/fuhsi_logo_1785485694958.jpg"
+              alt="FUHSI Connect"
+              className="w-8 h-8 rounded-full object-cover shrink-0 border border-teal-300/40 shadow-xs active:scale-95 transition-transform"
+              referrerPolicy="no-referrer"
+            />
+            <div className="text-left leading-none">
+              <h1 className="font-black text-sm tracking-tight text-white">FUHSI-Connect</h1>
+              <p className="text-[9px] text-teal-200 font-medium">Campus Network</p>
+            </div>
           </div>
 
           {/* Header Right Actions */}
           <div className="flex items-center gap-2">
-            {(userProfile?.isAdmin || userProfile?.badgeType === 'GOLD' || userProfile?.badgeTitle?.toLowerCase().includes('admin')) && (
+            {userProfile?.isAdmin && (
               <button
                 onClick={() => setNavIndex(5)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm ${
@@ -407,15 +643,6 @@ export const App: React.FC = () => {
                 <span>Admin Console</span>
               </button>
             )}
-
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700/80 hover:bg-teal-700 text-teal-100 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs"
-              title="Sign In or Switch Account"
-            >
-              <LogIn size={14} className="text-teal-300" />
-              <span>{userProfile?.nickname ? userProfile.nickname : 'Sign In'}</span>
-            </button>
 
             <button
               onClick={() => setShowPwaModal(true)}
@@ -439,6 +666,7 @@ export const App: React.FC = () => {
             onLikeClick={handleLikeClick}
             onBookmarkClick={handleBookmarkClick}
             onCommentClick={(post) => setSelectedPost(post)}
+            onDeletePost={handleDeletePost}
             onAuthorClick={(post) => setSelectedAuthorPost(post)}
             onVotePoll={handleVotePoll}
             onReportPost={handleReportPost}
@@ -462,6 +690,7 @@ export const App: React.FC = () => {
           <CampusHubScreen
             userProfile={userProfile}
             approvedMarketplaceItems={marketplaceItems}
+            pendingMarketplaceItems={pendingMarketplaceItems}
             onSubmitMarketplaceItem={handleSubmitMarketplaceItem}
             onRecordDmBuyIntent={handleRecordDmBuyIntent}
             onMarkAsSold={handleMarkAsSold}
@@ -489,14 +718,30 @@ export const App: React.FC = () => {
         {navIndex === 5 && (
           <ModerationScreen
             userProfile={userProfile}
+            flaggedPosts={posts.filter((p) => p.isQuarantined)}
             reports={reports}
             pendingMarketplaceItems={pendingMarketplaceItems}
             verificationRequests={verificationRequests}
-            onApproveItem={handleAdminApproveMarketplaceItem}
-            onRejectItem={handleAdminRejectMarketplaceItem}
+            onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
+            onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
             onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
             onApproveVerification={(reqId) => setVerificationRequests((prev) => prev.filter((v) => v.id !== reqId))}
             onRejectVerification={(reqId) => setVerificationRequests((prev) => prev.filter((v) => v.id !== reqId))}
+            onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
+            onUpdateBadge={(badgeType, badgeTitle) => {
+              if (userProfile) {
+                const updated = { ...userProfile, badgeType, badgeTitle };
+                setUserProfile(updated);
+                localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+              }
+            }}
+            onUpdateReputationScore={(newScore) => {
+              if (userProfile) {
+                const updated = { ...userProfile, reputationScore: newScore };
+                setUserProfile(updated);
+                localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+              }
+            }}
           />
         )}
       </main>
@@ -524,14 +769,24 @@ export const App: React.FC = () => {
             <div className="overflow-y-auto p-2 sm:p-4">
               <ProfileScreen
                 userProfile={userProfile}
-                onSaveProfile={(updated) => {
-                  handleSaveUserProfile(updated);
-                  setShowProfileModal(false);
+                allPosts={posts}
+                allComments={comments}
+                onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
+                  const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
+                  if (!err) setShowProfileModal(false);
+                  return err;
                 }}
                 onOpenAuthModal={() => {
                   setShowProfileModal(false);
                   setShowAuthModal(true);
                 }}
+                onLogout={handleLogout}
+                onLikeClick={handleLikeClick}
+                onBookmarkClick={handleBookmarkClick}
+                onCommentClick={(post) => setSelectedPost(post)}
+                onDeletePost={handleDeletePost}
+                onDeleteComment={handleDeleteComment}
+                onClose={() => setShowProfileModal(false)}
               />
             </div>
           </div>
@@ -545,9 +800,22 @@ export const App: React.FC = () => {
           comments={comments.filter((c) => c.postId === selectedPost.id)}
           userProfile={userProfile}
           onClose={() => setSelectedPost(null)}
-          onAddComment={(text) => handleAddComment(selectedPost.id, text)}
+          onAddComment={(text, parentId, replyToNickname) => handleAddComment(selectedPost.id, text, parentId, replyToNickname)}
+          onLikeComment={handleLikeComment}
           onToggleLike={handleLikeClick}
           onToggleBookmark={handleBookmarkClick}
+          onDeletePost={handleDeletePost}
+          onDeleteComment={handleDeleteComment}
+          onVotePoll={handleVotePoll}
+          onAuthorClick={(author) =>
+            setSelectedAuthorPost({
+              authorNickname: author.nickname,
+              authorAvatarKey: author.avatarKey,
+              authorAvatarUrl: author.avatarUrl,
+              authorBadgeType: author.badgeType,
+              authorBadgeTitle: author.badgeTitle,
+            } as Post)
+          }
         />
       )}
 
@@ -555,15 +823,19 @@ export const App: React.FC = () => {
       {selectedAuthorPost && (
         <AuthorProfileModal
           authorNickname={selectedAuthorPost.authorNickname || selectedAuthorPost.nickname || 'Student'}
-          authorDepartment={selectedAuthorPost.authorDepartment || selectedAuthorPost.department}
-          authorAvatarKey={selectedAuthorPost.authorAvatarKey || '1'}
+          authorAvatarKey={selectedAuthorPost.authorAvatarKey || 'caduceus'}
+          authorAvatarUrl={selectedAuthorPost.authorAvatarUrl}
           authorBadgeType={selectedAuthorPost.authorBadgeType as BadgeType}
           authorBadgeTitle={selectedAuthorPost.authorBadgeTitle}
-          authorLevel={selectedAuthorPost.authorLevel}
+          authorPoints={selectedAuthorPost.authorPoints || 1500}
+          authorJoinedDate="Jul 2026"
+          currentUserNickname={userProfile.nickname}
           allPosts={posts}
+          allComments={comments}
           onClose={() => setSelectedAuthorPost(null)}
           onLikeClick={handleLikeClick}
           onBookmarkClick={handleBookmarkClick}
+          onDeletePost={handleDeletePost}
           onCommentClick={(p) => {
             setSelectedAuthorPost(null);
             setSelectedPost(p);

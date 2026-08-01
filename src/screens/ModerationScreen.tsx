@@ -1,46 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
 import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { INITIAL_VERIFICATION_CANDIDATES } from '../data/initialData';
 
 interface ModerationScreenProps {
-  userProfile: UserProfile | null;
-  flaggedPosts: Post[];
-  reports: Report[];
-  verificationRequests: VerificationRequest[];
-  pendingMarketplaceItems: MarketplaceItem[];
-  onToggleAntiDoxxing: (enabled: boolean) => void;
-  onToggleProfanityShield: (enabled: boolean) => void;
-  onDismissReport: (reportId: string, postId: string) => void;
-  onQuarantinePost: (reportId: string, postId: string) => void;
-  onDeletePost: (postId: string) => void;
-  onUpdateBadge: (badgeType: BadgeType, badgeTitle: string) => void;
-  onUpdateReputationScore: (newScore: number) => void;
-  onUpdateVerificationRequestStatus: (id: string, status: 'APPROVED' | 'REJECTED') => void;
-  onAdminApproveMarketplaceItem: (id: string, approvedPrice: number, note: string) => void;
-  onAdminRejectMarketplaceItem: (id: string, note: string) => void;
-  onSendPriceAdvisory: (id: string, suggestedPrice: number, message: string) => void;
+  userProfile?: UserProfile | null;
+  flaggedPosts?: Post[];
+  reports?: Report[];
+  verificationRequests?: VerificationRequest[];
+  pendingMarketplaceItems?: MarketplaceItem[];
+  onToggleAntiDoxxing?: (enabled: boolean) => void;
+  onToggleProfanityShield?: (enabled: boolean) => void;
+  onDismissReport?: (reportId: string, postId: string) => void;
+  onQuarantinePost?: (reportId: string, postId: string) => void;
+  onDeletePost?: (postId: string) => void;
+  onUpdateBadge?: (badgeType: BadgeType, badgeTitle: string) => void;
+  onUpdateReputationScore?: (newScore: number) => void;
+  onUpdateVerificationRequestStatus?: (id: string, status: 'APPROVED' | 'REJECTED') => void;
+  onAdminApproveMarketplaceItem?: (id: string, approvedPrice: number, note: string) => void;
+  onAdminRejectMarketplaceItem?: (id: string, note: string) => void;
+  onSendPriceAdvisory?: (id: string, suggestedPrice: number, message: string) => void;
 }
 
 export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   userProfile,
-  flaggedPosts,
-  reports,
-  verificationRequests,
-  pendingMarketplaceItems,
-  onToggleAntiDoxxing,
-  onToggleProfanityShield,
-  onDismissReport,
-  onQuarantinePost,
-  onDeletePost,
-  onUpdateBadge,
-  onUpdateReputationScore,
-  onUpdateVerificationRequestStatus,
-  onAdminApproveMarketplaceItem,
-  onAdminRejectMarketplaceItem,
-  onSendPriceAdvisory,
+  flaggedPosts = [],
+  reports = [],
+  verificationRequests = [],
+  pendingMarketplaceItems = [],
+  onToggleAntiDoxxing = () => {},
+  onToggleProfanityShield = () => {},
+  onDismissReport = () => {},
+  onQuarantinePost = () => {},
+  onDeletePost = () => {},
+  onUpdateBadge = () => {},
+  onUpdateReputationScore = () => {},
+  onUpdateVerificationRequestStatus = () => {},
+  onAdminApproveMarketplaceItem = () => {},
+  onAdminRejectMarketplaceItem = () => {},
+  onSendPriceAdvisory = () => {},
 }) => {
+  // Verification candidates state
+  const [verifCandidates, setVerifCandidates] = useState(INITIAL_VERIFICATION_CANDIDATES || []);
+
   // Toggles state
   const [antiDoxxing, setAntiDoxxing] = useState(true);
   const [profanityShield, setProfanityShield] = useState(true);
@@ -67,25 +70,30 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [adminUpdateToast, setAdminUpdateToast] = useState(false);
 
   // Pending Student Registrations Approval State
-  const [pendingRegistrations, setPendingRegistrations] = useState<UserProfile[]>(() => {
+  const [allUsersList, setAllUsersList] = useState<UserProfile[]>([]);
+  const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'ALL'>('PENDING');
+
+  const refreshUsersList = () => {
     try {
       const stored = localStorage.getItem('fuhsi_users_db');
       if (stored) {
         const list: UserProfile[] = JSON.parse(stored);
-        const unapproved = list.filter((u) => u.isApproved === false);
-        if (unapproved.length > 0) return unapproved;
+        if (list && list.length > 0) {
+          setAllUsersList(list);
+          return;
+        }
       }
     } catch (err) {
       console.error(err);
     }
-    return [
+    setAllUsersList([
       {
         id: 'usr_pending_demo_1',
         nickname: '@FreshMedStudent',
         realName: 'Adegoke Emmanuel Temitope',
         matricNumber: '25/MBS/088',
         emergencyHomePhone: '08023456789',
-        department: 'Medicine and Surgery (MBBS)',
+        department: 'Medicine and Surgery',
         level: '100L',
         bio: 'Fresh 100L MBBS Student seeking account approval.',
         isApproved: false,
@@ -97,55 +105,90 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         realName: 'Olanrewaju Grace Omowumi',
         matricNumber: '24/NSC/412',
         emergencyHomePhone: '08134567890',
-        department: 'Nursing Science (NSC)',
+        department: 'Nursing Science',
         level: '200L',
         bio: '200L Nursing student registered on FUHSI Connect.',
         isApproved: false,
         isVerified: false,
       },
-    ];
-  });
+    ]);
+  };
+
+  useEffect(() => {
+    refreshUsersList();
+  }, []);
 
   const [approvalToast, setApprovalToast] = useState<string | null>(null);
 
   const handleApproveRegistration = (userId: string, nick: string) => {
     try {
       const stored = localStorage.getItem('fuhsi_users_db');
-      if (stored) {
-        let list: UserProfile[] = JSON.parse(stored);
-        list = list.map((u) => u.id === userId ? { ...u, isApproved: true, isVerified: true, badgeTitle: 'Verified Student' } : u);
-        localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
-      }
-      const activeStored = localStorage.getItem('fuhsi_active_user');
-      if (activeStored) {
-        const active: UserProfile = JSON.parse(activeStored);
-        if (active.id === userId) {
-          localStorage.setItem('fuhsi_active_user', JSON.stringify({ ...active, isApproved: true, isVerified: true, badgeTitle: 'Verified Student' }));
+      let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
+      list = list.map((u) => u.id === userId ? { ...u, isApproved: true, isVerified: true, badgeTitle: 'Verified Student', isAdmin: false } : u);
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+      setAllUsersList(list);
+
+      // Also update active user profile in localStorage if it matches
+      const activeJson = localStorage.getItem('fuhsi_active_user');
+      if (activeJson) {
+        const activeUser: UserProfile = JSON.parse(activeJson);
+        if (activeUser && activeUser.id === userId) {
+          const updatedActive = { ...activeUser, isApproved: true, isVerified: true, badgeTitle: 'Verified Student', isAdmin: false };
+          localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
         }
       }
     } catch (err) {
       console.error(err);
     }
 
-    setPendingRegistrations((prev) => prev.filter((u) => u.id !== userId));
     setApprovalToast(`✓ Registration approved for ${nick}! Student account is now active & verified.`);
     setTimeout(() => setApprovalToast(null), 3500);
   };
 
-  const handleRejectRegistration = (userId: string, nick: string) => {
+  const handleRevokeRegistration = (userId: string, nick: string) => {
     try {
       const stored = localStorage.getItem('fuhsi_users_db');
-      if (stored) {
-        let list: UserProfile[] = JSON.parse(stored);
-        list = list.filter((u) => u.id !== userId);
-        localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+      let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
+      list = list.map((u) => u.id === userId ? { ...u, isApproved: false, isAdmin: false } : u);
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+      setAllUsersList(list);
+
+      const activeJson = localStorage.getItem('fuhsi_active_user');
+      if (activeJson) {
+        const activeUser: UserProfile = JSON.parse(activeJson);
+        if (activeUser && activeUser.id === userId) {
+          const updatedActive = { ...activeUser, isApproved: false, isAdmin: false };
+          localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
+        }
       }
     } catch (err) {
       console.error(err);
     }
 
-    setPendingRegistrations((prev) => prev.filter((u) => u.id !== userId));
-    setApprovalToast(`Registration declined for ${nick}.`);
+    setApprovalToast(`Access restricted for ${nick}.`);
+    setTimeout(() => setApprovalToast(null), 3000);
+  };
+
+  const handleDeleteUserAccount = (userId: string, nick: string) => {
+    try {
+      const stored = localStorage.getItem('fuhsi_users_db');
+      let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
+      list = list.filter((u) => u.id !== userId);
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+      setAllUsersList(list);
+
+      const activeJson = localStorage.getItem('fuhsi_active_user');
+      if (activeJson) {
+        const activeUser: UserProfile = JSON.parse(activeJson);
+        if (activeUser && activeUser.id === userId) {
+          localStorage.removeItem('fuhsi_active_user');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    setApprovalToast(`Account deleted for ${nick}.`);
     setTimeout(() => setApprovalToast(null), 3000);
   };
 
@@ -223,15 +266,15 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   };
 
   const handleSaveBadgeAndRep = () => {
-    onUpdateBadge(selectedBadgeType, badgeTitleInput);
-    onUpdateReputationScore(reputationInput);
+    onUpdateBadge?.(selectedBadgeType, badgeTitleInput);
+    onUpdateReputationScore?.(reputationInput);
     setAdminUpdateToast(true);
     setTimeout(() => setAdminUpdateToast(false), 2000);
   };
 
   const handleSendAdvisory = () => {
     if (advisoryItem) {
-      onSendPriceAdvisory(advisoryItem.id, suggestedPrice, advisoryMsg);
+      onSendPriceAdvisory?.(advisoryItem.id, suggestedPrice, advisoryMsg);
       setAdvisoryItem(null);
     }
   };
@@ -268,7 +311,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
               onClick={() => {
                 const next = !antiDoxxing;
                 setAntiDoxxing(next);
-                onToggleAntiDoxxing(next);
+                onToggleAntiDoxxing?.(next);
               }}
               className={`px-3 py-1.5 rounded-full font-bold text-xs transition-colors ${
                 antiDoxxing ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'
@@ -288,7 +331,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
               onClick={() => {
                 const next = !profanityShield;
                 setProfanityShield(next);
-                onToggleProfanityShield(next);
+                onToggleProfanityShield?.(next);
               }}
               className={`px-3 py-1.5 rounded-full font-bold text-xs transition-colors ${
                 profanityShield ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'
@@ -300,20 +343,108 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         </div>
       </div>
 
-      {/* PENDING STUDENT ACCOUNT REGISTRATIONS APPROVAL DESK */}
+      {/* ADMIN ONLY: FUHSI CONNECT SERVER FUND & TRANSPARENCY DESK */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 flex-wrap gap-2">
           <div>
-            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
-              <UserCheck className="w-4 h-4 text-teal-600" /> Pending Student Account Approvals ({pendingRegistrations.length})
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <span>📊 FUHSI Connect Server Fund & Transparency Desk</span>
+              <span className="text-[10px] font-black bg-indigo-100 text-indigo-900 px-2 py-0.5 rounded-md border border-indigo-200">ADMIN CONTROL</span>
             </h2>
             <p className="text-[11px] text-slate-500">
-              Review and approve new student registrations before full campus posting privileges are enabled.
+              System Cloud infrastructure budget, database storage costs, and community supporter contributions ledger.
             </p>
           </div>
-          <span className="text-xs font-extrabold bg-amber-50 text-amber-900 px-2.5 py-1 rounded-full border border-amber-200">
-            {pendingRegistrations.length} Pending Approval
+          <span className="font-extrabold text-teal-700 text-xs bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
+            78% Funded
           </span>
+        </div>
+
+        {/* Progress Meter */}
+        <div className="space-y-1.5 text-xs">
+          <div className="flex justify-between font-bold text-slate-700">
+            <span>Total Contributions: ₦117,000</span>
+            <span>Annual Goal: ₦150,000 / Year</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200">
+            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full w-[78%]" />
+          </div>
+        </div>
+
+        {/* Budget Breakdown */}
+        <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <p className="text-slate-500 font-medium text-[11px]">Cloud Server Hosting</p>
+            <p className="font-extrabold text-slate-800">₦90,000 / year</p>
+          </div>
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <p className="text-slate-500 font-medium text-[11px]">Database & Media Vault</p>
+            <p className="font-extrabold text-slate-800">₦40,000 / year</p>
+          </div>
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <p className="text-slate-500 font-medium text-[11px]">Custom Domain & SSL</p>
+            <p className="font-extrabold text-slate-800">₦12,000 / year</p>
+          </div>
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <p className="text-slate-500 font-medium text-[11px]">Domain Privacy Shield</p>
+            <p className="font-extrabold text-slate-800">₦8,000 / year</p>
+          </div>
+        </div>
+
+        {/* Recent Donors List */}
+        <div className="pt-1 space-y-1.5 text-xs">
+          <h3 className="font-bold text-slate-800 text-xs">Recent Community Supporters Ledger</h3>
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between items-center p-2 rounded-lg bg-teal-50/50 border border-teal-100">
+              <span className="font-bold text-slate-800">👑 Anonymous MB;BS Alumnus</span>
+              <span className="font-extrabold text-teal-700">₦50,000</span>
+            </div>
+            <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+              <span className="font-bold text-slate-800">@IlaMedHero (300L Medicine)</span>
+              <span className="font-extrabold text-teal-700">₦15,000</span>
+            </div>
+            <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
+              <span className="font-bold text-slate-800">@NurseQueen_Ila (Nursing)</span>
+              <span className="font-extrabold text-teal-700">₦10,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PENDING STUDENT ACCOUNT REGISTRATIONS APPROVAL DESK */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
+          <div>
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
+              <UserCheck className="w-4 h-4 text-teal-600" /> Student Account Management Desk ({allUsersList.filter(u => !u.isAdmin).length})
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Review new registrations, approve matric credentials, or manage registered student accounts.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            <button
+              onClick={() => setActiveUserTab('PENDING')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeUserTab === 'PENDING'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Pending ({allUsersList.filter((u) => !u.isApproved && !u.isAdmin).length})
+            </button>
+            <button
+              onClick={() => setActiveUserTab('ALL')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeUserTab === 'ALL'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All Registered ({allUsersList.filter((u) => !u.isAdmin).length})
+            </button>
+          </div>
         </div>
 
         {approvalToast && (
@@ -322,61 +453,92 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
           </div>
         )}
 
-        {pendingRegistrations.length === 0 ? (
-          <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-            <CheckCircle2 size={24} className="mx-auto text-teal-600 mb-1" />
-            <p className="font-bold text-slate-800">All registered student accounts are approved!</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">New account registrations submitted by students will appear here for admin sign-off.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pendingRegistrations.map((user) => (
-              <div key={user.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
-                <div className="flex items-start justify-between flex-wrap gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-slate-900 text-sm">{user.nickname}</span>
-                      <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
-                        {user.department} ({user.level})
-                      </span>
+        {(() => {
+          const displayUsers = allUsersList.filter((u) => {
+            if (u.isAdmin) return false;
+            if (activeUserTab === 'PENDING') return !u.isApproved;
+            return true;
+          });
+
+          if (displayUsers.length === 0) {
+            return (
+              <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                <CheckCircle2 size={24} className="mx-auto text-teal-600 mb-1" />
+                <p className="font-bold text-slate-800">
+                  {activeUserTab === 'PENDING' ? 'No pending student approvals!' : 'No registered students found.'}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  New account registrations submitted by students will appear here for admin review.
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-3">
+              {displayUsers.map((user) => (
+                <div key={user.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+                  <div className="flex items-start justify-between flex-wrap gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900 text-sm">{user.nickname}</span>
+                        <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
+                          {user.department} ({user.level})
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 font-medium mt-0.5">
+                        👤 Real Name: <span className="font-bold text-slate-900">{user.realName}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Matric Number: <span className="font-mono font-bold text-slate-800">{user.matricNumber || 'N/A'}</span> • Phone: <span className="font-bold text-teal-700">{user.emergencyHomePhone || 'N/A'}</span>
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-700 font-medium mt-0.5">
-                      👤 Student Real Name: <span className="font-bold text-slate-900">{user.realName}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      Matric Number: <span className="font-mono font-bold text-slate-800">{user.matricNumber || '24/MBS/012'}</span> • Phone: <span className="font-bold text-teal-700">{user.emergencyHomePhone || 'N/A'}</span>
-                    </p>
+
+                    <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
+                      user.isApproved
+                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        : 'bg-amber-100 text-amber-900 border-amber-300'
+                    }`}>
+                      {user.isApproved ? '✅ APPROVED & ACTIVE' : '⏳ PENDING APPROVAL'}
+                    </span>
                   </div>
 
-                  <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full border bg-amber-100 text-amber-900 border-amber-300">
-                    ⏳ AWAITING ADMIN APPROVAL
-                  </span>
-                </div>
+                  {user.bio && (
+                    <div className="p-2 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600">
+                      <span className="font-bold text-slate-800">Bio:</span> {user.bio}
+                    </div>
+                  )}
 
-                <div className="p-2 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600">
-                  <span className="font-bold text-slate-800">Bio:</span> {user.bio}
-                </div>
+                  <div className="flex gap-2 pt-1 flex-wrap">
+                    {!user.isApproved ? (
+                      <button
+                        onClick={() => handleApproveRegistration(user.id, user.nickname)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                      >
+                        <CheckCircle2 size={14} />
+                        <span>Approve Student Account</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRevokeRegistration(user.id, user.nickname)}
+                        className="py-1.5 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-colors"
+                      >
+                        Restrict Access
+                      </button>
+                    )}
 
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => handleApproveRegistration(user.id, user.nickname)}
-                    className="flex-1 py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Approve Student Registration</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleRejectRegistration(user.id, user.nickname)}
-                    className="py-2 px-4 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
-                  >
-                    Decline
-                  </button>
+                    <button
+                      onClick={() => handleDeleteUserAccount(user.id, user.nickname)}
+                      className="py-1.5 px-3 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
+                    >
+                      Delete Account
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ADMIN MARKETPLACE MIDDLEMAN TRADE DESK */}
@@ -573,8 +735,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <div>
-            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-800">
-              <UserCheck className="w-4 h-4 text-teal-600" /> Automated Verification Eligibility Queue
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-indigo-900">
+              <UserCheck className="w-4 h-4 text-indigo-600" /> ⭐ Student Identity & Verification Review Processing Fee Desk (₦1,500)
             </h2>
             <p className="text-[11px] text-slate-500">
               Students who met multi-factor formula (90+ days tenure, 0 strikes, 1200+ rep score, quality posts)
@@ -758,7 +920,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => onAdminApproveMarketplaceItem(item.id, item.askingPrice, 'Approved at asking price')}
+                    onClick={() => onAdminApproveMarketplaceItem?.(item.id, item.askingPrice, 'Approved at asking price')}
                     className="flex-1 py-1.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors"
                   >
                     Approve ₦{item.askingPrice.toLocaleString()}
@@ -775,7 +937,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                   </button>
 
                   <button
-                    onClick={() => onAdminRejectMarketplaceItem(item.id, 'Price exceeds campus benchmark')}
+                    onClick={() => onAdminRejectMarketplaceItem?.(item.id, 'Price exceeds campus benchmark')}
                     className="py-1.5 px-3 rounded-lg bg-rose-100 text-rose-800 font-bold hover:bg-rose-200 transition-colors"
                   >
                     Reject
@@ -807,7 +969,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => onDeletePost(post.id)}
+                    onClick={() => onDeletePost?.(post.id)}
                     className="flex-1 py-1.5 rounded-lg bg-rose-600 text-white font-bold hover:bg-rose-700 transition-colors"
                   >
                     Delete Post

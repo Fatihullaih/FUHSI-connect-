@@ -32,12 +32,13 @@ export const AvatarIcon: React.FC<AvatarIconProps> = ({
   size = 20,
 }) => {
   if (avatarUrl) {
+    const hasSizeClass = Boolean(sizeClassName && sizeClassName.trim());
     return (
       <img
         src={avatarUrl}
         alt="Profile Avatar"
-        className={`rounded-full object-cover shrink-0 ${sizeClassName || ''} ${className || ''}`}
-        style={{ width: `${size}px`, height: `${size}px` }}
+        className={`rounded-full object-cover shrink-0 ${sizeClassName || 'w-10 h-10'} ${className || ''}`}
+        style={!hasSizeClass && size ? { width: `${size}px`, height: `${size}px` } : undefined}
         onError={(e) => {
           (e.currentTarget as HTMLElement).style.display = 'none';
         }}

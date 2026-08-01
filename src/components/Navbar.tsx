@@ -116,22 +116,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               Leaderboard
             </button>
 
-            <button
-              onClick={() => setActiveTab('moderation')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors relative ${
-                activeTab === 'moderation'
-                  ? 'bg-teal-50 text-teal-700 border border-teal-200/60'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <ShieldCheck size={18} />
-              Moderation
-              {pendingReportsCount > 0 && (
-                <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center -mr-1">
-                  {pendingReportsCount}
-                </span>
-              )}
-            </button>
+            {user.isAdmin && (
+              <button
+                onClick={() => setActiveTab('moderation')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors relative ${
+                  activeTab === 'moderation'
+                    ? 'bg-teal-50 text-teal-700 border border-teal-200/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <ShieldCheck size={18} />
+                Moderation
+                {pendingReportsCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center -mr-1">
+                    {pendingReportsCount}
+                  </span>
+                )}
+              </button>
+            )}
           </nav>
 
           {/* User Profile Summary */}
@@ -201,20 +203,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           Leaderboard
         </button>
 
-        <button
-          onClick={() => setActiveTab('moderation')}
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium relative ${
-            activeTab === 'moderation' ? 'text-teal-700 font-bold' : 'text-slate-500'
-          }`}
-        >
-          <ShieldCheck size={20} />
-          Moderation
-          {pendingReportsCount > 0 && (
-            <span className="absolute top-0 right-2 w-4 h-4 bg-rose-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-              {pendingReportsCount}
-            </span>
-          )}
-        </button>
+        {user.isAdmin && (
+          <button
+            onClick={() => setActiveTab('moderation')}
+            className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium relative ${
+              activeTab === 'moderation' ? 'text-teal-700 font-bold' : 'text-slate-500'
+            }`}
+          >
+            <ShieldCheck size={20} />
+            Moderation
+            {pendingReportsCount > 0 && (
+              <span className="absolute top-0 right-2 w-4 h-4 bg-rose-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                {pendingReportsCount}
+              </span>
+            )}
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('profile')}

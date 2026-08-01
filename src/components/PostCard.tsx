@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Post, Comment, PostCategory, BadgeType } from '../types';
+import React, { useState, useMemo } from 'react';
+import { Post, Comment, PostCategory, BadgeType, PollOption } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
+import { formatRelativeTime } from '../utils/dateUtils';
+import { ImagePreviewModal } from './ImagePreviewModal';
 import { 
   Heart, 
   MessageSquare, 
@@ -17,15 +19,18 @@ import {
   BarChart2,
   Check,
   Zap,
-  Maximize2
+  Maximize2,
+  Trash2
 } from 'lucide-react';
 
 interface PostCardProps {
   post: Post;
   comments?: Comment[];
+  currentUserNickname?: string;
   onLikeClick?: (post: Post) => void;
   onBookmarkClick?: (post: Post) => void;
   onCommentClick?: (post: Post) => void;
+  onDeletePost?: (postId: string) => void;
   onVotePoll?: (post: Post, option: 'A' | 'B') => void;
   onReportPost?: (post: Post, reason: string) => void;
   onAuthorClick?: (post: Post) => void;
@@ -39,9 +44,11 @@ interface PostCardProps {
 export const PostCard: React.FC<PostCardProps> = ({
   post,
   comments = [],
+  currentUserNickname,
   onLikeClick,
   onBookmarkClick,
   onCommentClick,
+  onDeletePost,
   onVotePoll,
   onReportPost,
   onAuthorClick,
@@ -56,6 +63,13 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [flagReason, setFlagReason] = useState('Inappropriate Content / Harassment');
   const [customReason, setCustomReason] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  const isMyPost = Boolean(
+    (post as any).isOwner ||
+    (currentUserNickname && post.authorNickname?.toLowerCase() === currentUserNickname.toLowerCase())
+  );
 
   const likesCount = post.likesCount ?? post.upvotes ?? 0;
   const isLiked = post.isLikedByMe || post.userVote === 'up';
@@ -125,10 +139,31 @@ export const PostCard: React.FC<PostCardProps> = ({
     setShowFlagModal(false);
   };
 
-  // Poll calculations
-  const totalPollVotes = (post.pollVotesA || 0) + (post.pollVotesB || 0);
-  const pctA = totalPollVotes > 0 ? Math.round(((post.pollVotesA || 0) / totalPollVotes) * 100) : 0;
-  const pctB = totalPollVotes > 0 ? Math.round(((post.pollVotesB || 0) / totalPollVotes) * 100) : 0;
+  // Poll calculations & multi-option support
+  const optionsList: PollOption[] = useMemo(() => {
+    if (post.pollOptions && post.pollOptions.length > 0) {
+      return post.pollOptions;
+    }
+    if (post.pollOptA || post.pollOptB) {
+      return [
+        { id: 'A', text: post.pollOptA || 'Option A', votes: post.pollVotesA || 0 },
+        { id: 'B', text: post.pollOptB || 'Option B', votes: post.pollVotesB || 0 },
+      ];
+    }
+    return [];
+  }, [post.pollOptions, post.pollOptA, post.pollOptB, post.pollVotesA, post.pollVotesB]);
+
+  // User-specific vote check
+  const userKey = currentUserNickname?.toLowerCase();
+  const myVotedOptionId = userKey && post.pollVotesByUser
+    ? (post.pollVotesByUser[userKey] || post.pollVotesByUser[currentUserNickname || ''])
+    : undefined;
+
+  const hasVoted = Boolean(myVotedOptionId);
+
+  const totalPollVotes = useMemo(() => {
+    return optionsList.reduce((acc, opt) => acc + (opt.votes || 0), 0);
+  }, [optionsList]);
 
   return (
     <article className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-slate-300 transition-all overflow-hidden mb-4">
@@ -139,10 +174,10 @@ export const PostCard: React.FC<PostCardProps> = ({
             <button
               type="button"
               onClick={() => onAuthorClick?.(post)}
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-teal-50 border-teal-200/80 hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-teal-50 border-teal-200/80 hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-teal-500/40 overflow-hidden"
               title={`View ${post.authorNickname}'s profile details`}
             >
-              <AvatarIcon avatarKey={avatarKey} size={20} />
+              <AvatarIcon avatarKey={avatarKey} avatarUrl={post.authorAvatarUrl} size={20} sizeClassName="w-10 h-10 rounded-xl object-cover" />
             </button>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -162,12 +197,8 @@ export const PostCard: React.FC<PostCardProps> = ({
                     showTitle 
                   />
                 )}
-
-                <span className="text-xs text-slate-500 font-medium">
-                  • {department} {post.authorLevel ? `(${post.authorLevel})` : ''}
-                </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">{post.timestamp}</p>
+              <p className="text-xs text-slate-400 font-medium">{formatRelativeTime(post.timestamp)}</p>
             </div>
           </div>
 
@@ -177,28 +208,74 @@ export const PostCard: React.FC<PostCardProps> = ({
             </span>
             <button
               onClick={handleToggleBookmark}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 isBookmarked ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
               }`}
               title={isBookmarked ? 'Remove Bookmark' : 'Save Post'}
             >
               {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
             </button>
+            {isMyPost && (
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(true)}
+                className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                title="Delete your thread"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Delete Confirmation Banner */}
+        {showConfirmDelete && (
+          <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-2 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2 text-rose-900 font-bold">
+              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+              <span>Are you sure you want to delete your thread permanently? This cannot be undone.</span>
+            </div>
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-800 font-bold hover:bg-slate-300 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfirmDelete(false);
+                  if (onDeletePost) onDeletePost(post.id);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-extrabold hover:bg-rose-700 transition-colors shadow-xs cursor-pointer"
+              >
+                Yes, Delete Thread
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Post Content */}
-        <p className="mt-2 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal">
+        <p 
+          onClick={() => onCommentClick?.(post)}
+          className="mt-2 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal cursor-pointer hover:text-teal-950 transition-colors"
+          title="Click to view full thread, comments & replies"
+        >
           {post.content}
         </p>
 
         {/* Attached Image */}
         {(post.imageUrl || post.imageResName) && (
-          <div className="mt-3.5 rounded-xl overflow-hidden border border-slate-200/90 bg-slate-950 group relative">
+          <div 
+            onClick={() => setPreviewImage(post.imageUrl || post.imageResName || null)}
+            className="mt-3.5 rounded-xl overflow-hidden border border-slate-200/90 bg-slate-950 group cursor-pointer"
+          >
             <img
               src={post.imageUrl || post.imageResName}
               alt="Post visual attachment"
-              className="w-full max-h-96 object-cover group-hover:scale-102 transition-transform duration-300"
+              className="w-full max-h-96 object-cover group-hover:scale-101 transition-transform duration-200"
             />
           </div>
         )}
@@ -215,65 +292,57 @@ export const PostCard: React.FC<PostCardProps> = ({
         )}
 
         {/* Optional Poll Component */}
-        {post.pollQuestion && (
+        {post.pollQuestion && optionsList.length > 0 && (
           <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold text-teal-800">
-              <BarChart2 size={16} />
+              <BarChart2 size={16} className="shrink-0 text-teal-600" />
               <span>Campus Poll: {post.pollQuestion}</span>
             </div>
 
             <div className="space-y-2">
-              {/* Option A */}
-              <button
-                disabled={Boolean(post.userVotedOpt)}
-                onClick={() => onVotePoll && onVotePoll(post, 'A')}
-                className={`w-full p-2.5 rounded-xl text-left border text-xs font-semibold relative overflow-hidden transition-all flex items-center justify-between ${
-                  post.userVotedOpt === 'A'
-                    ? 'border-teal-600 bg-teal-50/80 text-teal-900 font-bold'
-                    : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                }`}
-              >
-                {/* Background Progress Bar */}
-                {post.userVotedOpt && (
-                  <div
-                    className="absolute left-0 top-0 bottom-0 bg-teal-200/40 pointer-events-none transition-all duration-500"
-                    style={{ width: `${pctA}%` }}
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-2">
-                  {post.userVotedOpt === 'A' && <Check size={14} className="text-teal-700" />}
-                  {post.pollOptA}
-                </span>
-                {post.userVotedOpt && (
-                  <span className="relative z-10 font-bold text-teal-800">{pctA}% ({post.pollVotesA || 0})</span>
-                )}
-              </button>
+              {optionsList.map((opt, idx) => {
+                const isThisSelected =
+                  myVotedOptionId === opt.id ||
+                  myVotedOptionId === opt.text ||
+                  (idx === 0 && myVotedOptionId === 'A') ||
+                  (idx === 1 && myVotedOptionId === 'B');
 
-              {/* Option B */}
-              <button
-                disabled={Boolean(post.userVotedOpt)}
-                onClick={() => onVotePoll && onVotePoll(post, 'B')}
-                className={`w-full p-2.5 rounded-xl text-left border text-xs font-semibold relative overflow-hidden transition-all flex items-center justify-between ${
-                  post.userVotedOpt === 'B'
-                    ? 'border-teal-600 bg-teal-50/80 text-teal-900 font-bold'
-                    : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                }`}
-              >
-                {/* Background Progress Bar */}
-                {post.userVotedOpt && (
-                  <div
-                    className="absolute left-0 top-0 bottom-0 bg-teal-200/40 pointer-events-none transition-all duration-500"
-                    style={{ width: `${pctB}%` }}
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-2">
-                  {post.userVotedOpt === 'B' && <Check size={14} className="text-teal-700" />}
-                  {post.pollOptB}
-                </span>
-                {post.userVotedOpt && (
-                  <span className="relative z-10 font-bold text-teal-800">{pctB}% ({post.pollVotesB || 0})</span>
-                )}
-              </button>
+                const pct = totalPollVotes > 0 ? Math.round(((opt.votes || 0) / totalPollVotes) * 100) : 0;
+
+                return (
+                  <button
+                    key={opt.id || `opt_${idx}`}
+                    disabled={hasVoted}
+                    onClick={() => onVotePoll && onVotePoll(post, opt.id || `opt_${idx}`)}
+                    className={`w-full p-2.5 rounded-xl text-left border text-xs font-semibold relative overflow-hidden transition-all flex items-center justify-between ${
+                      hasVoted ? 'cursor-default' : 'cursor-pointer hover:border-teal-400 hover:bg-teal-50/40'
+                    } ${
+                      isThisSelected
+                        ? 'border-teal-600 bg-teal-50/90 text-teal-950 font-extrabold ring-1 ring-teal-600/30'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    {/* Background Progress Bar when voted */}
+                    {hasVoted && (
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-500 ${
+                          isThisSelected ? 'bg-teal-200/60' : 'bg-slate-100/80'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2">
+                      {isThisSelected && <Check size={14} className="text-teal-700 shrink-0" />}
+                      <span>{opt.text}</span>
+                    </span>
+                    {hasVoted && (
+                      <span className="relative z-10 font-bold text-teal-800 shrink-0 ml-2">
+                        {pct}% ({opt.votes || 0})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <p className="text-[10px] text-slate-400 font-medium">
               {totalPollVotes} student {totalPollVotes === 1 ? 'vote' : 'votes'} • Anonymous poll
@@ -456,6 +525,15 @@ export const PostCard: React.FC<PostCardProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Full-Screen Image Preview Modal */}
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage}
+          title={`Attachment by ${post.authorNickname}`}
+          onClose={() => setPreviewImage(null)}
+        />
       )}
     </article>
   );

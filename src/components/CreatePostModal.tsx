@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PostCategory, UserProfile } from '../types';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { AvatarIcon } from './AvatarIcon';
-import { X, Sparkles, Send, ShieldCheck, BarChart2, AlertTriangle, Image as ImageIcon, Video as VideoIcon, Upload, Trash2, Building2, Bell, Crown, Lock } from 'lucide-react';
+import { X, Sparkles, Send, ShieldCheck, BarChart2, AlertTriangle, Image as ImageIcon, Video as VideoIcon, Upload, Trash2, Building2, Bell, Crown, Lock, Plus } from 'lucide-react';
 
 interface CreatePostModalProps {
   userProfile?: UserProfile | null;
@@ -18,6 +18,7 @@ interface CreatePostModalProps {
       imageUrl?: string;
       videoUri?: string;
       pollQuestion?: string;
+      pollOptions?: string[];
       pollOptA?: string;
       pollOptB?: string;
     }
@@ -25,15 +26,6 @@ interface CreatePostModalProps {
   onCreatePost?: (content: string, category: PostCategory, customNickname?: string) => void;
   checkDoxxingThreats?: (text: string) => boolean;
 }
-
-const CATEGORIES: PostCategory[] = [
-  'General',
-  'Academic',
-  'Events',
-  'Confessions',
-  'Marketplace',
-  'LostAndFound'
-];
 
 // Target Audience Options - General Campus is Priority 1 listed first, followed by Faculties & Dept Abbreviations
 const TARGET_AUDIENCE_OPTIONS = [
@@ -84,7 +76,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const isPremiumUser = Boolean(currentUser?.badgeType && currentUser.badgeType !== 'NONE') || Boolean(currentUser?.reputationScore && currentUser.reputationScore >= 1000) || Boolean(currentUser?.badgeTitle);
 
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState<PostCategory>('General');
   const [targetDepartment, setTargetDepartment] = useState('General Campus');
   const [imageUrl, setImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
@@ -93,9 +84,25 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [showPremiumVideoModal, setShowPremiumVideoModal] = useState(false);
   const [hasPoll, setHasPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOptA, setPollOptA] = useState('');
-  const [pollOptB, setPollOptB] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [doxxingWarning, setDoxxingWarning] = useState(false);
+
+  const handleAddPollOption = () => {
+    setPollOptions((prev) => [...prev, '']);
+  };
+
+  const handleUpdatePollOption = (index: number, value: string) => {
+    setPollOptions((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const handleRemovePollOption = (index: number) => {
+    if (pollOptions.length <= 2) return;
+    setPollOptions((prev) => prev.filter((_, i) => i !== index));
+  };
 
   if (isOpen === false) return null;
 
@@ -142,20 +149,24 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     e.preventDefault();
     if (!content.trim()) return;
 
+    const validPollOptions = pollOptions.map((opt) => opt.trim()).filter(Boolean);
+    const isValidPoll = hasPoll && Boolean(pollQuestion.trim()) && validPollOptions.length >= 2;
+
     if (onSubmit) {
       onSubmit({
         content: content.trim(),
         department: currentUser?.department || 'General',
         targetDepartment: targetDepartment,
-        category,
+        category: 'General',
         imageUrl: imageUrl.trim() || undefined,
         videoUri: videoUri.trim() || undefined,
-        pollQuestion: hasPoll ? pollQuestion.trim() : undefined,
-        pollOptA: hasPoll ? pollOptA.trim() : undefined,
-        pollOptB: hasPoll ? pollOptB.trim() : undefined,
+        pollQuestion: isValidPoll ? pollQuestion.trim() : undefined,
+        pollOptions: isValidPoll ? validPollOptions : undefined,
+        pollOptA: isValidPoll ? validPollOptions[0] : undefined,
+        pollOptB: isValidPoll ? validPollOptions[1] : undefined,
       });
     } else if (onCreatePost) {
-      onCreatePost(content.trim(), category);
+      onCreatePost(content.trim(), 'General');
     }
 
     setContent('');
@@ -163,8 +174,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     setVideoUri('');
     setTargetDepartment('General Campus');
     setPollQuestion('');
-    setPollOptA('');
-    setPollOptB('');
+    setPollOptions(['', '']);
     setHasPoll(false);
     onClose();
   };
@@ -259,29 +269,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 </span>
               )}
             </p>
-          </div>
-
-          {/* Category Picker */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Select Post Category
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                    category === cat
-                      ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Post Content Area */}
@@ -486,37 +473,64 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             <button
               type="button"
               onClick={() => setHasPoll(!hasPoll)}
-              className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline mb-2"
+              className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline mb-2 cursor-pointer"
             >
               <BarChart2 size={16} />
               <span>{hasPoll ? 'Remove Campus Poll' : '+ Attach Student Poll'}</span>
             </button>
 
             {hasPoll && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 mt-2">
-                <input
-                  type="text"
-                  placeholder="Poll Question (e.g. Should Saturday CBT start by 8 AM?)"
-                  value={pollQuestion}
-                  onChange={(e) => setPollQuestion(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium focus:outline-none focus:border-teal-500"
-                />
-                <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3 mt-2">
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
+                    Poll Question
+                  </label>
                   <input
                     type="text"
-                    placeholder="Option A (e.g. Yes)"
-                    value={pollOptA}
-                    onChange={(e) => setPollOptA(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium focus:outline-none focus:border-teal-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Option B (e.g. No)"
-                    value={pollOptB}
-                    onChange={(e) => setPollOptB(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium focus:outline-none focus:border-teal-500"
+                    placeholder="e.g. How many courses are available in FUHSI?"
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-medium focus:outline-none focus:border-teal-500"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
+                    Answer Options
+                  </label>
+                  {pollOptions.map((optText, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={`Option ${String.fromCharCode(65 + index)} (e.g. ${
+                          index === 0 ? '5 Courses' : index === 1 ? '8 Courses' : index === 2 ? '12 Courses' : 'Option Choice'
+                        })`}
+                        value={optText}
+                        onChange={(e) => handleUpdatePollOption(index, e.target.value)}
+                        className="flex-1 bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium focus:outline-none focus:border-teal-500"
+                      />
+                      {pollOptions.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePollOption(index)}
+                          className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-100/60 rounded-lg transition-colors cursor-pointer"
+                          title="Remove option"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddPollOption}
+                  className="mt-1 text-xs font-extrabold text-teal-800 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200/90 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>+ Add Option</span>
+                </button>
               </div>
             )}
           </div>

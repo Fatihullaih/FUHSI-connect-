@@ -21,6 +21,7 @@ export interface UserProfile {
   avatarKey?: string;
   avatarId?: string;
   avatarUrl?: string;
+  joinedDate?: string;
   badgeType?: BadgeType;
   badgeTitle?: string;
   badge?: string;
@@ -41,10 +42,21 @@ export interface Comment {
   authorBadgeType?: BadgeType | string;
   authorAvatarKey?: string;
   authorAvatarId?: string;
+  authorAvatarUrl?: string;
   content: string;
   timestamp: string;
   upvotes?: number;
   userVote?: 'up' | 'down' | null;
+  parentId?: string;
+  replyToNickname?: string;
+  likesCount?: number;
+  isLikedByMe?: boolean;
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
 }
 
 export interface Post {
@@ -54,6 +66,8 @@ export interface Post {
   authorBadgeTitle?: string;
   authorAvatarKey?: string;
   authorAvatarId?: string;
+  authorAvatarUrl?: string;
+  authorPoints?: number;
   authorDepartment?: string;
   authorLevel?: string;
   department?: string;
@@ -80,11 +94,13 @@ export interface Post {
   sponsorName?: string;
   sponsorActionUrl?: string;
   pollQuestion?: string;
+  pollOptions?: PollOption[];
+  pollVotesByUser?: Record<string, string>;
   pollOptA?: string;
   pollOptB?: string;
   pollVotesA?: number;
   pollVotesB?: number;
-  userVotedOpt?: 'A' | 'B';
+  userVotedOpt?: 'A' | 'B' | string;
   isFlagged?: boolean;
   flagReason?: string;
   status?: PostStatus;
@@ -287,5 +303,16 @@ export interface CampusEvent {
   description: string;
   rsvpCount: number;
   isRsvped?: boolean;
+}
+
+export interface CampusNotification {
+  id: string;
+  type: 'VERIFICATION' | 'LIKE' | 'COMMENT' | 'ADMIN' | 'MARKET' | 'TARGETED_DEPT' | 'TARGETED_FACULTY';
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  targetDepartment?: string;
+  postId?: string;
 }
 
