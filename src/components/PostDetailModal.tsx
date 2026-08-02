@@ -41,6 +41,22 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   const [confirmDeletePost, setConfirmDeletePost] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (previewImage) {
+        setPreviewImage(null);
+        return;
+      }
+      if (confirmDeletePost) {
+        setConfirmDeletePost(false);
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [previewImage, confirmDeletePost]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -191,7 +207,7 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[60] bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/90 shrink-0">

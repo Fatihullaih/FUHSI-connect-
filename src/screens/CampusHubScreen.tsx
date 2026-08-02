@@ -116,6 +116,31 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   const [previewPhotoItem, setPreviewPhotoItem] = useState<MarketplaceItem | null>(null);
   const [previewPhotoIdx, setPreviewPhotoIdx] = useState(0);
 
+  // Popstate listener for back button navigation in CampusHubScreen
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (previewPhotoItem) {
+        setPreviewPhotoItem(null);
+        return;
+      }
+      if (buyModalItem) {
+        setBuyModalItem(null);
+        return;
+      }
+      if (showSellModal) {
+        setShowSellModal(false);
+        return;
+      }
+      if (soldModalItem) {
+        setSoldModalItem(null);
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [previewPhotoItem, buyModalItem, showSellModal, soldModalItem]);
+
   const categories = [
     'Medical Equipment',
     'Textbooks & Books',
@@ -206,7 +231,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     const buyerNickname = userProfile?.nickname || '@FUHSI_Student';
 
     // Buyer message sent to Admin Middleman
-    const buyerRequestText = `Hello Admin, I am interested in buying "${buyModalItem.title}" listed by @${buyModalItem.sellerNickname} for ₦${buyModalItem.adminApprovedPrice.toLocaleString()}.\n\nI confirm I am a serious buyer and ready to pay at the safe campus meet-up location (${buyModalItem.meetupPoint}).`;
+    const itemPriceFormatted = (buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0).toLocaleString();
+    const buyerRequestText = `Hello Admin, I am interested in buying "${buyModalItem.title}" listed by @${buyModalItem.sellerNickname} for ₦${itemPriceFormatted}.\n\nI confirm I am a serious buyer and ready to pay at the safe campus meet-up location (${buyModalItem.meetupPoint}).`;
 
     const newBuyerMsg: DirectMessage = {
       id: `dm_${Date.now()}`,
@@ -217,13 +243,13 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       timestamp: 'Just now',
       itemId: buyModalItem.id,
       itemTitle: buyModalItem.title,
-      itemPrice: buyModalItem.adminApprovedPrice,
+      itemPrice: buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice,
       meetupPoint: buyModalItem.meetupPoint,
       isPledgeConfirmed: true
     };
 
     // Automated Admin Response reassuring buyer
-    const adminResponseText = `🛡️ [ADMIN MIDDLEMAN ACKNOWLEDGMENT]\nHello ${buyerNickname}! Your purchase request for "${buyModalItem.title}" listed by @${buyModalItem.sellerNickname} at ₦${buyModalItem.adminApprovedPrice.toLocaleString()} has been logged.\n\n📱 Next Step: We are now contacting @${buyModalItem.sellerNickname} privately to confirm if the item is still available.\n📍 Proposed Meet-Up: ${buyModalItem.meetupPoint}\n\nNote: Payment is completed directly between you and the seller at the meet-up point after inspection. Admin does not collect or hold money.`;
+    const adminResponseText = `🛡️ [ADMIN MIDDLEMAN ACKNOWLEDGMENT]\nHello ${buyerNickname}! Your purchase request for "${buyModalItem.title}" listed by @${buyModalItem.sellerNickname} at ₦${itemPriceFormatted} has been logged.\n\n📱 Next Step: We are now contacting @${buyModalItem.sellerNickname} privately to confirm if the item is still available.\n📍 Proposed Meet-Up: ${buyModalItem.meetupPoint}\n\nNote: Payment is completed directly between you and the seller at the meet-up point after inspection. Admin does not collect or hold money.`;
 
     const newAdminMsg: DirectMessage = {
       id: `dm_resp_${Date.now()}`,
@@ -941,7 +967,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   <div className="flex justify-between items-start">
                     <p className="font-extrabold text-slate-900 text-sm">{buyModalItem.title}</p>
                     <span className="px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 font-black text-xs">
-                      ₦{buyModalItem.adminApprovedPrice.toLocaleString()}
+                      ₦{(buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0).toLocaleString()}
                     </span>
                   </div>
                   <p className="text-slate-600 text-[11px]">
@@ -983,7 +1009,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                       className="mt-0.5 rounded text-teal-600 focus:ring-teal-500 w-4 h-4 shrink-0"
                     />
                     <span className="font-extrabold text-slate-900 text-[11px] leading-snug">
-                      "I confirm my genuine intention to buy '{buyModalItem.title}' at ₦{buyModalItem.adminApprovedPrice.toLocaleString()} and request Admin to verify availability."
+                      "I confirm my genuine intention to buy '{buyModalItem.title}' at ₦{(buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0).toLocaleString()} and request Admin to verify availability."
                     </span>
                   </label>
                 </div>

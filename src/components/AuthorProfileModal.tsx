@@ -59,6 +59,16 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
   const [activeTab, setActiveTab] = useState<'threads' | 'replies'>('threads');
   const [showPictureModal, setShowPictureModal] = useState(false);
 
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (showPictureModal) {
+        setShowPictureModal(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showPictureModal]);
+
   // Derive username format
   const username = authorNickname.startsWith('@') 
     ? authorNickname 
@@ -122,10 +132,10 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
 
   // Calculate points dynamically based on actual activity
   const computedPoints = useMemo(() => {
-    return calculateUserPoints(authorNickname, undefined, effectivePosts, allComments);
+    return calculateUserPoints(authorNickname || '', undefined, effectivePosts, allComments);
   }, [authorNickname, effectivePosts, allComments]);
 
-  const displayPoints = authorPoints ?? computedPoints;
+  const displayPoints = (authorPoints !== undefined && authorPoints !== null) ? authorPoints : (computedPoints ?? 0);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
@@ -183,7 +193,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
           <div>
             <div className="text-base sm:text-lg font-black text-teal-700 flex items-center justify-center gap-1">
               <Award size={16} className="text-teal-600" />
-              <span>{displayPoints.toLocaleString()} <span className="text-xs font-bold text-teal-600">pts</span></span>
+              <span>{(displayPoints ?? 0).toLocaleString()} <span className="text-xs font-bold text-teal-600">pts</span></span>
             </div>
             <div className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Total Points Earned</div>
           </div>
@@ -226,7 +236,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                 </div>
                 <h4 className="text-slate-800 font-bold text-sm">No Public Threads Yet</h4>
                 <p className="text-slate-500 text-xs max-w-xs mx-auto">
-                  {authorNickname} has earned {authorPoints.toLocaleString()} points on FUHSI Connect.
+                  {authorNickname} has earned {(displayPoints ?? 0).toLocaleString()} points on FUHSI Connect.
                 </p>
               </div>
             ) : (

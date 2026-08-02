@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Post, Comment } from '../types';
 import { compressImageFile } from '../utils/imageUtils';
-import { calculateUserPoints } from '../utils/reputationUtils';
+import { calculateUserPoints, getUserPointsBreakdown } from '../utils/reputationUtils';
 import { 
   User, 
   Lock, 
@@ -25,7 +25,9 @@ import {
   LogOut,
   LogIn,
   Bookmark,
-  AlertTriangle
+  AlertTriangle,
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
@@ -75,6 +77,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [showPictureModal, setShowPictureModal] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [showPointsBreakdown, setShowPointsBreakdown] = useState(false);
 
   // Edit Form state (owner personal details)
   const [nickname, setNickname] = useState(userProfile?.nickname || '@IlaMedHero');
@@ -105,6 +108,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setAvatarUrl(userProfile.avatarUrl || '');
     }
   }, [userProfile]);
+
+  // Handle popstate for back button inside ProfileScreen
+  useEffect(() => {
+    const handlePopState = () => {
+      if (confirmLogout) {
+        setConfirmLogout(false);
+        return;
+      }
+      if (showPictureModal) {
+        setShowPictureModal(false);
+        return;
+      }
+      if (showPointsBreakdown) {
+        setShowPointsBreakdown(false);
+        return;
+      }
+      if (isEditingSettings) {
+        setIsEditingSettings(false);
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [confirmLogout, showPictureModal, showPointsBreakdown, isEditingSettings]);
 
   const departments = [
     'Medicine and Surgery (MBBS)',
@@ -244,7 +272,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsEditingSettings(true)}
+              onClick={() => {
+                setIsEditingSettings(true);
+                try { window.history.pushState({ subModal: 'profileEdit' }, ''); } catch (e) { console.error(e); }
+              }}
               className="px-3.5 py-2 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-800 hover:text-teal-800 transition-all border border-slate-200 shadow-2xs flex items-center gap-1.5 font-extrabold text-xs"
               title="Account Settings & Personal Details"
             >
@@ -303,17 +334,131 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <span className="text-lg sm:text-xl font-black text-slate-900">{myPosts.length}</span>
           </div>
 
-          <div className="bg-teal-50/80 p-3 rounded-2xl border border-teal-200/80 text-center">
-            <span className="text-xs font-bold text-teal-800 uppercase block flex items-center justify-center gap-1">
-              <Award size={13} className="text-teal-600" />
+          <div 
+            onClick={() => setShowPointsBreakdown(true)}
+            className="bg-teal-50/80 hover:bg-teal-100/90 transition-all p-3 rounded-2xl border border-teal-200/80 text-center cursor-pointer group shadow-2xs"
+            title="Click to view full points breakdown"
+          >
+            <span className="text-xs font-bold text-teal-800 uppercase flex items-center justify-center gap-1 group-hover:text-teal-900">
+              <Award size={13} className="text-teal-600 group-hover:scale-110 transition-transform" />
               <span>Total Points Earned</span>
             </span>
-            <span className="text-lg sm:text-xl font-black text-teal-900">
+            <span className="text-lg sm:text-xl font-black text-teal-900 flex items-center justify-center gap-1">
               {pointsEarned.toLocaleString()} <span className="text-xs font-extrabold text-teal-700">pts</span>
+              <Info size={12} className="text-teal-600 opacity-60 group-hover:opacity-100" />
             </span>
           </div>
         </div>
       </div>
+
+      {/* POINTS BREAKDOWN MODAL */}
+      {showPointsBreakdown && (() => {
+        const bd = getUserPointsBreakdown(myNickname, userProfile, allPosts, allComments);
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="bg-white max-w-md w-full rounded-3xl p-5 sm:p-6 border border-teal-200 shadow-2xl space-y-4 my-auto animate-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-teal-800 font-extrabold text-base">
+                  <Award className="w-5 h-5 text-teal-600" />
+                  <span>Reputation Points Breakdown</span>
+                </div>
+                <button
+                  onClick={() => setShowPointsBreakdown(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Official reputation calculation for <strong className="text-slate-800">{userProfile?.nickname || myNickname}</strong> based on campus activity:
+              </p>
+
+              <div className="space-y-2 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 block">👤 Profile Completion</span>
+                    <span className="text-[10px] text-slate-500">One-time account reward</span>
+                  </div>
+                  <span className="font-extrabold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
+                    +{bd.profileCompletion} pts
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 block">📝 Quality Threads Created</span>
+                    <span className="text-[10px] text-slate-500">{bd.postsCount} posts × 2 pts</span>
+                  </div>
+                  <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                    +{bd.qualityPosts} pts
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 block">👍 Likes Received from Peers</span>
+                    <span className="text-[10px] text-slate-500">{bd.likesCount} peer likes × 1 pt</span>
+                  </div>
+                  <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                    +{bd.likesReceived} pts
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 block">💬 Comments Received from Peers</span>
+                    <span className="text-[10px] text-slate-500">{bd.commentsCount} peer comments × 1 pt</span>
+                  </div>
+                  <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                    +{bd.commentsReceived} pts
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 block">🔄 Reposts/Quotes Received</span>
+                    <span className="text-[10px] text-slate-500">{bd.repostsCount} peer reposts × 1 pt</span>
+                  </div>
+                  <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                    +{bd.repostsReceived} pts
+                  </span>
+                </div>
+
+                {(bd.spamPenalties > 0 || bd.offensivePenalties > 0 || bd.reportPenalties > 0) && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 space-y-1">
+                    <span className="font-bold text-rose-950 block">⚠️ Safety Penalties Deducted</span>
+                    {bd.spamPenalties > 0 && <p className="text-[11px] text-rose-700">• Spam penalty: -{bd.spamPenalties} pts</p>}
+                    {bd.offensivePenalties > 0 && <p className="text-[11px] text-rose-700">• Offensive post penalty: -{bd.offensivePenalties} pts</p>}
+                    {bd.reportPenalties > 0 && <p className="text-[11px] text-rose-700">• Valid community reports penalty: -{bd.reportPenalties} pts</p>}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <span className="font-black text-slate-900 text-sm">Total Calculated Points</span>
+                <span className="font-black text-teal-800 text-lg bg-teal-50 px-3 py-1 rounded-xl border border-teal-200">
+                  {bd.total.toLocaleString()} pts
+                </span>
+              </div>
+
+              <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-[10px] text-amber-900 space-y-1">
+                <span className="font-bold block">🔒 Anti-Abuse System Active:</span>
+                <p className="leading-snug">
+                  Liking, commenting on, or reposting your own threads earns <strong>0 points</strong>. Only verified interactions from other students count towards reputation points.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowPointsBreakdown(false)}
+                className="w-full py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs transition-colors cursor-pointer shadow-xs"
+              >
+                Close Breakdown
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* SETTINGS & PERSONAL DETAILS MODAL (Account Owner Only) */}
       {isEditingSettings && (

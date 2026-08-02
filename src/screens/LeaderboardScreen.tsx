@@ -470,26 +470,25 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-              <span className="font-bold text-slate-900 block">➕ How You Earn Points:</span>
-              <ul className="space-y-1 text-slate-700 text-[11px]">
-                <li>• 📅 Daily login: <span className="font-bold text-teal-700">+2 pts</span></li>
-                <li>• 📝 Create a quality post: <span className="font-bold text-teal-700">+3 pts</span></li>
-                <li>• 👍 Receive a peer like: <span className="font-bold text-teal-700">+1 pt</span></li>
-                <li>• 💬 Receive a meaningful comment: <span className="font-bold text-purple-700">+2 pts</span></li>
-                <li>• 🔄 Receive a repost/share: <span className="font-bold text-purple-700">+2 pts</span></li>
-                <li>• 👤 Complete full profile: <span className="font-bold text-blue-700">+20 pts (one time)</span></li>
-                <li>• 🚩 Helpful report leading to action: <span className="font-bold text-blue-700">+10 pts</span></li>
+              <span className="font-bold text-slate-900 block">➕ How Users Earn Points:</span>
+              <ul className="space-y-1.5 text-slate-700 text-[11px]">
+                <li className="flex items-center justify-between">• 📝 Create a quality post <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">+2 pts</span></li>
+                <li className="flex items-center justify-between">• 👍 Receive a like on a thread <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">+1 pt</span></li>
+                <li className="flex items-center justify-between">• 💬 Receive a comment on a thread <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">+1 pt</span></li>
+                <li className="flex items-center justify-between">• 🔄 Receive a repost/quote of a thread <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">+1 pt</span></li>
+                <li className="flex items-center justify-between">• 👤 Complete profile (one-time reward) <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">+20 pts</span></li>
               </ul>
             </div>
 
             <div className="p-4 bg-rose-50/70 rounded-xl border border-rose-200 space-y-2">
-              <span className="font-bold text-rose-950 block">➖ Deductions & Anti-Cheating Protection:</span>
-              <ul className="space-y-1 text-rose-900 text-[11px]">
-                <li>• 🚫 Posting spam: <span className="font-bold text-rose-700">-30 pts</span></li>
-                <li>• ❌ Offensive post: <span className="font-bold text-rose-700">-50 pts</span></li>
-                <li>• ⚠️ Multiple valid community reports: <span className="font-bold text-rose-700">-20 pts</span></li>
-                <li>• ⛔ Temporary account suspension: <span className="font-bold text-rose-700">-100 pts</span></li>
-                <li>• 🛡️ Anti-Farm: Likes from same user count only once. Accounts &lt; 7 days old cannot award engagement points.</li>
+              <span className="font-bold text-rose-950 block">➖ How Users Lose Points & Anti-Abuse Rules:</span>
+              <ul className="space-y-1.5 text-rose-900 text-[11px]">
+                <li className="flex items-center justify-between">• 🚫 Spam penalty <span className="font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">-20 pts</span></li>
+                <li className="flex items-center justify-between">• ❌ Offensive post penalty <span className="font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">-20 pts</span></li>
+                <li className="flex items-center justify-between">• ⚠️ Multiple valid reports penalty <span className="font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">-20 pts</span></li>
+                <li className="text-[10px] text-slate-600 bg-white/80 p-2 rounded border border-rose-200/60 font-medium mt-1">
+                  🔒 <strong>Abuse Prevention:</strong> Liking, commenting on, or reposting your own post earns 0 points. Only interactions from other users count.
+                </li>
               </ul>
             </div>
           </div>

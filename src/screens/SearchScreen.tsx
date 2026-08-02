@@ -29,6 +29,7 @@ interface SearchScreenProps {
   onLikeClick: (post: Post) => void;
   onBookmarkClick: (post: Post) => void;
   onCommentClick: (post: Post) => void;
+  onAuthorClick?: (post: Post) => void;
 }
 
 interface CampusAccount {
@@ -296,6 +297,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   onLikeClick,
   onBookmarkClick,
   onCommentClick,
+  onAuthorClick,
 }) => {
   const [query, setQuery] = useState('');
   
@@ -306,6 +308,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
   // Author profile modal
   const [selectedAuthor, setSelectedAuthor] = useState<UserProfile | null>(null);
+
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (selectedAuthor) {
+        setSelectedAuthor(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedAuthor]);
 
   const trendingTopics = [
     'SUG Welfare',
@@ -466,20 +478,41 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
 
   // Convert account to UserProfile for modal
   const handleAccountClick = (acc: CampusAccount) => {
-    const profile: UserProfile = {
-      id: acc.id,
-      nickname: acc.nickname,
-      realName: acc.realName,
-      department: acc.department,
-      level: acc.level,
-      bio: acc.bio,
-      badgeType: acc.badgeType,
-      badgeTitle: acc.badgeTitle,
-      avatarKey: acc.avatarKey,
-      reputationScore: acc.reputationScore,
-      isVerified: acc.isVerified,
+    const dummyPost: Post = {
+      id: `acc_${acc.id}`,
+      authorNickname: acc.nickname,
+      authorAvatarKey: acc.avatarKey,
+      authorBadgeType: acc.badgeType,
+      authorBadgeTitle: acc.badgeTitle,
+      authorPoints: acc.reputationScore,
+      timeAgo: '',
+      categoryTag: 'General',
+      text: acc.bio,
+      likesCount: 0,
+      commentsCount: 0,
+      isQuarantined: false,
+      createdAt: '',
     };
-    setSelectedAuthor(profile);
+
+    if (onAuthorClick) {
+      onAuthorClick(dummyPost);
+    } else {
+      const profile: UserProfile = {
+        id: acc.id,
+        nickname: acc.nickname,
+        realName: acc.realName,
+        department: acc.department,
+        level: acc.level,
+        bio: acc.bio,
+        badgeType: acc.badgeType,
+        badgeTitle: acc.badgeTitle,
+        avatarKey: acc.avatarKey,
+        reputationScore: acc.reputationScore,
+        isVerified: acc.isVerified,
+      };
+      setSelectedAuthor(profile);
+      try { window.history.pushState({ subModal: 'searchAuthor' }, ''); } catch (e) { console.error(e); }
+    }
   };
 
   const displayedAccounts = showAllAccounts ? matchingAccounts : matchingAccounts.slice(0, 3);
@@ -795,7 +828,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           allPosts={posts}
           onClose={() => setSelectedAuthor(null)}
           onCommentClick={(post) => {
-            setSelectedAuthor(null);
             onSelectPost(post);
           }}
         />

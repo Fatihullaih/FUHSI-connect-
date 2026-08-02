@@ -472,6 +472,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         level: matchedUser.level,
         bio: matchedUser.bio,
         avatarKey: matchedUser.avatarKey,
+        avatarUrl: matchedUser.avatarUrl,
         badgeType: matchedUser.badgeType || 'GREEN',
         badgeTitle: matchedUser.badgeTitle || 'Verified Student',
         reputationScore: matchedUser.reputationScore || 100,

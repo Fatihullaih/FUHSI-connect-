@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   INITIAL_USER_PROFILE,
   INITIAL_POSTS,
@@ -147,8 +147,22 @@ export const App: React.FC = () => {
     try {
       const activeUserJson = localStorage.getItem('fuhsi_active_user');
       if (activeUserJson) {
-        const parsed = JSON.parse(activeUserJson);
+        let parsed = JSON.parse(activeUserJson);
         if (parsed && parsed.nickname) {
+          const storedUsers = localStorage.getItem('fuhsi_users_db');
+          if (storedUsers) {
+            const list: UserProfile[] = JSON.parse(storedUsers);
+            const found = list.find(
+              (u) => u.id === parsed.id || u.nickname?.toLowerCase() === parsed.nickname?.toLowerCase()
+            );
+            if (found) {
+              parsed = {
+                ...parsed,
+                ...found,
+                avatarUrl: found.avatarUrl || parsed.avatarUrl,
+              };
+            }
+          }
           setUserProfile(parsed);
         }
       }
@@ -165,6 +179,156 @@ export const App: React.FC = () => {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedAuthorPost, setSelectedAuthorPost] = useState<Post | null>(null);
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+
+  // Stack-based Navigation & Modal History State Support
+  type ModalStackItem =
+    | { type: 'postDetail'; post: Post }
+    | { type: 'authorProfile'; post: Post }
+    | { type: 'profile' }
+    | { type: 'createPost' }
+    | { type: 'auth' }
+    | { type: 'pwa' };
+
+  const [modalStack, setModalStack] = useState<ModalStackItem[]>([]);
+  const [navHistory, setNavHistory] = useState<number[]>([0]);
+
+  // Tab Navigation with History Tracking
+  const handleNavChange = useCallback((newIndex: number) => {
+    setNavIndex((prevNav) => {
+      if (prevNav === newIndex) return prevNav;
+      setNavHistory((prev) => [...prev, newIndex]);
+      try {
+        window.history.pushState({ type: 'nav', index: newIndex, time: Date.now() }, '');
+      } catch (e) { console.error(e); }
+      return newIndex;
+    });
+  }, []);
+
+  // Modal Opener Helpers with History Tracking
+  const openPostDetail = useCallback((post: Post) => {
+    setSelectedPost(post);
+    setModalStack((prev) => [...prev, { type: 'postDetail', post }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'postDetail', id: post.id, time: Date.now() }, '');
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const openAuthorProfile = useCallback((post: Post) => {
+    setSelectedAuthorPost(post);
+    setModalStack((prev) => [...prev, { type: 'authorProfile', post }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'authorProfile', id: post.id, time: Date.now() }, '');
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const openProfileModal = useCallback(() => {
+    setShowProfileModal(true);
+    setModalStack((prev) => [...prev, { type: 'profile' }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'profile', time: Date.now() }, '');
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const openCreatePostModal = useCallback(() => {
+    setShowCreatePostModal(true);
+    setModalStack((prev) => [...prev, { type: 'createPost' }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'createPost', time: Date.now() }, '');
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const openAuthModal = useCallback(() => {
+    setShowAuthModal(true);
+    setModalStack((prev) => [...prev, { type: 'auth' }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'auth', time: Date.now() }, '');
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const openPwaModal = useCallback(() => {
+    setShowPwaModal(true);
+    setModalStack((prev) => [...prev, { type: 'pwa' }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'pwa', time: Date.now() }, '');
+    } catch (e) { console.error(e); }
+  }, []);
+
+  // Close top modal via UI "X" / "Back" button
+  const closeModalUI = useCallback(() => {
+    if (window.history.state && window.history.state.type === 'modal') {
+      window.history.back();
+    } else {
+      // Direct state pop if no history entry
+      setModalStack((prevStack) => {
+        if (prevStack.length === 0) {
+          setSelectedPost(null);
+          setSelectedAuthorPost(null);
+          setShowProfileModal(false);
+          setShowCreatePostModal(false);
+          setShowAuthModal(false);
+          setShowPwaModal(false);
+          return [];
+        }
+        const newStack = [...prevStack];
+        newStack.pop();
+
+        const lastPost = newStack.slice().reverse().find((item) => item.type === 'postDetail');
+        setSelectedPost(lastPost ? (lastPost as any).post : null);
+
+        const lastAuthor = newStack.slice().reverse().find((item) => item.type === 'authorProfile');
+        setSelectedAuthorPost(lastAuthor ? (lastAuthor as any).post : null);
+
+        setShowProfileModal(newStack.some((item) => item.type === 'profile'));
+        setShowCreatePostModal(newStack.some((item) => item.type === 'createPost'));
+        setShowAuthModal(newStack.some((item) => item.type === 'auth'));
+        setShowPwaModal(newStack.some((item) => item.type === 'pwa'));
+
+        return newStack;
+      });
+    }
+  }, []);
+
+  // PopState Event Handler
+  useEffect(() => {
+    const handlePopState = () => {
+      setModalStack((prevStack) => {
+        if (prevStack.length > 0) {
+          const newStack = [...prevStack];
+          newStack.pop();
+
+          const lastPost = newStack.slice().reverse().find((item) => item.type === 'postDetail');
+          setSelectedPost(lastPost ? (lastPost as any).post : null);
+
+          const lastAuthor = newStack.slice().reverse().find((item) => item.type === 'authorProfile');
+          setSelectedAuthorPost(lastAuthor ? (lastAuthor as any).post : null);
+
+          setShowProfileModal(newStack.some((item) => item.type === 'profile'));
+          setShowCreatePostModal(newStack.some((item) => item.type === 'createPost'));
+          setShowAuthModal(newStack.some((item) => item.type === 'auth'));
+          setShowPwaModal(newStack.some((item) => item.type === 'pwa'));
+
+          return newStack;
+        }
+
+        // Handle navigation tab history if no modals open
+        setNavHistory((prevNav) => {
+          if (prevNav.length > 1) {
+            const newNav = [...prevNav];
+            newNav.pop();
+            const prevTab = newNav[newNav.length - 1];
+            setNavIndex(prevTab);
+            return newNav;
+          }
+          return prevNav;
+        });
+
+        return [];
+      });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Anti-doxxing helper function: checks phone numbers, email, links, or matric numbers
   const checkDoxxingThreats = (text: string): string | null => {
@@ -650,13 +814,14 @@ export const App: React.FC = () => {
           {/* Top-Left Profile Picture Avatar Trigger (Twitter Style) */}
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setShowProfileModal(true)}
+              onClick={openProfileModal}
               className="group relative flex items-center gap-2 p-1 rounded-full hover:bg-teal-700/80 transition-all text-left focus:outline-none focus:ring-2 focus:ring-teal-400/50"
               title="Click to check your Student Profile"
             >
               <div className="relative">
                 <AvatarIcon
                   avatarKey={userProfile?.avatarKey || '1'}
+                  avatarUrl={userProfile?.avatarUrl}
                   className="w-9 h-9 rounded-full ring-2 ring-teal-300/60 shadow-xs group-hover:scale-105 transition-transform"
                 />
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-teal-800 rounded-full" />
@@ -673,7 +838,7 @@ export const App: React.FC = () => {
 
           {/* App Title & Logo */}
           <div
-            onClick={() => setNavIndex(0)}
+            onClick={() => handleNavChange(0)}
             className="flex items-center gap-2 cursor-pointer select-none py-0.5"
             title="FUHSI-Connect Campus Network"
           >
@@ -694,7 +859,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2">
             {userProfile?.isAdmin && (
               <button
-                onClick={() => setNavIndex(5)}
+                onClick={() => handleNavChange(5)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm ${
                   navIndex === 5
                     ? 'bg-amber-400 text-slate-900 ring-2 ring-amber-300'
@@ -708,20 +873,11 @@ export const App: React.FC = () => {
             )}
 
             <button
-              onClick={() => setShowPwaModal(true)}
+              onClick={openPwaModal}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700/80 hover:bg-teal-700 text-teal-100 hover:text-white border border-teal-500/40 text-xs font-bold transition-all shadow-xs"
             >
               <Smartphone size={14} className="text-teal-300" />
               <span className="hidden sm:inline">Install</span>
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-900/80 hover:bg-rose-900/90 text-teal-200 hover:text-white border border-teal-600/40 text-xs font-bold transition-all shadow-xs cursor-pointer"
-              title="Sign Out of Account"
-            >
-              <LogOut size={14} className="text-teal-300 group-hover:text-rose-200 shrink-0" />
-              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
@@ -737,12 +893,12 @@ export const App: React.FC = () => {
             onFilterSelect={setSelectedFilter}
             onLikeClick={handleLikeClick}
             onBookmarkClick={handleBookmarkClick}
-            onCommentClick={(post) => setSelectedPost(post)}
+            onCommentClick={openPostDetail}
             onDeletePost={handleDeletePost}
-            onAuthorClick={(post) => setSelectedAuthorPost(post)}
+            onAuthorClick={openAuthorProfile}
             onVotePoll={handleVotePoll}
             onReportPost={handleReportPost}
-            onCreatePostClick={() => setShowCreatePostModal(true)}
+            onCreatePostClick={openCreatePostModal}
           />
         )}
 
@@ -751,10 +907,11 @@ export const App: React.FC = () => {
             userProfile={userProfile}
             posts={posts}
             marketplaceItems={marketplaceItems}
-            onSelectPost={(post) => setSelectedPost(post)}
+            onSelectPost={openPostDetail}
             onLikeClick={handleLikeClick}
             onBookmarkClick={handleBookmarkClick}
-            onCommentClick={(post) => setSelectedPost(post)}
+            onCommentClick={openPostDetail}
+            onAuthorClick={openAuthorProfile}
           />
         )}
 
@@ -779,7 +936,7 @@ export const App: React.FC = () => {
           <NotificationScreen
             userProfile={userProfile}
             allPosts={posts}
-            onSelectPost={(post) => setSelectedPost(post)}
+            onSelectPost={openPostDetail}
           />
         )}
 
@@ -828,14 +985,14 @@ export const App: React.FC = () => {
           <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
             <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
               <div className="flex items-center gap-2.5">
-                <AvatarIcon avatarKey={userProfile.avatarKey} className="w-8 h-8 rounded-full border border-teal-300" />
+                <AvatarIcon avatarKey={userProfile.avatarKey} avatarUrl={userProfile.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
                 <div>
                   <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
                   <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
                 </div>
               </div>
               <button
-                onClick={() => setShowProfileModal(false)}
+                onClick={closeModalUI}
                 className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
               >
                 <X size={18} />
@@ -849,20 +1006,20 @@ export const App: React.FC = () => {
                 allComments={comments}
                 onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
                   const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
-                  if (!err) setShowProfileModal(false);
+                  if (!err) closeModalUI();
                   return err;
                 }}
                 onOpenAuthModal={() => {
-                  setShowProfileModal(false);
-                  setShowAuthModal(true);
+                  closeModalUI();
+                  openAuthModal();
                 }}
                 onLogout={handleLogout}
                 onLikeClick={handleLikeClick}
                 onBookmarkClick={handleBookmarkClick}
-                onCommentClick={(post) => setSelectedPost(post)}
+                onCommentClick={openPostDetail}
                 onDeletePost={handleDeletePost}
                 onDeleteComment={handleDeleteComment}
-                onClose={() => setShowProfileModal(false)}
+                onClose={closeModalUI}
               />
             </div>
           </div>
@@ -875,7 +1032,7 @@ export const App: React.FC = () => {
           post={selectedPost}
           comments={comments.filter((c) => c.postId === selectedPost.id)}
           userProfile={userProfile}
-          onClose={() => setSelectedPost(null)}
+          onClose={closeModalUI}
           onAddComment={(text, parentId, replyToNickname) => handleAddComment(selectedPost.id, text, parentId, replyToNickname)}
           onLikeComment={handleLikeComment}
           onToggleLike={handleLikeClick}
@@ -883,15 +1040,25 @@ export const App: React.FC = () => {
           onDeletePost={handleDeletePost}
           onDeleteComment={handleDeleteComment}
           onVotePoll={handleVotePoll}
-          onAuthorClick={(author) =>
-            setSelectedAuthorPost({
+          onAuthorClick={(author) => {
+            const dummyPost: Post = {
+              id: `author_${author.nickname}`,
               authorNickname: author.nickname,
-              authorAvatarKey: author.avatarKey,
+              authorAvatarKey: author.avatarKey || 'caduceus',
               authorAvatarUrl: author.avatarUrl,
-              authorBadgeType: author.badgeType,
-              authorBadgeTitle: author.badgeTitle,
-            } as Post)
-          }
+              authorBadgeType: (author.badgeType as any) || 'NONE',
+              authorBadgeTitle: author.badgeTitle || '',
+              authorPoints: 0,
+              timeAgo: '',
+              categoryTag: 'General',
+              text: '',
+              likesCount: 0,
+              commentsCount: 0,
+              isQuarantined: false,
+              createdAt: '',
+            };
+            openAuthorProfile(dummyPost);
+          }}
         />
       )}
 
@@ -908,14 +1075,11 @@ export const App: React.FC = () => {
           currentUserNickname={userProfile.nickname}
           allPosts={posts}
           allComments={comments}
-          onClose={() => setSelectedAuthorPost(null)}
+          onClose={closeModalUI}
           onLikeClick={handleLikeClick}
           onBookmarkClick={handleBookmarkClick}
           onDeletePost={handleDeletePost}
-          onCommentClick={(p) => {
-            setSelectedAuthorPost(null);
-            setSelectedPost(p);
-          }}
+          onCommentClick={openPostDetail}
         />
       )}
 
@@ -923,7 +1087,7 @@ export const App: React.FC = () => {
       {showCreatePostModal && (
         <CreatePostModal
           userProfile={userProfile}
-          onClose={() => setShowCreatePostModal(false)}
+          onClose={closeModalUI}
           onSubmit={handleCreatePost}
           checkDoxxingThreats={checkDoxxingThreats}
         />
@@ -932,16 +1096,16 @@ export const App: React.FC = () => {
       {/* PWA App Install Modal */}
       <PWAInstallModal
         isOpen={showPwaModal}
-        onClose={() => setShowPwaModal(false)}
+        onClose={closeModalUI}
       />
 
       {/* Account Register & Login Modal */}
       <AuthModal
         isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+        onClose={closeModalUI}
         onLoginSuccess={(user) => {
           setUserProfile(user);
-          setShowAuthModal(false);
+          closeModalUI();
         }}
       />
 
@@ -950,7 +1114,7 @@ export const App: React.FC = () => {
         <div className="max-w-md mx-auto flex items-center justify-around py-2 px-2">
           {/* 1. Feed */}
           <button
-            onClick={() => setNavIndex(0)}
+            onClick={() => handleNavChange(0)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
               navIndex === 0 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
@@ -961,7 +1125,7 @@ export const App: React.FC = () => {
 
           {/* 2. Search */}
           <button
-            onClick={() => setNavIndex(1)}
+            onClick={() => handleNavChange(1)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
               navIndex === 1 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
@@ -972,7 +1136,7 @@ export const App: React.FC = () => {
 
           {/* 3. Hub&Fund */}
           <button
-            onClick={() => setNavIndex(2)}
+            onClick={() => handleNavChange(2)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
               navIndex === 2 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
@@ -983,7 +1147,7 @@ export const App: React.FC = () => {
 
           {/* 4. Notification */}
           <button
-            onClick={() => setNavIndex(3)}
+            onClick={() => handleNavChange(3)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
               navIndex === 3 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
@@ -994,7 +1158,7 @@ export const App: React.FC = () => {
 
           {/* 5. Ranking */}
           <button
-            onClick={() => setNavIndex(4)}
+            onClick={() => handleNavChange(4)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
               navIndex === 4 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
