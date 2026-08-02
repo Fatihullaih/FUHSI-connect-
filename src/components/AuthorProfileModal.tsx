@@ -5,6 +5,7 @@ import { VerificationBadge } from './VerificationBadge';
 import { PostCard } from './PostCard';
 import { ProfilePictureModal } from './ProfilePictureModal';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { calculateUserPoints } from '../utils/reputationUtils';
 import { 
   X, 
   Award, 
@@ -25,7 +26,8 @@ interface AuthorProfileModalProps {
   authorPoints?: number;
   authorJoinedDate?: string;
   currentUserNickname?: string;
-  allPosts: Post[];
+  allPosts?: Post[];
+  posts?: Post[];
   allComments?: Comment[];
   onClose: () => void;
   onLikeClick?: (post: Post) => void;
@@ -34,23 +36,26 @@ interface AuthorProfileModalProps {
   onDeletePost?: (postId: string) => void;
 }
 
-export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
-  authorNickname,
-  authorAvatarKey = 'caduceus',
-  authorAvatarUrl,
-  authorBadgeType = 'GREEN',
-  authorBadgeTitle = 'Verified Student',
-  authorPoints = 1500,
-  authorJoinedDate = 'Jul 2026',
-  currentUserNickname,
-  allPosts = [],
-  allComments = [],
-  onClose,
-  onLikeClick,
-  onBookmarkClick,
-  onCommentClick,
-  onDeletePost,
-}) => {
+export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => {
+  const {
+    authorNickname,
+    authorAvatarKey = 'caduceus',
+    authorAvatarUrl,
+    authorBadgeType = 'GREEN',
+    authorBadgeTitle = 'Verified Student',
+    authorPoints,
+    authorJoinedDate = 'Jul 2026',
+    currentUserNickname,
+    allPosts = [],
+    posts = [],
+    allComments = [],
+    onClose,
+    onLikeClick,
+    onBookmarkClick,
+    onCommentClick,
+    onDeletePost,
+  } = props;
+
   const [activeTab, setActiveTab] = useState<'threads' | 'replies'>('threads');
   const [showPictureModal, setShowPictureModal] = useState(false);
 
@@ -59,21 +64,26 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
     ? authorNickname 
     : `@${authorNickname.replace(/\s+/g, '_').toLowerCase()}`;
 
+  const normAuthor = authorNickname ? authorNickname.toLowerCase().replace(/^@/, '').trim() : '';
+  const effectivePosts = (allPosts && allPosts.length > 0) ? allPosts : posts;
+
   // Find all threads written by this author, sorted chronologically (newest first)
   const authorPosts = useMemo(() => {
-    return allPosts
-      .filter(
-        (p) =>
-          p.authorNickname?.toLowerCase() === authorNickname?.toLowerCase() ||
-          (p as any).nickname?.toLowerCase() === authorNickname?.toLowerCase()
-      )
+    return effectivePosts
+      .filter((p) => {
+        const nick = (p.authorNickname || p.nickname || (p as any).customNickname || '')
+          .toLowerCase()
+          .replace(/^@/, '')
+          .trim();
+        return nick === normAuthor;
+      })
       .sort((a, b) => {
         const timeA = new Date(a.timestamp).getTime();
         const timeB = new Date(b.timestamp).getTime();
         if (!isNaN(timeA) && !isNaN(timeB)) return timeB - timeA;
         return 0;
       });
-  }, [allPosts, authorNickname]);
+  }, [effectivePosts, normAuthor]);
 
   // Find all replies/comments made by this author across all threads
   const authorReplies = useMemo(() => {
@@ -82,20 +92,22 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
 
     // From allComments prop
     (allComments || []).forEach((c) => {
-      if (c.authorNickname?.toLowerCase() === authorNickname?.toLowerCase()) {
+      const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '').trim();
+      if (cNick === normAuthor) {
         if (!seen.has(c.id)) {
           seen.add(c.id);
-          const parentPost = allPosts.find((p) => p.id === c.postId);
+          const parentPost = effectivePosts.find((p) => p.id === c.postId);
           list.push({ comment: c, parentPost });
         }
       }
     });
 
     // From embedded comments inside posts
-    allPosts.forEach((p) => {
+    effectivePosts.forEach((p) => {
       if ((p as any).comments && Array.isArray((p as any).comments)) {
         (p as any).comments.forEach((c: Comment) => {
-          if (c.authorNickname?.toLowerCase() === authorNickname?.toLowerCase()) {
+          const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '').trim();
+          if (cNick === normAuthor) {
             if (!seen.has(c.id)) {
               seen.add(c.id);
               list.push({ comment: c, parentPost: p });
@@ -106,7 +118,14 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
     });
 
     return list;
-  }, [allComments, allPosts, authorNickname]);
+  }, [allComments, effectivePosts, normAuthor]);
+
+  // Calculate points dynamically based on actual activity
+  const computedPoints = useMemo(() => {
+    return calculateUserPoints(authorNickname, undefined, effectivePosts, allComments);
+  }, [authorNickname, effectivePosts, allComments]);
+
+  const displayPoints = authorPoints ?? computedPoints;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
@@ -164,7 +183,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
           <div>
             <div className="text-base sm:text-lg font-black text-teal-700 flex items-center justify-center gap-1">
               <Award size={16} className="text-teal-600" />
-              <span>{authorPoints.toLocaleString()} <span className="text-xs font-bold text-teal-600">pts</span></span>
+              <span>{displayPoints.toLocaleString()} <span className="text-xs font-bold text-teal-600">pts</span></span>
             </div>
             <div className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Total Points Earned</div>
           </div>

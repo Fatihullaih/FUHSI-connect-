@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PostCategory, UserProfile } from '../types';
-import { INITIAL_USER_PROFILE } from '../data/initialData';
+import { compressImageFile } from '../utils/imageUtils';
 import { AvatarIcon } from './AvatarIcon';
 import { X, Sparkles, Send, ShieldCheck, BarChart2, AlertTriangle, Image as ImageIcon, Video as VideoIcon, Upload, Trash2, Building2, Bell, Crown, Lock, Plus } from 'lucide-react';
 
@@ -115,14 +115,20 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedDataUrl = await compressImageFile(file, 900, 900, 0.75);
+        setImageUrl(compressedDataUrl);
+      } catch (err) {
+        console.error('Image compression failed, using direct reader', err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImageUrl(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

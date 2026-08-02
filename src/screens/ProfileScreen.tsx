@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile, Post, Comment } from '../types';
+import { compressImageFile } from '../utils/imageUtils';
+import { calculateUserPoints } from '../utils/reputationUtils';
 import { 
   User, 
   Lock, 
@@ -77,7 +79,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Edit Form state (owner personal details)
   const [nickname, setNickname] = useState(userProfile?.nickname || '@IlaMedHero');
   const [realName, setRealName] = useState(userProfile?.realNameHidden || userProfile?.realName || 'Adeyemo Oluwaseun Joseph');
-  const [studentEmail, setStudentEmail] = useState(userProfile?.studentEmail || 'adepojufatih33@gmail.com');
+  const [studentEmail, setStudentEmail] = useState(userProfile?.studentEmail || 'student@fuhsi.edu.ng');
   const [department, setDepartment] = useState(userProfile?.department || 'Medicine and Surgery (MBBS)');
   const [level, setLevel] = useState(userProfile?.level || '300L');
   const [bio, setBio] = useState(userProfile?.bio || 'FUHSI Student | Learning & Saving Lives');
@@ -88,6 +90,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [showSavedToast, setShowSavedToast] = useState(false);
+
+  // Sync form state when userProfile changes
+  useEffect(() => {
+    if (userProfile) {
+      setNickname(userProfile.nickname || '@IlaMedHero');
+      setRealName(userProfile.realNameHidden || userProfile.realName || '');
+      setStudentEmail(userProfile.studentEmail || '');
+      setDepartment(userProfile.department || 'Medicine and Surgery (MBBS)');
+      setLevel(userProfile.level || '300L');
+      setBio(userProfile.bio || '');
+      setEmergencyPhone(userProfile.emergencyHomePhone || '');
+      setSelectedAvatarKey(userProfile.avatarKey || 'caduceus');
+      setAvatarUrl(userProfile.avatarUrl || '');
+    }
+  }, [userProfile]);
 
   const departments = [
     'Medicine and Surgery (MBBS)',
@@ -117,12 +134,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // User posts (threads) sorted chronologically (newest first)
   const myNickname = userProfile?.nickname || '';
+  const normMyNick = myNickname ? myNickname.toLowerCase().replace(/^@/, '').trim() : '';
+
   const myPosts = allPosts
-    .filter(
-      (p) =>
-        (p.authorNickname && p.authorNickname.toLowerCase() === myNickname.toLowerCase()) ||
-        (p.nickname && p.nickname.toLowerCase() === myNickname.toLowerCase())
-    )
+    .filter((p) => {
+      const author = (p.authorNickname || p.nickname || (p as any).customNickname || '')
+        .toLowerCase()
+        .replace(/^@/, '')
+        .trim();
+      return author === normMyNick;
+    })
     .sort((a, b) => {
       const timeA = new Date(a.timestamp).getTime();
       const timeB = new Date(b.timestamp).getTime();
@@ -132,9 +153,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // User comments (replies) sorted chronologically (newest first)
   const myReplies = allComments
-    .filter(
-      (c) => c.authorNickname && c.authorNickname.toLowerCase() === myNickname.toLowerCase()
-    )
+    .filter((c) => {
+      const author = (c.authorNickname || '').toLowerCase().replace(/^@/, '').trim();
+      return author === normMyNick;
+    })
     .sort((a, b) => {
       const timeA = new Date(a.timestamp).getTime();
       const timeB = new Date(b.timestamp).getTime();
@@ -152,24 +174,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       return 0;
     });
 
-  const pointsEarned = userProfile?.reputationScore ?? userProfile?.reputationPoints ?? 1250;
+  const pointsEarned = calculateUserPoints(myNickname, userProfile, allPosts, allComments);
   const joinedDate = userProfile?.joinedDate || 'Jul 2026';
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setSaveErrorMessage('Image file size must be less than 5MB.');
-        return;
+      try {
+        const compressedDataUrl = await compressImageFile(file, 600, 600, 0.75);
+        setAvatarUrl(compressedDataUrl);
+        setSaveErrorMessage(null);
+      } catch (err) {
+        console.error('Image compression failed', err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            setAvatarUrl(reader.result);
+            setSaveErrorMessage(null);
+          }
+        };
+        reader.readAsDataURL(file);
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setAvatarUrl(reader.result);
-          setSaveErrorMessage(null);
-        }
-      };
-      reader.readAsDataURL(file);
     }
   };
 

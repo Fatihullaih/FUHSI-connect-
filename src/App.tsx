@@ -8,6 +8,7 @@ import {
   INITIAL_VERIFICATION_REQUESTS,
   INITIAL_REPORTS,
 } from './data/initialData';
+import fuhsiLogo from './assets/images/fuhsi_logo_1785485694958.jpg';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -23,7 +24,7 @@ import { PWAInstallModal } from './components/PWAInstallModal';
 import { AuthModal } from './components/AuthModal';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
-import { Smartphone, Search, Bell, Trophy, LogIn, User, Shield, X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Navigation State
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
   const [showPwaModal, setShowPwaModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   // App Core State with Persistent LocalStorage Initialization
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
@@ -140,7 +142,7 @@ export const App: React.FC = () => {
     }
   }, [userProfile]);
 
-  // Check initial login session or show register/login modal on first visit
+  // Requirement: Session & Security - Require user authentication on initial load or reload
   useEffect(() => {
     try {
       const activeUserJson = localStorage.getItem('fuhsi_active_user');
@@ -148,16 +150,14 @@ export const App: React.FC = () => {
         const parsed = JSON.parse(activeUserJson);
         if (parsed && parsed.nickname) {
           setUserProfile(parsed);
-        } else {
-          setShowAuthModal(true);
         }
-      } else {
-        // First time visiting website - trigger account registration / login
-        setShowAuthModal(true);
       }
-    } catch {
-      setShowAuthModal(true);
+    } catch (e) {
+      console.error(e);
     }
+    // Strict authentication guard: start unauthenticated on page load/refresh
+    setIsLoggedIn(false);
+    setShowAuthModal(true);
   }, []);
 
   // Filter & Selected Item Modals
@@ -220,7 +220,13 @@ export const App: React.FC = () => {
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === post.id) {
-          return { ...p, isBookmarkedByMe: !p.isBookmarkedByMe, isBookmarked: !p.isBookmarkedByMe };
+          const currentlyBookmarked = p.isBookmarkedByMe !== undefined ? Boolean(p.isBookmarkedByMe) : Boolean(p.isBookmarked);
+          const nextState = !currentlyBookmarked;
+          const updated = { ...p, isBookmarkedByMe: nextState, isBookmarked: nextState };
+          if (selectedPost && selectedPost.id === post.id) {
+            setSelectedPost(updated);
+          }
+          return updated;
         }
         return p;
       })
@@ -452,6 +458,7 @@ export const App: React.FC = () => {
       console.error(e);
     }
     setUserProfile(INITIAL_USER_PROFILE);
+    setIsLoggedIn(false);
     setShowProfileModal(false);
     setShowAuthModal(true);
   };
@@ -551,34 +558,89 @@ export const App: React.FC = () => {
       return 'Error: Nicknames containing "Anonymous" or "Anon" are forbidden. Please choose a unique student handle.';
     }
 
-    setUserProfile((prev) => {
-      const updated = {
-        ...prev,
-        nickname,
-        department,
-        level,
-        bio,
-        avatarKey,
-        avatarUrl: avatarUrl || prev.avatarUrl,
-        emergencyHomePhone: emergencyPhone,
-      };
+    const newAvatarUrl = avatarUrl || userProfile.avatarUrl;
 
-      try {
-        localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-        const storedUsers = localStorage.getItem('fuhsi_users_db');
-        if (storedUsers) {
-          let list: UserProfile[] = JSON.parse(storedUsers);
-          list = list.map((u) => (u.id === updated.id ? updated : u));
-          localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
-        }
-      } catch (e) {
-        console.error('Error persisting user profile update:', e);
+    const updated: UserProfile = {
+      ...userProfile,
+      nickname,
+      department,
+      level,
+      bio,
+      avatarKey,
+      avatarUrl: newAvatarUrl,
+      emergencyHomePhone: emergencyPhone,
+    };
+
+    setUserProfile(updated);
+
+    try {
+      localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+      const storedUsers = localStorage.getItem('fuhsi_users_db');
+      let list: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : [];
+      const idx = list.findIndex(
+        (u) => u.id === updated.id || u.nickname?.toLowerCase() === updated.nickname?.toLowerCase()
+      );
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...updated };
+      } else {
+        list.push(updated);
       }
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+    } catch (e) {
+      console.error('Error persisting user profile update:', e);
+    }
 
-      return updated;
-    });
+    // Propagate updated avatar and nickname across existing user posts and comments
+    const oldNick = (userProfile.nickname || '').toLowerCase().replace(/^@/, '');
+    setPosts((prev) =>
+      prev.map((p) => {
+        const pNick = (p.authorNickname || p.nickname || '').toLowerCase().replace(/^@/, '');
+        if (pNick === oldNick || pNick === nickname.toLowerCase().replace(/^@/, '')) {
+          return {
+            ...p,
+            authorNickname: nickname,
+            authorAvatarKey: avatarKey,
+            authorAvatarUrl: newAvatarUrl,
+          };
+        }
+        return p;
+      })
+    );
+
+    setComments((prev) =>
+      prev.map((c) => {
+        const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '');
+        if (cNick === oldNick || cNick === nickname.toLowerCase().replace(/^@/, '')) {
+          return {
+            ...c,
+            authorNickname: nickname,
+            authorAvatarKey: avatarKey,
+            authorAvatarUrl: newAvatarUrl,
+          };
+        }
+        return c;
+      })
+    );
+
     return null;
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-2 sm:p-4">
+        <AuthModal
+          isOpen={true}
+          canClose={false}
+          onClose={() => {}}
+          onLoginSuccess={(user) => {
+            setUserProfile(user);
+            setIsLoggedIn(true);
+            setShowAuthModal(false);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] flex flex-col justify-between selection:bg-teal-500 selection:text-white">
@@ -612,18 +674,19 @@ export const App: React.FC = () => {
           {/* App Title & Logo */}
           <div
             onClick={() => setNavIndex(0)}
-            className="flex items-center gap-2 cursor-pointer select-none"
+            className="flex items-center gap-2 cursor-pointer select-none py-0.5"
             title="FUHSI-Connect Campus Network"
           >
             <img
-              src="/src/assets/images/fuhsi_logo_1785485694958.jpg"
-              alt="FUHSI Connect"
-              className="w-8 h-8 rounded-full object-cover shrink-0 border border-teal-300/40 shadow-xs active:scale-95 transition-transform"
-              referrerPolicy="no-referrer"
+              src={fuhsiLogo}
+              alt="FUHSI Connect Logo"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shrink-0 border-2 border-teal-300/60 shadow-xs active:scale-95 transition-transform"
             />
-            <div className="text-left leading-none">
-              <h1 className="font-black text-sm tracking-tight text-white">FUHSI-Connect</h1>
-              <p className="text-[9px] text-teal-200 font-medium">Campus Network</p>
+            <div className="text-left leading-tight">
+              <h1 className="font-black text-xs sm:text-sm tracking-tight text-white flex items-center gap-1">
+                <span>FUHSI-Connect</span>
+              </h1>
+              <p className="text-[9px] text-teal-200/90 font-semibold tracking-wide">Campus Network</p>
             </div>
           </div>
 
@@ -650,6 +713,15 @@ export const App: React.FC = () => {
             >
               <Smartphone size={14} className="text-teal-300" />
               <span className="hidden sm:inline">Install</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-900/80 hover:bg-rose-900/90 text-teal-200 hover:text-white border border-teal-600/40 text-xs font-bold transition-all shadow-xs cursor-pointer"
+              title="Sign Out of Account"
+            >
+              <LogOut size={14} className="text-teal-300 group-hover:text-rose-200 shrink-0" />
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
@@ -704,7 +776,11 @@ export const App: React.FC = () => {
         )}
 
         {navIndex === 3 && (
-          <NotificationScreen userProfile={userProfile} />
+          <NotificationScreen
+            userProfile={userProfile}
+            allPosts={posts}
+            onSelectPost={(post) => setSelectedPost(post)}
+          />
         )}
 
         {navIndex === 4 && (
@@ -827,7 +903,7 @@ export const App: React.FC = () => {
           authorAvatarUrl={selectedAuthorPost.authorAvatarUrl}
           authorBadgeType={selectedAuthorPost.authorBadgeType as BadgeType}
           authorBadgeTitle={selectedAuthorPost.authorBadgeTitle}
-          authorPoints={selectedAuthorPost.authorPoints || 1500}
+          authorPoints={selectedAuthorPost.authorPoints}
           authorJoinedDate="Jul 2026"
           currentUserNickname={userProfile.nickname}
           allPosts={posts}

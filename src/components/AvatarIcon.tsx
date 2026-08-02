@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Stethoscope, 
   Brain, 
@@ -31,7 +31,9 @@ export const AvatarIcon: React.FC<AvatarIconProps> = ({
   sizeClassName = '',
   size = 20,
 }) => {
-  if (avatarUrl) {
+  const [imgError, setImgError] = useState(false);
+
+  if (avatarUrl && !imgError) {
     const hasSizeClass = Boolean(sizeClassName && sizeClassName.trim());
     return (
       <img
@@ -39,9 +41,7 @@ export const AvatarIcon: React.FC<AvatarIconProps> = ({
         alt="Profile Avatar"
         className={`rounded-full object-cover shrink-0 ${sizeClassName || 'w-10 h-10'} ${className || ''}`}
         style={!hasSizeClass && size ? { width: `${size}px`, height: `${size}px` } : undefined}
-        onError={(e) => {
-          (e.currentTarget as HTMLElement).style.display = 'none';
-        }}
+        onError={() => setImgError(true)}
       />
     );
   }

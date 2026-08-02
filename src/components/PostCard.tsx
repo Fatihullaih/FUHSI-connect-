@@ -73,7 +73,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const likesCount = post.likesCount ?? post.upvotes ?? 0;
   const isLiked = post.isLikedByMe || post.userVote === 'up';
-  const isBookmarked = post.isBookmarkedByMe || post.isBookmarked || false;
+  const isBookmarked = post.isBookmarkedByMe !== undefined ? Boolean(post.isBookmarkedByMe) : Boolean(post.isBookmarked);
   const commentsCount = post.commentsCount ?? post.commentCount ?? comments.length;
   const department = post.department || post.authorDepartment || 'General';
   const avatarKey = post.authorAvatarKey || post.authorAvatarId || 'caduceus';
@@ -203,9 +203,6 @@ export const PostCard: React.FC<PostCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${getCategoryBadge(category)}`}>
-              {category}
-            </span>
             <button
               onClick={handleToggleBookmark}
               className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
