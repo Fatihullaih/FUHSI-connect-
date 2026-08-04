@@ -239,7 +239,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                           >
                             {user.nickname}
                           </button>
-                          <VerificationBadge badgeType={user.badgeType} />
+                          <VerificationBadge isVerified={(user as any).isVerified || user.badgeType === 'VERIFIED'} />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
                       </div>
@@ -300,7 +300,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                           >
                             {user.nickname}
                           </button>
-                          <VerificationBadge badgeType={user.badgeType} />
+                          <VerificationBadge isVerified={(user as any).isVerified || user.badgeType === 'VERIFIED'} />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
                       </div>
@@ -392,7 +392,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                         <span className="font-extrabold text-slate-900 text-sm sm:text-base">
                           {student.nickname}
                         </span>
-                        <VerificationBadge badgeType={student.badgeType} title={student.title} showTitle />
+                        <VerificationBadge isVerified={(student as any).isVerified || student.badgeType === 'VERIFIED'} showTitle />
                         {isCurrentUser && (
                           <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
                             YOU
@@ -431,12 +431,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
             <div className="space-y-2 text-xs text-slate-600 font-medium">
               <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                <span>Current Badge</span>
-                <VerificationBadge badgeType={currentBadgeType} title={currentBadgeTitle} showTitle />
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                 <span>Account Status</span>
-                <span className="font-bold text-emerald-600">Active & Verified</span>
+                <span className="font-bold text-emerald-600">Active Campus Member</span>
               </div>
             </div>
           </div>

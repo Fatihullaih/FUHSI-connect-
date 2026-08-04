@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { X, MessageSquare, Heart, Bookmark, Send, CornerDownRight, Maximize2, Trash2, AlertTriangle, BarChart2, Check } from 'lucide-react';
+import { X, MessageSquare, Heart, Bookmark, Send, CornerDownRight, Maximize2, Trash2, AlertTriangle, BarChart2, Check, Image as ImageIcon } from 'lucide-react';
 import { Post, Comment, UserProfile, PollOption } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { ImagePreviewModal } from './ImagePreviewModal';
+import { compressImageFile } from '../utils/imageUtils';
 
 interface PostDetailModalProps {
   post: Post;
   comments: Comment[];
   userProfile: UserProfile | null;
   onClose: () => void;
-  onAddComment: (commentText: string, parentId?: string, replyToNickname?: string) => void;
+  onAddComment: (commentText: string, parentId?: string, replyToNickname?: string, imageUrl?: string) => void;
   onLikeComment?: (commentId: string) => void;
   onToggleLike: (post: Post) => void;
   onToggleBookmark: (post: Post) => void;
@@ -36,6 +37,7 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   onAuthorClick,
 }) => {
   const [commentText, setCommentText] = useState('');
+  const [commentImage, setCommentImage] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [confirmDeletePost, setConfirmDeletePost] = useState(false);
@@ -57,17 +59,33 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
     return () => window.removeEventListener('popstate', handlePopState);
   }, [previewImage, confirmDeletePost]);
 
+  const handleCommentImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        setCommentImage(compressed);
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onloadend = () => setCommentImage(reader.result as string);
+        reader.readAsDataURL(file);
+      }
+      e.target.value = '';
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (!commentText.trim() && !commentImage) return;
 
     if (replyingTo) {
-      onAddComment(commentText, replyingTo.id, replyingTo.nickname);
+      onAddComment(commentText.trim(), replyingTo.id, replyingTo.nickname, commentImage || undefined);
       setReplyingTo(null);
     } else {
-      onAddComment(commentText);
+      onAddComment(commentText.trim(), undefined, undefined, commentImage || undefined);
     }
     setCommentText('');
+    setCommentImage(null);
   };
 
   // Build comment tree (top-level vs nested child replies)
@@ -115,9 +133,11 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               <span className="font-extrabold text-slate-900 text-xs group-hover/user:text-teal-700 group-hover/user:underline">
                 {comment.authorNickname}
               </span>
-              {comment.authorBadgeType && (
-                <VerificationBadge badgeType={comment.authorBadgeType} />
-              )}
+              <VerificationBadge 
+                isVerified={(comment as any).isVerified || (comment as any).authorIsVerified || (Boolean(comment.authorBadgeType) && comment.authorBadgeType !== 'NONE')} 
+                badgeType={comment.authorBadgeType}
+                title={comment.authorBadgeTitle}
+              />
               {comment.replyToNickname && (
                 <button
                   type="button"
@@ -140,9 +160,26 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
             </span>
           </div>
 
-          <p className="text-xs text-slate-800 pt-1.5 leading-relaxed font-medium whitespace-pre-line pl-9">
-            {comment.content}
-          </p>
+          {comment.content && (
+            <p className="text-xs text-slate-800 pt-1.5 leading-relaxed font-medium whitespace-pre-line pl-9">
+              {comment.content}
+            </p>
+          )}
+
+          {comment.imageUrl && (
+            <div className="pl-9 pt-2">
+              <div 
+                onClick={() => setPreviewImage(comment.imageUrl!)}
+                className="inline-block rounded-xl overflow-hidden border border-slate-200 max-h-52 max-w-sm bg-slate-950 cursor-pointer group"
+              >
+                <img
+                  src={comment.imageUrl}
+                  alt="Comment visual attachment"
+                  className="max-h-52 w-auto object-cover group-hover:scale-102 transition-transform duration-200"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-2 pl-9 text-[11px] font-bold text-slate-500">
             <div className="flex items-center gap-3">
@@ -264,9 +301,12 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                         <span className="font-black text-slate-900 text-sm truncate group-hover/author:text-teal-700 group-hover/author:underline">
                           {post.authorNickname}
                         </span>
-                        {post.authorBadgeType && (
-                          <VerificationBadge badgeType={post.authorBadgeType} title={post.authorBadgeTitle} showTitle />
-                        )}
+                        <VerificationBadge 
+                          isVerified={post.isVerified || (post as any).authorIsVerified || (Boolean(post.authorBadgeType) && post.authorBadgeType !== 'NONE')} 
+                          badgeType={post.authorBadgeType}
+                          title={post.authorBadgeTitle}
+                          showTitle 
+                        />
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 pt-0.5">
                         <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-[10px]">
@@ -323,14 +363,42 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                   {post.content}
                 </p>
 
-            {(post.imageUrl || post.imageResName) && (
-              <div 
-                onClick={() => setPreviewImage(post.imageUrl || post.imageResName || null)}
-                className="rounded-2xl overflow-hidden border border-slate-200 max-h-64 bg-slate-100 cursor-pointer"
-              >
-                <img src={post.imageUrl || post.imageResName} alt="attachment" className="w-full h-full object-cover hover:scale-101 transition-transform duration-200" />
-              </div>
-            )}
+            {(() => {
+              const postImages: string[] = post.imageUrls && post.imageUrls.length > 0
+                ? post.imageUrls
+                : post.imageUrl
+                ? [post.imageUrl]
+                : post.imageResName
+                ? [post.imageResName]
+                : [];
+
+              if (postImages.length === 0) return null;
+
+              if (postImages.length === 1) {
+                return (
+                  <div 
+                    onClick={() => setPreviewImage(postImages[0])}
+                    className="rounded-2xl overflow-hidden border border-slate-200 max-h-64 bg-slate-100 cursor-pointer"
+                  >
+                    <img src={postImages[0]} alt="attachment" className="w-full h-full object-cover hover:scale-101 transition-transform duration-200" />
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-2 gap-2">
+                  {postImages.slice(0, 2).map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setPreviewImage(imgUrl)}
+                      className="rounded-2xl overflow-hidden border border-slate-200 h-48 sm:h-56 bg-slate-100 cursor-pointer"
+                    >
+                      <img src={imgUrl} alt={`attachment ${idx + 1}`} className="w-full h-full object-cover hover:scale-105 transition-transform duration-200" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Optional Poll Component */}
             {post.pollQuestion && (
@@ -482,7 +550,34 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
             </div>
           )}
 
-          <div className="flex gap-2">
+          {/* Comment Image Attachment Preview */}
+          {commentImage && (
+            <div className="relative inline-block rounded-xl overflow-hidden border border-slate-300 max-h-32 bg-slate-900 group">
+              <img src={commentImage} alt="Comment image attachment" className="max-h-32 w-auto object-cover" />
+              <button
+                type="button"
+                onClick={() => setCommentImage(null)}
+                className="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full shadow-md hover:bg-rose-700 transition-colors"
+                title="Remove image"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-2 items-center">
+            <label
+              className="p-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-teal-700 cursor-pointer flex items-center justify-center shrink-0 transition-colors shadow-2xs"
+              title="Attach image to comment"
+            >
+              <ImageIcon size={18} />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleCommentImageUpload}
+                className="hidden"
+              />
+            </label>
             <input
               type="text"
               value={commentText}
@@ -490,14 +585,14 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               placeholder={
                 replyingTo
                   ? `Write a reply to @${replyingTo.nickname}...`
-                  : 'Write a constructive student comment...'
+                  : 'Write a comment or attach an image...'
               }
               className="flex-1 text-xs rounded-xl border border-slate-300 bg-white p-2.5 text-slate-800 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600 shadow-2xs"
             />
             <button
               type="submit"
-              disabled={!commentText.trim()}
-              className="px-4 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transition-all shrink-0"
+              disabled={!commentText.trim() && !commentImage}
+              className="px-4 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Reply</span>

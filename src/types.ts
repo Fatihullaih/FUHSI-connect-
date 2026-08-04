@@ -42,10 +42,13 @@ export interface Comment {
   postId: string;
   authorNickname: string;
   authorBadgeType?: BadgeType | string;
+  authorBadgeTitle?: string;
   authorAvatarKey?: string;
   authorAvatarId?: string;
   authorAvatarUrl?: string;
   content: string;
+  imageUrl?: string;
+  imageUrls?: string[];
   timestamp: string;
   upvotes?: number;
   userVote?: 'up' | 'down' | null;
@@ -78,6 +81,7 @@ export interface Post {
   category?: PostCategory;
   content: string;
   imageUrl?: string;
+  imageUrls?: string[];
   imageResName?: string;
   videoUri?: string;
   timestamp: string;
@@ -181,9 +185,17 @@ export interface VerificationRequest {
   id: string;
   applicantNickname: string;
   category: string;
+  accountType?: 'Student' | 'Executive' | 'Organization';
+  positionTitle?: string;
+  matricNumber?: string;
+  proofDetails?: string;
+  paymentRef?: string;
+  amountPaid?: number;
   statement: string;
   timestamp: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  assignedBadgeType?: BadgeType;
+  assignedBadgeTitle?: string;
 }
 
 export interface Report {

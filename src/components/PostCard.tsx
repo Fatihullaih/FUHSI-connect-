@@ -190,13 +190,12 @@ export const PostCard: React.FC<PostCardProps> = ({
                   {post.authorNickname}
                 </button>
 
-                {post.authorBadgeType && (
-                  <VerificationBadge 
-                    badgeType={post.authorBadgeType as BadgeType} 
-                    title={post.authorBadgeTitle} 
-                    showTitle 
-                  />
-                )}
+                <VerificationBadge 
+                  isVerified={post.isVerified || (post as any).authorIsVerified || (Boolean(post.authorBadgeType) && post.authorBadgeType !== 'NONE')} 
+                  badgeType={post.authorBadgeType}
+                  title={post.authorBadgeTitle}
+                  showTitle 
+                />
               </div>
               <p className="text-xs text-slate-400 font-medium">{formatRelativeTime(post.timestamp)}</p>
             </div>
@@ -263,19 +262,51 @@ export const PostCard: React.FC<PostCardProps> = ({
           {post.content}
         </p>
 
-        {/* Attached Image */}
-        {(post.imageUrl || post.imageResName) && (
-          <div 
-            onClick={() => setPreviewImage(post.imageUrl || post.imageResName || null)}
-            className="mt-3.5 rounded-xl overflow-hidden border border-slate-200/90 bg-slate-950 group cursor-pointer"
-          >
-            <img
-              src={post.imageUrl || post.imageResName}
-              alt="Post visual attachment"
-              className="w-full max-h-96 object-cover group-hover:scale-101 transition-transform duration-200"
-            />
-          </div>
-        )}
+        {/* Attached Images (Supports up to 2 images) */}
+        {(() => {
+          const imagesList: string[] = post.imageUrls && post.imageUrls.length > 0
+            ? post.imageUrls
+            : post.imageUrl
+            ? [post.imageUrl]
+            : post.imageResName
+            ? [post.imageResName]
+            : [];
+
+          if (imagesList.length === 0) return null;
+
+          if (imagesList.length === 1) {
+            return (
+              <div 
+                onClick={() => setPreviewImage(imagesList[0])}
+                className="mt-3.5 rounded-xl overflow-hidden border border-slate-200/90 bg-slate-950 group cursor-pointer"
+              >
+                <img
+                  src={imagesList[0]}
+                  alt="Post visual attachment"
+                  className="w-full max-h-96 object-cover group-hover:scale-101 transition-transform duration-200"
+                />
+              </div>
+            );
+          }
+
+          return (
+            <div className="mt-3.5 grid grid-cols-2 gap-2">
+              {imagesList.slice(0, 2).map((imgUrl, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setPreviewImage(imgUrl)}
+                  className="rounded-xl overflow-hidden border border-slate-200/90 bg-slate-950 group cursor-pointer h-48 sm:h-60"
+                >
+                  <img
+                    src={imgUrl}
+                    alt={`Post attachment ${idx + 1}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Attached Video (Premium Feature) */}
         {post.videoUri && (

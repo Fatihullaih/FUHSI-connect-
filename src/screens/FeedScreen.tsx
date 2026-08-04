@@ -3,6 +3,7 @@ import { Post, Comment, PostCategory, UserProfile } from '../types';
 import { PostCard } from '../components/PostCard';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { generateMorePosts } from '../utils/postGenerator';
+import { getTimestampMs } from '../utils/dateUtils';
 import { 
   Plus, 
   Loader2,
@@ -171,26 +172,6 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     };
   }, [observerTarget, isLoadingMore, hasReachedEnd, loadMorePosts]);
 
-  // Helper to parse relative timestamp age in minutes for exact chronological sorting
-  const getTimestampAgeInMinutes = (timestampStr?: string): number => {
-    if (!timestampStr) return 0;
-    const str = timestampStr.toLowerCase().trim();
-    if (str.includes('just now') || str.includes('30s') || str.includes('sec')) return 0.5;
-    if (str.includes('min') || str.includes('m ago')) {
-      const match = str.match(/\d+/);
-      return match ? parseInt(match[0], 10) : 3;
-    }
-    if (str.includes('hr') || str.includes('h ago') || str.includes('hour')) {
-      const match = str.match(/\d+/);
-      return match ? parseInt(match[0], 10) * 60 : 120;
-    }
-    if (str.includes('day') || str.includes('d ago')) {
-      const match = str.match(/\d+/);
-      return match ? parseInt(match[0], 10) * 1440 : 4320;
-    }
-    return 9999;
-  };
-
   // Combine initial posts and extra loaded posts
   const allCombinedPosts = [...posts, ...extraPosts];
 
@@ -203,7 +184,10 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
       const targetDept = post.targetDepartment || '';
       const cat = post.category || '';
 
+      const isGeneralPost = !targetDept || targetDept === 'General Campus' || targetDept === 'General' || targetDept === 'All';
+
       const matchesFilter =
+        isGeneralPost ||
         dept.toLowerCase().includes(currentFilter.toLowerCase()) ||
         targetDept.toLowerCase().includes(currentFilter.toLowerCase()) ||
         cat.toLowerCase() === currentFilter.toLowerCase();
@@ -214,8 +198,8 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     return true;
   });
 
-  // Sort strictly chronologically: 3min ago -> 2hrs ago -> 3 days ago (newest first)
-  filteredPosts.sort((a, b) => getTimestampAgeInMinutes(a.timestamp) - getTimestampAgeInMinutes(b.timestamp));
+  // Strictly chronological: Latest posted / newest thread appears FIRST
+  filteredPosts.sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   return (
     <div className="py-4 px-3 sm:px-4 max-w-2xl mx-auto pb-28 space-y-3">

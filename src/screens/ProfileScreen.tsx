@@ -33,7 +33,8 @@ import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { PostCard } from '../components/PostCard';
 import { ProfilePictureModal } from '../components/ProfilePictureModal';
-import { formatRelativeTime } from '../utils/dateUtils';
+import { VerificationModal } from '../components/VerificationModal';
+import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
 
 interface ProfileScreenProps {
   userProfile: UserProfile | null;
@@ -49,6 +50,7 @@ interface ProfileScreenProps {
     emergencyPhone: string,
     avatarUrl?: string
   ) => string | null;
+  onSubmitVerification?: (data: { matricNumber: string; department: string; level: string; proofDetails: string }) => void;
   onOpenAuthModal?: () => void;
   onLikeClick?: (post: Post) => void;
   onBookmarkClick?: (post: Post) => void;
@@ -66,6 +68,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   allComments = [],
   bookmarkedPostIds = [],
   onSaveProfile,
+  onSubmitVerification,
   onOpenAuthModal,
   onLikeClick,
   onBookmarkClick,
@@ -76,10 +79,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onLogout,
   onClose,
 }) => {
+  const isOwnProfile = Boolean(userProfile);
   const [activeTab, setActiveTab] = useState<'threads' | 'replies' | 'bookmarks'>('threads');
   const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [showPictureModal, setShowPictureModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [showPointsBreakdown, setShowPointsBreakdown] = useState(false);
 
@@ -176,12 +181,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         .trim();
       return author === normMyNick;
     })
-    .sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      if (!isNaN(timeA) && !isNaN(timeB)) return timeB - timeA;
-      return 0;
-    });
+    .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   // User comments (replies) sorted chronologically (newest first)
   const myReplies = allComments
@@ -189,12 +189,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const author = (c.authorNickname || '').toLowerCase().replace(/^@/, '').trim();
       return author === normMyNick;
     })
-    .sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      if (!isNaN(timeA) && !isNaN(timeB)) return timeB - timeA;
-      return 0;
-    });
+    .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   // Saved / Bookmarked posts (Strictly isolated per account)
   const bookmarkedPosts = allPosts
@@ -204,12 +199,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }
       return Boolean(p.isBookmarkedByMe);
     })
-    .sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      if (!isNaN(timeA) && !isNaN(timeB)) return timeB - timeA;
-      return 0;
-    });
+    .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   const pointsEarned = calculateUserPoints(myNickname, userProfile, allPosts, allComments);
   const joinedDate = userProfile?.joinedDate || 'Jul 2026';
@@ -281,11 +271,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={() => {
+                if (!userProfile && onOpenAuthModal) {
+                  onOpenAuthModal();
+                } else {
+                  setShowVerificationModal(true);
+                }
+              }}
+              className="bg-black hover:bg-slate-800 text-white px-3.5 py-2 rounded-full text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <CheckCircle2 size={15} className="text-sky-400" />
+              <span>Get Verified</span>
+            </button>
+
+            <button
               onClick={() => {
                 setIsEditingSettings(true);
                 try { window.history.pushState({ subModal: 'profileEdit' }, ''); } catch (e) { console.error(e); }
               }}
-              className="px-3.5 py-2 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-800 hover:text-teal-800 transition-all border border-slate-200 shadow-2xs flex items-center gap-1.5 font-extrabold text-xs"
+              className="px-3.5 py-2 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-800 hover:text-teal-800 transition-all border border-slate-200 shadow-2xs flex items-center gap-1.5 font-extrabold text-xs cursor-pointer"
               title="Account Settings & Personal Details"
             >
               <Settings size={16} className="text-teal-700" />
@@ -308,20 +313,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Public Profile Overview (Username, Date Joined, Bio) */}
         <div className="space-y-1.5 pt-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              {userProfile?.nickname || '@IlaMedHero'}
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-black tracking-wide uppercase flex items-center gap-1">
-              <User size={11} /> {userProfile?.isAdmin ? 'ADMIN' : 'STUDENT'}
-            </span>
-            {userProfile?.badgeType && (
-              <VerificationBadge
-                badgeType={userProfile.badgeType}
-                title={userProfile.badgeTitle || 'Verified Student'}
-                showTitle
-              />
-            )}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                {userProfile?.nickname || '@IlaMedHero'}
+              </h1>
+            </div>
           </div>
 
           <p className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
@@ -963,6 +960,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           )}
         </div>
       </div>
+
+      {/* Verification Information & Application Modal */}
+      {showVerificationModal && (
+        <VerificationModal
+          userProfile={userProfile}
+          onClose={() => setShowVerificationModal(false)}
+          onSubmitVerification={(data) => {
+            onSubmitVerification?.(data);
+          }}
+        />
+      )}
     </div>
   );
 };

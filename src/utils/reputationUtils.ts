@@ -145,11 +145,7 @@ export const calculateUserPoints = (
     points -= REPUTATION_RULES.MULTIPLE_REPORTS_PENALTY;
   }
 
-  // Preserve admin / official leader baseline minimum if configured
-  if (userProfile?.isAdmin && points < 2500) {
-    return Math.max(points, userProfile.reputationScore || 2500);
-  }
-
+  // Calculated points directly follow official rules without artificial overrides
   return Math.max(0, points);
 };
 
@@ -264,10 +260,6 @@ export const getUserPointsBreakdown = (
   }
 
   let total = profilePts + postPts + likePts + commentPts + repostPts - spamPenalties - offensivePenalties - reportPenalties;
-
-  if (userProfile?.isAdmin && total < 2500) {
-    total = Math.max(total, userProfile.reputationScore || 2500);
-  }
 
   return {
     profileCompletion: profilePts,

@@ -34,7 +34,7 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({ userProf
       id: 'notif_1',
       type: 'VERIFICATION',
       title: 'Badge Status Update',
-      message: `Your student profile (${userProfile.department} - ${userProfile.level}) is active on FUHSI-Connect. Submit credentials to request official Gold or Emerald Verified Badge status.`,
+      message: `Your student profile (${userProfile.department} - ${userProfile.level}) is active on FUHSI-Connect. Complete activities to earn reputation points and badges.`,
       timestamp: '10m ago',
       isRead: false,
     },

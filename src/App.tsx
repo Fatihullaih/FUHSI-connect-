@@ -9,6 +9,7 @@ import {
   INITIAL_REPORTS,
 } from './data/initialData';
 import fuhsiLogo from './assets/images/fuhsi_logo_1785485694958.jpg';
+import { calculateUserPoints } from './utils/reputationUtils';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -269,9 +270,10 @@ export const App: React.FC = () => {
           if (found) {
             enrichedPost.authorAvatarKey = found.avatarKey || post.authorAvatarKey || 'caduceus';
             enrichedPost.authorAvatarUrl = found.avatarUrl || post.authorAvatarUrl;
-            enrichedPost.authorBadgeType = found.badgeType || post.authorBadgeType || 'GREEN';
-            enrichedPost.authorBadgeTitle = found.badgeTitle || post.authorBadgeTitle || 'Verified Student';
-            enrichedPost.authorPoints = found.reputationScore || post.authorPoints;
+            enrichedPost.authorBadgeType = found.badgeType || post.authorBadgeType || 'NONE';
+            enrichedPost.authorBadgeTitle = found.badgeTitle || post.authorBadgeTitle || '';
+            (enrichedPost as any).authorIsVerified = found.isVerified ?? post.isVerified;
+            enrichedPost.authorPoints = calculateUserPoints(found.nickname, found, posts, comments, reports);
           }
         }
       }
@@ -610,9 +612,10 @@ export const App: React.FC = () => {
       authorNickname: userProfile.nickname,
       authorBadgeType: userProfile.badgeType,
       authorBadgeTitle: userProfile.badgeTitle,
+      isVerified: userProfile.isVerified,
       authorAvatarKey: userProfile.avatarKey,
       authorAvatarUrl: userProfile.avatarUrl,
-      authorPoints: (userProfile.reputationScore || 1250) + 3,
+      authorPoints: 0,
       authorDepartment: userProfile.department,
       authorLevel: userProfile.level,
       department: data.department || 'General',
@@ -621,6 +624,7 @@ export const App: React.FC = () => {
       category: (data.category as any) || 'General',
       content: cleanContent,
       imageUrl: data.imageUrl,
+      imageUrls: data.imageUrls || (data.imageUrl ? [data.imageUrl] : undefined),
       imageResName: data.imageResName,
       videoUri: data.videoUri,
       isGhostMode: false,
@@ -639,16 +643,23 @@ export const App: React.FC = () => {
       isFlagged: false,
     };
 
+    const calculatedPoints = calculateUserPoints(userProfile.nickname, userProfile, [newPost, ...posts], comments, reports);
+    newPost.authorPoints = calculatedPoints;
+
     setPosts((prev) => [newPost, ...prev]);
-    // Award +3 reputation points for post creation
-    setUserProfile((prev) => ({ ...prev, reputationScore: (prev.reputationScore || 0) + 3 }));
+    // Recalculate exact points dynamically
+    setUserProfile((prev) => ({
+      ...prev,
+      reputationScore: calculateUserPoints(prev.nickname, prev, [newPost, ...posts], comments, reports)
+    }));
   };
 
   const handleAddComment = (
     postId: string,
     commentText: string,
     parentId?: string,
-    replyToNickname?: string
+    replyToNickname?: string,
+    imageUrl?: string
   ) => {
     const cleanText = sanitizeText(commentText);
 
@@ -657,9 +668,12 @@ export const App: React.FC = () => {
       postId,
       authorNickname: userProfile.nickname,
       authorBadgeType: userProfile.badgeType,
+      authorBadgeTitle: userProfile.badgeTitle,
+      isVerified: userProfile.isVerified,
       authorAvatarKey: userProfile.avatarKey,
       authorAvatarUrl: userProfile.avatarUrl,
       content: cleanText,
+      imageUrl,
       timestamp: new Date().toISOString(),
       parentId,
       replyToNickname,
@@ -667,15 +681,19 @@ export const App: React.FC = () => {
       isLikedByMe: false,
     };
 
-    setComments((prev) => [...prev, newComment]);
+    const newCommentsList = [...comments, newComment];
+    setComments(newCommentsList);
     setPosts((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p))
     );
     if (selectedPost && selectedPost.id === postId) {
       setSelectedPost((prev) => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : null));
     }
-    // Award +2 reputation points for comment
-    setUserProfile((prev) => ({ ...prev, reputationScore: (prev.reputationScore || 0) + 2 }));
+    // Recalculate exact points dynamically
+    setUserProfile((prev) => ({
+      ...prev,
+      reputationScore: calculateUserPoints(prev.nickname, prev, posts, newCommentsList, reports)
+    }));
   };
 
   const handleLikeComment = (commentId: string) => {
@@ -1048,12 +1066,62 @@ export const App: React.FC = () => {
             onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
             onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
             onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
-            onApproveVerification={(reqId) => setVerificationRequests((prev) => prev.map((v) => (v.id === reqId ? { ...v, status: 'APPROVED' } : v)))}
+            onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = 'Verified Student') => {
+              setVerificationRequests((prev) => prev.map((v) => {
+                if (v.id === reqId) {
+                  const applicantNick = v.applicantNickname;
+                  
+                  // Update active user if matching
+                  if (userProfile && (userProfile.nickname.toLowerCase() === applicantNick.toLowerCase() || userProfile.id === applicantNick)) {
+                    const updated = { 
+                      ...userProfile, 
+                      isVerified: true, 
+                      verificationStatus: 'approved' as const, 
+                      badgeType: badgeType, 
+                      badgeTitle: badgeTitle || v.positionTitle || 'Verified'
+                    };
+                    setUserProfile(updated);
+                    localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                  }
+
+                  // Update user in fuhsi_users_db
+                  try {
+                    const storedUsers = localStorage.getItem('fuhsi_users_db');
+                    if (storedUsers) {
+                      const usersList: UserProfile[] = JSON.parse(storedUsers);
+                      const updatedUsers = usersList.map((u) => {
+                        if (u.nickname.toLowerCase() === applicantNick.toLowerCase() || u.id === applicantNick) {
+                          return {
+                            ...u,
+                            isVerified: true,
+                            verificationStatus: 'approved' as const,
+                            badgeType: badgeType,
+                            badgeTitle: badgeTitle || v.positionTitle || 'Verified'
+                          };
+                        }
+                        return u;
+                      });
+                      localStorage.setItem('fuhsi_users_db', JSON.stringify(updatedUsers));
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  }
+
+                  return { 
+                    ...v, 
+                    status: 'APPROVED', 
+                    assignedBadgeType: badgeType, 
+                    assignedBadgeTitle: badgeTitle || v.positionTitle || 'Verified' 
+                  };
+                }
+                return v;
+              }));
+            }}
             onRejectVerification={(reqId) => setVerificationRequests((prev) => prev.map((v) => (v.id === reqId ? { ...v, status: 'REJECTED' } : v)))}
             onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
             onUpdateBadge={(badgeType, badgeTitle) => {
               if (userProfile) {
-                const updated = { ...userProfile, badgeType, badgeTitle };
+                const updated = { ...userProfile, isVerified: true, verificationStatus: 'approved' as const, badgeType: 'VERIFIED' as const, badgeTitle: 'Verified' };
                 setUserProfile(updated);
                 localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
               }
@@ -1100,6 +1168,35 @@ export const App: React.FC = () => {
                   if (!err) closeModalUI();
                   return err;
                 }}
+                onSubmitVerification={(data: any) => {
+                  if (userProfile) {
+                    const updated = {
+                      ...userProfile,
+                      matricNumber: data.matricNumber || userProfile.matricNumber,
+                      department: data.department || userProfile.department,
+                      level: data.level || userProfile.level,
+                      verificationStatus: 'pending' as const,
+                    };
+                    setUserProfile(updated);
+                    localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+
+                    const newReq: VerificationRequest = {
+                      id: `verif_req_${Date.now()}`,
+                      applicantNickname: userProfile.nickname,
+                      category: `${data.accountType || 'Student'} Verification`,
+                      accountType: data.accountType || 'Student',
+                      positionTitle: data.positionTitle || '',
+                      matricNumber: data.matricNumber || '',
+                      proofDetails: data.proofDetails || '',
+                      paymentRef: data.paymentRef || `PAY-FUHSI-${Date.now()}`,
+                      amountPaid: data.amountPaid || 1500,
+                      statement: `Category: ${data.accountType || 'Student'}${data.positionTitle ? ` (${data.positionTitle})` : ''} | Matric/Reg: ${data.matricNumber} | Proof: ${data.proofDetails}`,
+                      timestamp: new Date().toISOString(),
+                      status: 'PENDING',
+                    };
+                    setVerificationRequests((prev) => [newReq, ...prev]);
+                  }
+                }}
                 onOpenAuthModal={() => {
                   closeModalUI();
                   openAuthModal();
@@ -1125,7 +1222,7 @@ export const App: React.FC = () => {
           comments={comments.filter((c) => c.postId === selectedPost.id)}
           userProfile={userProfile}
           onClose={closeModalUI}
-          onAddComment={(text, parentId, replyToNickname) => handleAddComment(selectedPost.id, text, parentId, replyToNickname)}
+          onAddComment={(text, parentId, replyToNickname, imageUrl) => handleAddComment(selectedPost.id, text, parentId, replyToNickname, imageUrl)}
           onLikeComment={handleLikeComment}
           onToggleLike={handleLikeClick}
           onToggleBookmark={handleBookmarkClick}

@@ -56,3 +56,54 @@ export function formatRelativeTime(dateInput?: string | number | Date): string {
   const yearsAgo = Math.floor(daysAgo / 365);
   return `${yearsAgo} ${yearsAgo === 1 ? 'year' : 'years'} ago`;
 }
+
+export function getTimestampAgeInMinutes(timestampStr?: string): number {
+  if (!timestampStr) return 0;
+  const str = String(timestampStr).trim();
+
+  // Handle ISO date format (e.g. 2026-08-04T04:25:00.000Z) or standard date parseable strings
+  if (/^\d{4}-\d{2}-\d{2}/.test(str) || (str.includes('T') && (str.includes('Z') || str.includes('+')))) {
+    const ms = Date.parse(str);
+    if (!isNaN(ms)) {
+      const ageMinutes = (Date.now() - ms) / (1000 * 60);
+      return Math.max(0, ageMinutes);
+    }
+  }
+
+  const lower = str.toLowerCase();
+  if (lower.includes('just now') || lower.includes('30s') || lower.includes('sec')) return 0.1;
+  if (lower.includes('min') || lower.includes('m ago') || lower.endsWith('m')) {
+    const match = lower.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 3;
+  }
+  if (lower.includes('hr') || lower.includes('h ago') || lower.includes('hour') || lower.endsWith('h')) {
+    const match = lower.match(/\d+/);
+    return match ? parseInt(match[0], 10) * 60 : 120;
+  }
+  if (lower.includes('yesterday')) return 1440;
+  if (lower.includes('day') || lower.includes('d ago') || lower.endsWith('d')) {
+    const match = lower.match(/\d+/);
+    return match ? parseInt(match[0], 10) * 1440 : 1440;
+  }
+  if (lower.includes('sponsored') || lower.includes('live desk')) return 0;
+
+  const ms = Date.parse(str);
+  if (!isNaN(ms)) {
+    const ageMinutes = (Date.now() - ms) / (1000 * 60);
+    return Math.max(0, ageMinutes);
+  }
+
+  return 9999;
+}
+
+export function getTimestampMs(timestampStr?: string): number {
+  if (!timestampStr) return Date.now();
+  const str = String(timestampStr).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str) || (str.includes('T') && (str.includes('Z') || str.includes('+')))) {
+    const ms = Date.parse(str);
+    if (!isNaN(ms)) return ms;
+  }
+  const ageInMinutes = getTimestampAgeInMinutes(str);
+  return Date.now() - ageInMinutes * 60 * 1000;
+}
+

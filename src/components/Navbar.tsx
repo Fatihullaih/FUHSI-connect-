@@ -11,7 +11,8 @@ import {
   Sparkles,
   Eye,
   EyeOff,
-  UserCheck
+  UserCheck,
+  CheckCircle2
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -47,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         return (
           <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
             <UserCheck size={12} />
-            Verified
+            Public
           </span>
         );
     }
@@ -138,6 +139,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* User Profile Summary */}
           <div className="flex items-center gap-3">
+
             {/* Reputation Badge */}
             <div 
               onClick={() => setActiveTab('leaderboard')}

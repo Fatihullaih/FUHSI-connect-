@@ -3,6 +3,7 @@ import { Post, MarketplaceItem, UserProfile } from '../types';
 import { PostCard } from '../components/PostCard';
 import { AuthorProfileModal } from '../components/AuthorProfileModal';
 import { AvatarIcon } from '../components/AvatarIcon';
+import { calculateUserPoints } from '../utils/reputationUtils';
 import {
   Search,
   Sparkles,
@@ -42,221 +43,10 @@ interface CampusAccount {
   badgeType: 'GREEN' | 'BLUE' | 'GOLD' | 'PURPLE' | 'NONE';
   badgeTitle: string;
   avatarKey: string;
+  avatarUrl?: string;
   reputationScore: number;
   isVerified: boolean;
 }
-
-// Preset verified campus accounts including official SUG Executives & Leaders
-const PRESET_ACCOUNTS: CampusAccount[] = [
-  {
-    id: 'acc_sug_pres',
-    nickname: '@SUGPresident',
-    realName: 'Hon. Executive President (SUG)',
-    department: 'SUG Executive Council',
-    level: 'Executive',
-    bio: 'Official Account of the Student Union Government President. Serving FUHSI students with integrity & excellence.',
-    badgeType: 'GOLD',
-    badgeTitle: 'SUG Executive President',
-    avatarKey: 'caduceus',
-    reputationScore: 5000,
-    isVerified: true,
-  },
-  {
-    id: 'acc_sug_welfare',
-    nickname: '@SUG_Welfare',
-    realName: 'SUG Directorate of Welfare',
-    department: 'SUG Executive Council',
-    level: 'Executive',
-    bio: 'Overseeing student accommodation, campus shuttles, water/electricity supply, and student welfare across Ila-Orangun.',
-    badgeType: 'GREEN',
-    badgeTitle: 'SUG Welfare Director',
-    avatarKey: 'caduceus',
-    reputationScore: 4800,
-    isVerified: true,
-  },
-  {
-    id: 'acc_sug_treasurer',
-    nickname: '@SUGTreasurer',
-    realName: 'SUG Financial Director & Treasurer',
-    department: 'SUG Executive Council',
-    level: 'Executive',
-    bio: 'Managing student union dues, community welfare grants, and transparent campus project budgeting.',
-    badgeType: 'GOLD',
-    badgeTitle: 'SUG Treasurer',
-    avatarKey: 'caduceus',
-    reputationScore: 4200,
-    isVerified: true,
-  },
-  {
-    id: 'acc_sug_pro',
-    nickname: '@SUGPRO',
-    realName: 'SUG Public Relations Officer',
-    department: 'SUG Executive Council',
-    level: 'Executive',
-    bio: 'Official campus news broadcasts, emergency notices, and academic timetable updates.',
-    badgeType: 'GREEN',
-    badgeTitle: 'SUG Public Relations',
-    avatarKey: 'caduceus',
-    reputationScore: 4100,
-    isVerified: true,
-  },
-  {
-    id: 'acc_fuhsi_sug',
-    nickname: '@FUHSI_SUG_Official',
-    realName: 'FUHSI Student Union Body',
-    department: 'Student Union Body',
-    level: 'Executive',
-    bio: 'Official network handle of the Federal University of Health Sciences, Ila-Orangun Student Union Government.',
-    badgeType: 'GREEN',
-    badgeTitle: 'SUG Welfare Committee',
-    avatarKey: 'caduceus',
-    reputationScore: 3850,
-    isVerified: true,
-  },
-  {
-    id: 'acc_med_hero',
-    nickname: '@IlaMedHero',
-    realName: 'Adeyemo Oluwaseun Joseph',
-    department: 'Medicine & Surgery',
-    level: '300L',
-    bio: 'FUHSI Student | Learning & Saving Lives 🩺 | Class Rep',
-    badgeType: 'BLUE',
-    badgeTitle: 'Class Rep & Tech Lead',
-    avatarKey: 'caduceus',
-    reputationScore: 2450,
-    isVerified: true,
-  },
-  {
-    id: 'acc_future_doc',
-    nickname: '@FutureDoctor',
-    realName: 'Babalola Chinedu',
-    department: 'Medicine & Surgery',
-    level: '400L',
-    bio: 'Clinical postings & clinical skills study group organizer.',
-    badgeType: 'GOLD',
-    badgeTitle: 'Academic Study Lead',
-    avatarKey: 'stethoscope',
-    reputationScore: 2180,
-    isVerified: true,
-  },
-  {
-    id: 'acc_nurse_queen',
-    nickname: '@NurseQueen_Ila',
-    realName: 'Amina Bello',
-    department: 'Nursing Science',
-    level: '300L',
-    bio: '300L Nursing Science Class Rep & peer mentor.',
-    badgeType: 'BLUE',
-    badgeTitle: 'Clinical Skills Mentor',
-    avatarKey: 'stethoscope',
-    reputationScore: 1890,
-    isVerified: true,
-  },
-  {
-    id: 'acc_lab_pro',
-    nickname: '@LabPro_MLS',
-    realName: 'Emeka Okonkwo',
-    department: 'Medical Lab Science',
-    level: '400L',
-    bio: 'MLS practicals contributor & lab equipment helper.',
-    badgeType: 'BLUE',
-    badgeTitle: 'Lab Practical Helper',
-    avatarKey: 'microscope',
-    reputationScore: 1620,
-    isVerified: true,
-  },
-  {
-    id: 'acc_preclinical',
-    nickname: '@PreClinicalPro',
-    realName: 'Oluwatosin Daniel',
-    department: 'Anatomy',
-    level: '200L',
-    bio: 'Histology slides & dissection guide summaries.',
-    badgeType: 'NONE',
-    badgeTitle: 'Histology Contributor',
-    avatarKey: 'caduceus',
-    reputationScore: 1250,
-    isVerified: false,
-  },
-  {
-    id: 'acc_pharm_boss',
-    nickname: '@PharmBoss',
-    realName: 'Khadijah Ibrahim',
-    department: 'Pharmacy',
-    level: '300L',
-    bio: 'Pharmacology flashcards & drug mechanism study notes.',
-    badgeType: 'NONE',
-    badgeTitle: 'Pharmacology Helper',
-    avatarKey: 'pill',
-    reputationScore: 980,
-    isVerified: false,
-  },
-  {
-    id: 'acc_physo_champ',
-    nickname: '@PhysoChamp',
-    realName: 'Victor Chukwu',
-    department: 'Physiology',
-    level: '200L',
-    bio: 'Neurophysiology CA prep group lead.',
-    badgeType: 'NONE',
-    badgeTitle: 'CA Study Group Lead',
-    avatarKey: 'stethoscope',
-    reputationScore: 760,
-    isVerified: false,
-  },
-  {
-    id: 'acc_radiology',
-    nickname: '@RadiologyExpert',
-    realName: 'Grace Adeleke',
-    department: 'Radiography',
-    level: '400L',
-    bio: 'X-Ray imaging & medical physics tutorial creator.',
-    badgeType: 'NONE',
-    badgeTitle: 'X-Ray Guide Creator',
-    avatarKey: 'microscope',
-    reputationScore: 540,
-    isVerified: false,
-  },
-  {
-    id: 'acc_biochem_whiz',
-    nickname: '@BioChemWhiz',
-    realName: 'Suleiman Farooq',
-    department: 'Biochemistry',
-    level: '100L',
-    bio: 'Enzyme kinetics & metabolic pathway diagrams.',
-    badgeType: 'NONE',
-    badgeTitle: 'Enzyme Notes Share',
-    avatarKey: 'pill',
-    reputationScore: 320,
-    isVerified: false,
-  },
-  {
-    id: 'acc_medic_2024',
-    nickname: '@MedicStudent_2024',
-    realName: 'Tunde Oladipo',
-    department: 'Medicine & Surgery',
-    level: '200L',
-    bio: '200L MBBS Student at FUHSI Ila.',
-    badgeType: 'NONE',
-    badgeTitle: '',
-    avatarKey: 'caduceus',
-    reputationScore: 450,
-    isVerified: false,
-  },
-  {
-    id: 'acc_campus_prints',
-    nickname: '@Ila_Campus_Prints',
-    realName: 'Ila Print & Digital Hub',
-    department: 'Services & Businesses',
-    level: 'Business',
-    bio: '24/7 Color Printing, Past Questions & Project Binding opposite Ila Campus Gate 2.',
-    badgeType: 'PURPLE',
-    badgeTitle: 'Verified Campus Business',
-    avatarKey: 'pill',
-    reputationScore: 1400,
-    isVerified: true,
-  },
-];
 
 // Helper function to normalize strings for intelligent/smart matching (ignores spaces, underscores, hyphens, @)
 const normalize = (str: string): string => {
@@ -334,11 +124,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const allAccounts = useMemo<CampusAccount[]>(() => {
     const accMap = new Map<string, CampusAccount>();
 
-    // Add presets first
-    PRESET_ACCOUNTS.forEach((acc) => {
-      accMap.set(normalize(acc.nickname), acc);
-    });
-
     // Add registered users from local storage if available
     try {
       const storedUsers = localStorage.getItem('fuhsi_users_db');
@@ -348,6 +133,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           if (u.nickname) {
             const key = normalize(u.nickname);
             if (!accMap.has(key)) {
+              const exactScore = calculateUserPoints(u.nickname, u, posts, []);
               accMap.set(key, {
                 id: u.id || `usr_${key}`,
                 nickname: u.nickname.startsWith('@') ? u.nickname : `@${u.nickname}`,
@@ -355,11 +141,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 department: u.department || 'FUHSI Student',
                 level: u.level || 'Student',
                 bio: u.bio || 'FUHSI Student Community Member.',
-                badgeType: u.badgeType || 'NONE',
-                badgeTitle: u.badgeTitle || '',
+                badgeType: 'NONE',
+                badgeTitle: '',
                 avatarKey: u.avatarKey || 'caduceus',
-                reputationScore: u.reputationScore || 500,
-                isVerified: Boolean(u.isVerified),
+                avatarUrl: u.avatarUrl,
+                reputationScore: exactScore,
+                isVerified: false,
               });
             }
           }
@@ -369,12 +156,35 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       console.error(e);
     }
 
+    // Add active logged in userProfile
+    if (userProfile && userProfile.nickname) {
+      const key = normalize(userProfile.nickname);
+      if (!accMap.has(key)) {
+        const exactScore = calculateUserPoints(userProfile.nickname, userProfile, posts, []);
+        accMap.set(key, {
+          id: userProfile.id || `usr_${key}`,
+          nickname: userProfile.nickname.startsWith('@') ? userProfile.nickname : `@${userProfile.nickname}`,
+          realName: userProfile.realName || userProfile.nickname,
+          department: userProfile.department || 'FUHSI Student',
+          level: userProfile.level || 'Student',
+          bio: userProfile.bio || 'FUHSI Student Community Member.',
+          badgeType: 'NONE',
+          badgeTitle: '',
+          avatarKey: userProfile.avatarKey || 'caduceus',
+          avatarUrl: userProfile.avatarUrl,
+          reputationScore: exactScore,
+          isVerified: false,
+        });
+      }
+    }
+
     // Add author nicknames from posts
     (posts || []).forEach((p) => {
       const nick = p.authorNickname || p.nickname || p.customNickname;
       if (nick) {
         const key = normalize(nick);
         if (!accMap.has(key)) {
+          const exactScore = calculateUserPoints(nick, { nickname: nick }, posts, []);
           accMap.set(key, {
             id: `post_author_${key}`,
             nickname: nick.startsWith('@') ? nick : `@${nick}`,
@@ -382,18 +192,19 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             department: p.department || 'FUHSI Campus',
             level: 'Student',
             bio: `Active campus contributor on FUHSI Connect.`,
-            badgeType: p.authorBadgeType || 'NONE',
-            badgeTitle: p.authorBadgeTitle || '',
+            badgeType: 'NONE',
+            badgeTitle: '',
             avatarKey: p.authorAvatarKey || 'caduceus',
-            reputationScore: 800,
-            isVerified: p.authorBadgeType !== 'NONE',
+            avatarUrl: p.authorAvatarUrl,
+            reputationScore: exactScore,
+            isVerified: false,
           });
         }
       }
     });
 
     return Array.from(accMap.values());
-  }, [posts]);
+  }, [posts, userProfile]);
 
   // Perform Intelligent Search Matching for Accounts
   const matchingAccounts = useMemo(() => {
@@ -582,7 +393,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               >
                 <User size={12} className="text-teal-600 shrink-0" />
                 <span>{sug.nickname}</span>
-                <span className="text-[10px] text-teal-600/80 font-medium">({sug.realName})</span>
               </button>
             ))}
           </div>
@@ -635,31 +445,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 px-2 rounded-xl transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative shrink-0">
-                        <AvatarIcon avatarKey={acc.avatarKey} size={40} sizeClassName="w-10 h-10 text-teal-700" />
-                        {acc.isVerified && (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-teal-600 border border-white rounded-full flex items-center justify-center text-white">
-                            <CheckCircle2 size={10} />
-                          </span>
-                        )}
+                      <div className="shrink-0">
+                        <AvatarIcon avatarKey={acc.avatarKey} avatarUrl={acc.avatarUrl} size={40} sizeClassName="w-10 h-10 text-teal-700 rounded-full" />
                       </div>
 
                       <div className="min-w-0 leading-snug">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-extrabold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">
-                            {acc.nickname}
-                          </h3>
-                          {acc.badgeTitle && (
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-md text-[10px] font-bold flex items-center gap-0.5">
-                              <Crown size={10} className="text-emerald-600" />
-                              <span>{acc.badgeTitle}</span>
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] font-semibold text-slate-700 truncate">{acc.realName}</p>
-                        <p className="text-[10px] text-slate-500 font-medium truncate">
-                          {acc.department} • {acc.level}
-                        </p>
+                        <h3 className="font-extrabold text-sm text-slate-900 group-hover:text-teal-700 transition-colors">
+                          {acc.nickname}
+                        </h3>
                       </div>
                     </div>
 

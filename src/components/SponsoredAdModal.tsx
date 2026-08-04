@@ -34,7 +34,7 @@ export const SponsoredAdModal: React.FC<SponsoredAdModalProps> = ({
         id: `post_sp_${Date.now()}`,
         authorNickname: `@${businessName.replace(/\s+/g, '_')}`,
         authorBadgeType: 'PURPLE',
-        authorBadgeTitle: 'Verified Campus Business',
+        authorBadgeTitle: 'Campus Business',
         authorAvatarKey: 'pill',
         department: 'Services & Businesses',
         content: `⚡ SPONSORED: ${adContent}`,

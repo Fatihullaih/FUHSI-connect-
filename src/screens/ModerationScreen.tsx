@@ -18,6 +18,8 @@ interface ModerationScreenProps {
   onUpdateBadge?: (badgeType: BadgeType, badgeTitle: string) => void;
   onUpdateReputationScore?: (newScore: number) => void;
   onUpdateVerificationRequestStatus?: (id: string, status: 'APPROVED' | 'REJECTED') => void;
+  onApproveVerification?: (id: string, badgeType?: BadgeType, badgeTitle?: string) => void;
+  onRejectVerification?: (id: string) => void;
   onAdminApproveMarketplaceItem?: (id: string, approvedPrice: number, note: string) => void;
   onAdminRejectMarketplaceItem?: (id: string, note: string) => void;
   onSendPriceAdvisory?: (id: string, suggestedPrice: number, message: string) => void;
@@ -37,6 +39,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   onUpdateBadge = () => {},
   onUpdateReputationScore = () => {},
   onUpdateVerificationRequestStatus = () => {},
+  onApproveVerification = () => {},
+  onRejectVerification = () => {},
   onAdminApproveMarketplaceItem = () => {},
   onAdminRejectMarketplaceItem = () => {},
   onSendPriceAdvisory = () => {},
@@ -84,6 +88,25 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [badgeTitleInput, setBadgeTitleInput] = useState(userProfile?.badgeTitle || 'Class Rep & Tech Lead');
   const [reputationInput, setReputationInput] = useState(userProfile?.reputationScore || 2450);
   const [adminUpdateToast, setAdminUpdateToast] = useState(false);
+
+  // Dynamic Verification Subscription Fee state
+  const [adminVerificationFee, setAdminVerificationFee] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_verification_fee');
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val) && val >= 0) return val;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return 1500;
+  });
+  const [feeSaveToast, setFeeSaveToast] = useState(false);
+
+  // Per-request color badge & title assignment state
+  const [selectedReqColors, setSelectedReqColors] = useState<Record<string, BadgeType>>({});
+  const [selectedReqTitles, setSelectedReqTitles] = useState<Record<string, string>>({});
 
   // Pending Student Registrations Approval State
   const [allUsersList, setAllUsersList] = useState<UserProfile[]>([]);
@@ -156,7 +179,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         if (u.id === userId || u.nickname.toLowerCase() === nick.toLowerCase()) {
           targetEmail = u.studentEmail || `${u.nickname.replace(/^@/, '')}@fuhsi.edu.ng`;
           targetRealName = u.realName || u.nickname;
-          return { ...u, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'Verified Student', isAdmin: false };
+          return { ...u, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'FUHSI Student', isAdmin: false };
         }
         return u;
       });
@@ -214,7 +237,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
         if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
-          const updatedActive = { ...activeUser, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'Verified Student', isAdmin: false };
+          const updatedActive = { ...activeUser, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'FUHSI Student', isAdmin: false };
           localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
         }
       }
@@ -731,7 +754,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                     setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
                       ...r,
                       status: 'SELLER_CONTACTED',
-                      adminNote: `Admin sent private prompt to ${req.sellerNickname}: 'A verified student (${req.buyerNickname}) is ready to buy your ${req.itemTitle} for ₦${req.price.toLocaleString()}. Do you still have it available?'`
+                      adminNote: `Admin sent private prompt to ${req.sellerNickname}: 'A student (${req.buyerNickname}) is ready to buy your ${req.itemTitle} for ₦${req.price.toLocaleString()}. Do you still have it available?'`
                     } : r));
                   }}
                   className="flex-1 py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors"
@@ -868,7 +891,231 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         )}
       </div>
 
-      {/* Multi-Factor Verification Candidates Review Queue */}
+      {/* Verification Subscription Fee & Paid Applications Desk */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h2 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+              <Shield className="w-4 h-4 text-sky-600" />
+              <span>"Get Verified" Subscription Requests & Fee Desk</span>
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Review paid verification subscriptions, tendered position held details, and assign custom verify badge colors.
+            </p>
+          </div>
+
+          <span className="self-start sm:self-center text-xs font-black text-sky-900 bg-sky-50 px-3 py-1 rounded-full border border-sky-200 shrink-0">
+            {verificationRequests.filter((r) => r.status === 'PENDING').length} Pending Subscriptions
+          </span>
+        </div>
+
+        {/* Fee Configuration Bar */}
+        <div className="bg-slate-900 text-white rounded-2xl p-3.5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+              ₦
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Verification Subscription Fee</span>
+              <span className="text-xs font-bold text-slate-200">Current Price Charged to Students on "Get Verified" Page</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-36">
+              <span className="absolute left-3 top-2.5 text-xs font-extrabold text-slate-400">₦</span>
+              <input
+                type="number"
+                value={adminVerificationFee}
+                onChange={(e) => setAdminVerificationFee(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-full text-xs font-black rounded-xl bg-slate-950 border border-slate-700 pl-7 pr-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.setItem('fuhsi_verification_fee', adminVerificationFee.toString());
+                  setFeeSaveToast(true);
+                  setTimeout(() => setFeeSaveToast(false), 2500);
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-xs shrink-0 cursor-pointer"
+            >
+              Save Fee
+            </button>
+          </div>
+        </div>
+
+        {feeSaveToast && (
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-center">
+            ✓ Verification Fee updated to ₦{adminVerificationFee.toLocaleString()}! Changes applied live on Get Verified page.
+          </div>
+        )}
+
+        {/* Requests Queue */}
+        <div className="space-y-3 pt-1">
+          {verificationRequests.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              No verification subscription requests submitted yet.
+            </div>
+          ) : (
+            verificationRequests.map((req) => {
+              const currentBadgeColor = selectedReqColors[req.id] || req.assignedBadgeType || (req.accountType === 'Executive' ? 'GREEN' : req.accountType === 'Organization' ? 'GOLD' : 'BLUE');
+              const currentBadgeTitle = selectedReqTitles[req.id] !== undefined ? selectedReqTitles[req.id] : (req.positionTitle || req.assignedBadgeTitle || 'Verified');
+
+              return (
+                <div 
+                  key={req.id}
+                  className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                    req.status === 'APPROVED' ? 'bg-emerald-50/40 border-emerald-200' :
+                    req.status === 'REJECTED' ? 'bg-rose-50/40 border-rose-200' : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold text-slate-900 text-sm">{req.applicantNickname}</span>
+                        
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-slate-900 text-white">
+                          {req.accountType || 'Student'}
+                        </span>
+
+                        {req.positionTitle && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 border border-teal-200">
+                            Position/Org: {req.positionTitle}
+                          </span>
+                        )}
+
+                        <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-200">
+                          Ref: {req.paymentRef || 'PAY-FUHSI-OK'} (₦{req.amountPaid ? req.amountPaid.toLocaleString() : adminVerificationFee.toLocaleString()})
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-600 font-medium mt-1">
+                        Matric / Reg No: <strong className="text-slate-900 font-mono">{req.matricNumber || 'Tendered'}</strong> • Statement: "{req.statement}"
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${
+                        req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                        req.status === 'REJECTED' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
+                      }`}>
+                        {req.status === 'APPROVED' ? '✔️ APPROVED & VERIFIED' :
+                         req.status === 'REJECTED' ? '❌ DECLINED' : '⏳ PENDING ADMIN REVIEW'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Badge Assignment Controls (for pending or re-configuring) */}
+                  {req.status === 'PENDING' && (
+                    <div className="bg-white p-3 rounded-xl border border-slate-200/90 space-y-3 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Assign Verify Badge Color
+                          </label>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'BLUE' }))}
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
+                                currentBadgeColor === 'BLUE' ? 'bg-sky-50 text-sky-800 border-sky-400 ring-2 ring-sky-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                              <span>Blue</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'GREEN' }))}
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
+                                currentBadgeColor === 'GREEN' ? 'bg-emerald-50 text-emerald-800 border-emerald-400 ring-2 ring-emerald-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                              <span>Green</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'GOLD' }))}
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
+                                currentBadgeColor === 'GOLD' ? 'bg-amber-50 text-amber-900 border-amber-400 ring-2 ring-amber-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                              <span>Orange</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'PURPLE' }))}
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
+                                currentBadgeColor === 'PURPLE' ? 'bg-purple-50 text-purple-900 border-purple-400 ring-2 ring-purple-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                              <span>Purple</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Assign Custom Badge Title / Position Label
+                          </label>
+                          <input
+                            type="text"
+                            value={currentBadgeTitle}
+                            onChange={(e) => setSelectedReqTitles((prev) => ({ ...prev, [req.id]: e.target.value }))}
+                            placeholder="e.g. SUG President, MSSN, Class Rep"
+                            className="w-full text-xs rounded-xl border border-slate-300 p-2 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-medium text-slate-500">Badge Preview:</span>
+                          <VerificationBadge isVerified badgeType={currentBadgeColor} title={currentBadgeTitle} showTitle />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onApproveVerification(req.id, currentBadgeColor, currentBadgeTitle);
+                            }}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-xs transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
+                          >
+                            <CheckCircle2 size={14} />
+                            <span>Approve & Assign Badge</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onRejectVerification(req.id);
+                              onUpdateVerificationRequestStatus(req.id, 'REJECTED');
+                            }}
+                            className="px-3 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-xl font-extrabold text-xs transition-colors cursor-pointer"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <div>

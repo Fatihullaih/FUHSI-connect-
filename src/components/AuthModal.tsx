@@ -370,7 +370,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       avatarKey,
       badgeType: 'NONE',
       badgeTitle: 'Pending Approval',
-      reputationScore: 100,
+      reputationScore: 20,
       isVerified: false,
       isApproved: false, // Must be approved via Admin Portal
       isAdmin: false,
@@ -524,9 +524,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         avatarKey: matchedUser.avatarKey,
         avatarUrl: matchedUser.avatarUrl,
         badgeType: matchedUser.badgeType || 'GREEN',
-        badgeTitle: matchedUser.badgeTitle || 'Verified Student',
-        reputationScore: matchedUser.reputationScore || 100,
-        isVerified: matchedUser.isVerified !== false,
+        badgeTitle: matchedUser.badgeTitle || 'FUHSI Student',
+        reputationScore: matchedUser.reputationScore !== undefined ? matchedUser.reputationScore : 20,
+        isVerified: Boolean(matchedUser.isVerified),
         isApproved: matchedUser.isApproved !== false,
         isAdmin: Boolean(matchedUser.isAdmin),
       };

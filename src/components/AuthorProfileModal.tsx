@@ -4,7 +4,7 @@ import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
 import { PostCard } from './PostCard';
 import { ProfilePictureModal } from './ProfilePictureModal';
-import { formatRelativeTime } from '../utils/dateUtils';
+import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
 import { calculateUserPoints } from '../utils/reputationUtils';
 import { 
   X, 
@@ -42,7 +42,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     authorAvatarKey = 'caduceus',
     authorAvatarUrl,
     authorBadgeType = 'GREEN',
-    authorBadgeTitle = 'Verified Student',
+    authorBadgeTitle = 'FUHSI Student',
     authorPoints,
     authorJoinedDate = 'Jul 2026',
     currentUserNickname,
@@ -87,12 +87,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
           .trim();
         return nick === normAuthor;
       })
-      .sort((a, b) => {
-        const timeA = new Date(a.timestamp).getTime();
-        const timeB = new Date(b.timestamp).getTime();
-        if (!isNaN(timeA) && !isNaN(timeB)) return timeB - timeA;
-        return 0;
-      });
+      .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
   }, [effectivePosts, normAuthor]);
 
   // Find all replies/comments made by this author across all threads
@@ -132,10 +127,15 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
 
   // Calculate points dynamically based on actual activity
   const computedPoints = useMemo(() => {
-    return calculateUserPoints(authorNickname || '', undefined, effectivePosts, allComments);
+    return calculateUserPoints(
+      authorNickname || '',
+      { nickname: authorNickname, department: 'FUHSI' },
+      effectivePosts,
+      allComments
+    );
   }, [authorNickname, effectivePosts, allComments]);
 
-  const displayPoints = (authorPoints !== undefined && authorPoints !== null) ? authorPoints : (computedPoints ?? 0);
+  const displayPoints = computedPoints;
 
   return (
     <div className="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
@@ -169,9 +169,12 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-white truncate">{authorNickname}</h2>
-                {authorBadgeType && (
-                  <VerificationBadge badgeType={authorBadgeType} title={authorBadgeTitle} showTitle />
-                )}
+                <VerificationBadge 
+                  isVerified={Boolean(authorBadgeType) && authorBadgeType !== 'NONE'} 
+                  badgeType={authorBadgeType}
+                  title={authorBadgeTitle}
+                  showTitle 
+                />
               </div>
 
               <p className="text-xs text-teal-200 font-bold mt-0.5">{username}</p>

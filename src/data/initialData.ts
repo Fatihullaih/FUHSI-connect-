@@ -9,12 +9,12 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   emergencyHomePhone: '08031234567',
   department: 'Medicine & Surgery',
   level: '300L',
-  bio: 'FUHSI Student | Learning & Saving Lives 🩺 | Class Rep',
+  bio: 'FUHSI Student | Learning & Saving Lives 🩺',
   avatarKey: 'caduceus',
-  badgeType: 'BLUE',
-  badgeTitle: 'Class Rep & Tech Lead',
+  badgeType: 'NONE',
+  badgeTitle: '',
   reputationScore: 2450,
-  isVerified: true,
+  isVerified: false,
   isPremiumUser: true
 };
 
@@ -92,7 +92,7 @@ export const INITIAL_POSTS: Post[] = [
     id: 'post_sp1',
     authorNickname: '@Ila_Campus_Prints',
     authorBadgeType: 'PURPLE',
-    authorBadgeTitle: 'Verified Campus Business',
+    authorBadgeTitle: 'Campus Business',
     authorAvatarKey: 'pill',
     department: 'Services & Businesses',
     content: '⚡ SPONSORED: Fast 24/7 Color Printing, Project Binding & Past Question Photocopying right opposite Ila Campus Gate 2! Student discount: ₦30 per page. Free WhatsApp PDF submission for instant pickup!',
@@ -336,7 +336,7 @@ export const INITIAL_ACHIEVEMENTS = [
   },
   {
     id: 'ach_7',
-    title: '✔️ Verified Student',
+    title: 'FUHSI Student',
     icon: '✔️',
     description: 'Passed multi-factor admin verification review (3+ mos tenure, 0 strikes, 1200+ rep).',
     isUnlocked: true,

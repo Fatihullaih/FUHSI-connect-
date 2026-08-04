@@ -16,6 +16,7 @@ interface CreatePostModalProps {
       targetDepartment?: string;
       category: string;
       imageUrl?: string;
+      imageUrls?: string[];
       videoUri?: string;
       pollQuestion?: string;
       pollOptions?: string[];
@@ -77,7 +78,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
   const [content, setContent] = useState('');
   const [targetDepartment, setTargetDepartment] = useState('General Campus');
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [showImageInput, setShowImageInput] = useState(false);
   const [videoUri, setVideoUri] = useState('');
   const [showVideoInput, setShowVideoInput] = useState(false);
@@ -116,20 +117,37 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const availableSlots = 2 - imageUrls.length;
+    if (availableSlots <= 0) return;
+
+    const filesToProcess = files.slice(0, availableSlots);
+    const newProcessedImages: string[] = [];
+
+    for (const file of filesToProcess) {
       try {
         const compressedDataUrl = await compressImageFile(file, 900, 900, 0.75);
-        setImageUrl(compressedDataUrl);
+        newProcessedImages.push(compressedDataUrl);
       } catch (err) {
         console.error('Image compression failed, using direct reader', err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImageUrl(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        newProcessedImages.push(dataUrl);
       }
     }
+
+    setImageUrls((prev) => [...prev, ...newProcessedImages].slice(0, 2));
+    // Clear input value so same file can be selected again if removed
+    e.target.value = '';
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImageUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,7 +182,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         department: currentUser?.department || 'General',
         targetDepartment: targetDepartment,
         category: 'General',
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: imageUrls[0] || undefined,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
         videoUri: videoUri.trim() || undefined,
         pollQuestion: isValidPoll ? pollQuestion.trim() : undefined,
         pollOptions: isValidPoll ? validPollOptions : undefined,
@@ -176,7 +195,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     }
 
     setContent('');
-    setImageUrl('');
+    setImageUrls([]);
     setVideoUri('');
     setTargetDepartment('General Campus');
     setPollQuestion('');
@@ -226,7 +245,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 </div>
               </div>
               <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-1 rounded-lg border border-teal-200">
-                Verified Student Handle
+                Student Handle
               </span>
             </div>
             <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/60">
@@ -298,7 +317,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline"
               >
                 <ImageIcon size={16} />
-                <span>{imageUrl ? '📷 Image Attached' : '+ Attach Image / Diagram'}</span>
+                <span>{imageUrls.length > 0 ? `📷 ${imageUrls.length}/2 Attached` : '+ Attach Image / Diagram'}</span>
               </button>
 
               {/* Video Toggle (Premium Only) */}
@@ -320,76 +339,87 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             </div>
 
             {/* Image Input Drawer */}
-            {(showImageInput || imageUrl) && (
+            {(showImageInput || imageUrls.length > 0) && (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-800">Image Attachment</span>
-                  {imageUrl && (
+                  <span className="text-xs font-bold text-slate-800">
+                    Image Attachments <span className="text-teal-700">({imageUrls.length}/2)</span>
+                  </span>
+                  {imageUrls.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setImageUrl('')}
+                      onClick={() => setImageUrls([])}
                       className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1"
                     >
                       <Trash2 size={13} />
-                      <span>Remove</span>
+                      <span>Clear All</span>
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="Paste image URL (http://...)"
-                    className="flex-1 bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium focus:outline-none focus:border-teal-500"
-                  />
-                  <label className="cursor-pointer bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg px-3 py-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0">
-                    <Upload size={14} />
-                    <span>Upload File</span>
+                {/* File Upload Button */}
+                {imageUrls.length < 2 ? (
+                  <label className="cursor-pointer bg-teal-600 hover:bg-teal-700 text-white rounded-xl p-3 text-xs font-extrabold flex items-center justify-center gap-2 transition-colors shadow-xs">
+                    <Upload size={16} />
+                    <span>{imageUrls.length === 0 ? 'Click to Upload Image(s) (Up to 2)' : '+ Add 2nd Image'}</span>
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       onChange={handleFileUpload}
                       className="hidden"
                     />
                   </label>
-                </div>
+                ) : (
+                  <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200 text-center">
+                    ✓ Maximum 2 images attached
+                  </p>
+                )}
 
                 {/* Preset sample images */}
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Or pick a campus sample image:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SAMPLE_IMAGE_PRESETS.map((preset) => (
-                      <button
-                        key={preset.name}
-                        type="button"
-                        onClick={() => setImageUrl(preset.url)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all ${
-                          imageUrl === preset.url
-                            ? 'bg-teal-600 text-white border-teal-600'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {preset.name}
-                      </button>
-                    ))}
+                {imageUrls.length < 2 && (
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Or attach a campus sample image:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SAMPLE_IMAGE_PRESETS.map((preset) => (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => {
+                            if (imageUrls.length < 2) {
+                              setImageUrls((prev) => [...prev, preset.url].slice(0, 2));
+                            }
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg border font-semibold bg-white text-slate-700 border-slate-200 hover:bg-teal-50 hover:border-teal-300 transition-all"
+                        >
+                          + {preset.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Live Image Preview */}
-                {imageUrl && (
-                  <div className="relative rounded-xl overflow-hidden border border-slate-200 max-h-48 bg-slate-950 flex items-center justify-center">
-                    <img src={imageUrl} alt="Attachment Preview" className="max-h-48 w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setImageUrl('')}
-                      className="absolute top-2 right-2 bg-slate-900/80 hover:bg-rose-600 text-white p-1 rounded-full transition-colors"
-                    >
-                      <X size={14} />
-                    </button>
+                {/* Attached Image Previews Grid */}
+                {imageUrls.length > 0 && (
+                  <div className={`grid ${imageUrls.length === 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1`}>
+                    {imageUrls.map((url, idx) => (
+                      <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 h-40 bg-slate-950 flex items-center justify-center group">
+                        <img src={url} alt={`Attachment ${idx + 1}`} className="h-full w-full object-cover" />
+                        <div className="absolute top-1.5 left-1.5 bg-slate-900/80 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md backdrop-blur-xs">
+                          Image {idx + 1}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="absolute top-1.5 right-1.5 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md transition-colors"
+                          title="Remove image"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -578,7 +608,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             </div>
             <h4 className="font-extrabold text-slate-900 text-base">Video Uploads Reserved for Premium Members</h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Video attachments are available exclusively to verified students with active campus badges (Class Rep, SUG Executive, Tech Lead, or Gold verified members).
+              Video attachments are available exclusively to students with active campus badges (Class Rep, SUG Executive, Tech Lead, or Gold badge members).
             </p>
             <div className="bg-purple-50 p-3 rounded-xl border border-purple-200 text-left text-xs space-y-1 text-purple-950">
               <span className="font-bold block">How to unlock video posting:</span>
