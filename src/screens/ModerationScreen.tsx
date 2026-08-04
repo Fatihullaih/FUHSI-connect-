@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle } from 'lucide-react';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
-import { INITIAL_VERIFICATION_CANDIDATES } from '../data/initialData';
+import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
 
 interface ModerationScreenProps {
   userProfile?: UserProfile | null;
@@ -41,8 +41,24 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   onAdminRejectMarketplaceItem = () => {},
   onSendPriceAdvisory = () => {},
 }) => {
-  // Verification candidates state
-  const [verifCandidates, setVerifCandidates] = useState(INITIAL_VERIFICATION_CANDIDATES || []);
+  // Verification candidates state with persistence
+  const [verifCandidates, setVerifCandidates] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_verif_candidates_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_VERIFICATION_CANDIDATES || [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_verif_candidates_db', JSON.stringify(verifCandidates));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [verifCandidates]);
 
   // Toggles state
   const [antiDoxxing, setAntiDoxxing] = useState(true);
@@ -86,7 +102,11 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     } catch (err) {
       console.error(err);
     }
-    setAllUsersList([
+    const defaultUsersList: UserProfile[] = [
+      {
+        ...INITIAL_USER_PROFILE,
+        isApproved: true,
+      },
       {
         id: 'usr_pending_demo_1',
         nickname: '@FreshMedStudent',
@@ -111,7 +131,13 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         isApproved: false,
         isVerified: false,
       },
-    ]);
+    ];
+    setAllUsersList(defaultUsersList);
+    try {
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(defaultUsersList));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useEffect(() => {
@@ -121,19 +147,74 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [approvalToast, setApprovalToast] = useState<string | null>(null);
 
   const handleApproveRegistration = (userId: string, nick: string) => {
+    let targetEmail = '';
+    let targetRealName = '';
     try {
       const stored = localStorage.getItem('fuhsi_users_db');
       let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
-      list = list.map((u) => u.id === userId ? { ...u, isApproved: true, isVerified: true, badgeTitle: 'Verified Student', isAdmin: false } : u);
+      list = list.map((u) => {
+        if (u.id === userId || u.nickname.toLowerCase() === nick.toLowerCase()) {
+          targetEmail = u.studentEmail || `${u.nickname.replace(/^@/, '')}@fuhsi.edu.ng`;
+          targetRealName = u.realName || u.nickname;
+          return { ...u, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'Verified Student', isAdmin: false };
+        }
+        return u;
+      });
       localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
       setAllUsersList(list);
 
-      // Also update active user profile in localStorage if it matches
+      // Create official automated email object sent from fuhsiconnect@gmail.com
+      const cleanNick = nick.toLowerCase().replace(/^@/, '');
+      const emailRecord = {
+        id: `email_appr_${Date.now()}`,
+        from: 'FUHSI Connect <fuhsiconnect@gmail.com>',
+        to: targetEmail,
+        recipientName: targetRealName,
+        recipientNickname: nick,
+        subject: 'FUHSI Connect Account Verified & Approved',
+        body: 'Your FUHSI Connect account has been verified and approved. You can now log in and start using the platform.',
+        notice: 'Note: This email was sent from an unmonitored system email address (fuhsiconnect@gmail.com). Please do not reply directly to this email.',
+        isNoReply: true,
+        sentAt: new Date().toISOString(),
+        formattedDate: new Date().toLocaleString('en-US', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }),
+      };
+
+      // Store email in global sent emails db
+      try {
+        const existingEmailsStr = localStorage.getItem('fuhsi_sent_emails_db');
+        const existingEmails = existingEmailsStr ? JSON.parse(existingEmailsStr) : [];
+        localStorage.setItem('fuhsi_sent_emails_db', JSON.stringify([emailRecord, ...existingEmails]));
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Save notification & email copy in user's in-app inbox
+      const notifKey = `fuhsi_user_notifications_${cleanNick}`;
+      const approvalMsg = {
+        id: `appr_notif_${Date.now()}`,
+        type: 'VERIFICATION',
+        title: '📧 Email Notification Received from fuhsiconnect@gmail.com',
+        message: `From: FUHSI Connect <fuhsiconnect@gmail.com> [Do Not Reply]\nTo: ${targetEmail}\nSubject: FUHSI Connect Account Verified & Approved\n\n"Your FUHSI Connect account has been verified and approved. You can now log in and start using the platform."`,
+        timestamp: 'Just now',
+        isRead: false,
+        emailDetails: emailRecord,
+      };
+      let existingNotifs = [];
+      try {
+        const storedNotifs = localStorage.getItem(notifKey);
+        if (storedNotifs) existingNotifs = JSON.parse(storedNotifs);
+      } catch (e) { console.error(e); }
+      localStorage.setItem(notifKey, JSON.stringify([approvalMsg, ...existingNotifs]));
+
+      // Update active user profile in localStorage if it matches
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
-        if (activeUser && activeUser.id === userId) {
-          const updatedActive = { ...activeUser, isApproved: true, isVerified: true, badgeTitle: 'Verified Student', isAdmin: false };
+        if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
+          const updatedActive = { ...activeUser, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'Verified Student', isAdmin: false };
           localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
         }
       }
@@ -141,8 +222,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       console.error(err);
     }
 
-    setApprovalToast(`✓ Registration approved for ${nick}! Student account is now active & verified.`);
-    setTimeout(() => setApprovalToast(null), 3500);
+    setApprovalToast(`✉️ Email Notification Dispatched to ${targetEmail}!\n• Sender: FUHSI Connect <fuhsiconnect@gmail.com> [Do Not Reply]\n• Message: "Your FUHSI Connect account has been verified and approved. You can now log in and start using the platform."`);
+    setTimeout(() => setApprovalToast(null), 6000);
   };
 
   const handleRevokeRegistration = (userId: string, nick: string) => {
@@ -490,7 +571,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                         👤 Real Name: <span className="font-bold text-slate-900">{user.realName}</span>
                       </p>
                       <p className="text-[11px] text-slate-600">
-                        Matric Number: <span className="font-mono font-bold text-slate-800">{user.matricNumber || 'N/A'}</span> • Phone: <span className="font-bold text-teal-700">{user.emergencyHomePhone || 'N/A'}</span>
+                        Matric: <span className="font-mono font-bold text-slate-800">{user.matricNumber || 'N/A'}</span> • Email: <span className="font-bold text-teal-800">{user.studentEmail || `${user.nickname.replace(/^@/, '')}@fuhsi.edu.ng`}</span> • Phone: <span className="font-bold text-slate-700">{user.emergencyHomePhone || 'N/A'}</span>
                       </p>
                     </div>
 
@@ -533,6 +614,62 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                     >
                       Delete Account
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* AUTOMATED EMAIL DISPATCH AUDIT LOG */}
+      <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div>
+            <h2 className="font-bold text-teal-400 text-sm flex items-center gap-2">
+              <Mail className="w-4 h-4 text-teal-400" /> Dispatched Automated Email Logs (fuhsiconnect@gmail.com)
+            </h2>
+            <p className="text-[11px] text-slate-400">
+              System automated account notifications sent to student emails upon Admin approval.
+            </p>
+          </div>
+          <span className="text-[10px] font-extrabold bg-teal-950 text-teal-300 px-2.5 py-1 rounded-full border border-teal-800">
+            Do Not Reply Address
+          </span>
+        </div>
+
+        {(() => {
+          let sentEmails = [];
+          try {
+            const stored = localStorage.getItem('fuhsi_sent_emails_db');
+            if (stored) sentEmails = JSON.parse(stored);
+          } catch (e) { console.error(e); }
+
+          if (sentEmails.length === 0) {
+            return (
+              <div className="p-4 text-center text-slate-400 bg-slate-950/50 rounded-xl border border-slate-800/80 text-xs font-mono">
+                No automated emails dispatched yet. Approving a student account will automatically send and log an email to their registered address from fuhsiconnect@gmail.com.
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+              {sentEmails.map((email: any) => (
+                <div key={email.id} className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono space-y-1.5">
+                  <div className="flex justify-between items-center text-teal-400 font-bold text-[11px] border-b border-slate-800/80 pb-1">
+                    <span>From: FUHSI Connect &lt;fuhsiconnect@gmail.com&gt;</span>
+                    <span className="text-[10px] text-slate-400 font-normal">{email.formattedDate || email.sentAt}</span>
+                  </div>
+                  <div className="text-slate-300 space-y-0.5 text-[11px]">
+                    <p><span className="text-slate-500">To:</span> <strong className="text-white">{email.to}</strong> ({email.recipientNickname})</p>
+                    <p><span className="text-slate-500">Subject:</span> {email.subject}</p>
+                    <p className="p-2 bg-slate-900 rounded border border-slate-800/80 text-emerald-300 font-sans text-xs mt-1">
+                      "{email.body}"
+                    </p>
+                    <p className="text-[10px] text-amber-300 font-sans italic pt-1">
+                      ⚠️ {email.notice}
+                    </p>
                   </div>
                 </div>
               ))}

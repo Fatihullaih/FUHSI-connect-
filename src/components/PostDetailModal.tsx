@@ -119,9 +119,19 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                 <VerificationBadge badgeType={comment.authorBadgeType} />
               )}
               {comment.replyToNickname && (
-                <span className="text-[10px] text-teal-700 font-bold bg-teal-100/70 px-1.5 py-0.5 rounded-md">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAuthorClick?.({
+                      nickname: comment.replyToNickname!,
+                    });
+                  }}
+                  className="text-[10px] text-teal-700 font-bold bg-teal-100/70 hover:bg-teal-200/80 px-1.5 py-0.5 rounded-md transition-colors cursor-pointer"
+                  title={`View @${comment.replyToNickname}'s profile`}
+                >
                   Replying to @{comment.replyToNickname}
-                </span>
+                </button>
               )}
             </div>
 

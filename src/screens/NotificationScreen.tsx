@@ -13,8 +13,23 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({ userProf
   const [filter, setFilter] = useState<'ALL' | 'TARGETED' | 'UNREAD' | 'ADMIN'>('ALL');
   const [readNotifIds, setReadNotifIds] = useState<Record<string, boolean>>({});
 
+  // Custom user notifications (e.g. account approval message)
+  const customUserNotifications: CampusNotification[] = useMemo(() => {
+    if (!userProfile?.nickname) return [];
+    const cleanNick = userProfile.nickname.toLowerCase().replace(/^@/, '');
+    const notifKey = `fuhsi_user_notifications_${cleanNick}`;
+    try {
+      const stored = localStorage.getItem(notifKey);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  }, [userProfile?.nickname]);
+
   // Base system notifications
   const baseNotifications: CampusNotification[] = useMemo(() => [
+    ...customUserNotifications,
     {
       id: 'notif_1',
       type: 'VERIFICATION',

@@ -535,11 +535,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           </div>
           <div>
             <h1 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-              <span>FUHSI Smart Search</span>
+              <span>Campus Search</span>
               <Sparkles size={16} className="text-amber-500 fill-amber-400" />
             </h1>
             <p className="text-xs text-slate-500 font-semibold">
-              Prioritizes verified user handles (@SUGPresident, @SUG_Welfare) followed by campus posts
+              Find accounts, posts, discussions, and campus marketplace items
             </p>
           </div>
         </div>
@@ -551,7 +551,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             type="text"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
-            placeholder="Search @handle (e.g. SUG Welfare), post topic, or item..."
+            placeholder="Search users, posts, topics, or marketplace..."
             className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-600 focus:outline-none transition-all shadow-inner"
           />
           {query && (
@@ -594,7 +594,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-2.5">
           <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
             <TrendingUp size={15} className="text-teal-600" />
-            <span>Trending SUG & Campus Searches</span>
+            <span>Trending Campus Searches</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {trendingTopics.map((tag) => (
@@ -611,10 +611,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         </div>
       )}
 
-      {/* Search Results in Priority Order */}
+      {/* Search Results */}
       {query.trim() && (
         <div className="space-y-5">
-          {/* PRIORITY 1: USER ACCOUNTS (Always First) */}
+          {/* USER ACCOUNTS */}
           {matchingAccounts.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -624,9 +624,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     Matching User Accounts ({matchingAccounts.length})
                   </h2>
                 </div>
-                <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-                  Priority 1
-                </span>
               </div>
 
               {/* Render Accounts */}
@@ -699,7 +696,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             </div>
           )}
 
-          {/* PRIORITY 2: POSTS (Always Second) */}
+          {/* POSTS */}
           {matchingPosts.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
@@ -707,9 +704,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   <Sparkles size={14} className="text-teal-600" />
                   <span>Matching Posts ({matchingPosts.length})</span>
                 </h2>
-                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
-                  Priority 2
-                </span>
               </div>
 
               {displayedPosts.map((post, idx) => (
@@ -741,7 +735,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             </div>
           )}
 
-          {/* PRIORITY 3: MARKETPLACE HUB ITEMS (Third) */}
+          {/* MARKETPLACE HUB ITEMS */}
           {matchingHubItems.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -751,9 +745,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     Marketplace & Hub Matches ({matchingHubItems.length})
                   </h2>
                 </div>
-                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                  Priority 3
-                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -770,7 +761,29 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       <p className="text-xs font-black text-teal-800">
                         ₦{(item.adminApprovedPrice ?? item.askingPrice ?? 0).toLocaleString()}
                       </p>
-                      <p className="text-[10px] text-slate-500 font-medium">By {item.sellerNickname}</p>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        By{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onAuthorClick) {
+                              onAuthorClick({
+                                id: `seller_${item.id}`,
+                                authorNickname: item.sellerNickname,
+                                timeAgo: 'Marketplace',
+                                categoryTag: 'Trade',
+                                text: `Seller of ${item.title}`,
+                                likesCount: 0,
+                                commentsCount: 0,
+                                createdAt: '',
+                              });
+                            }
+                          }}
+                          className="font-bold text-slate-800 hover:text-teal-700 hover:underline cursor-pointer focus:outline-none"
+                        >
+                          {item.sellerNickname}
+                        </button>
+                      </p>
                     </div>
                     {item.imageUrls?.[0] && (
                       <img
@@ -810,7 +823,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               </div>
               <h3 className="text-sm font-black text-slate-900">No exact matches found for "{query}"</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Try searching for verified SUG executive handles like <span className="font-extrabold text-teal-800">@SUGPresident</span> or <span className="font-extrabold text-teal-800">@SUG_Welfare</span>, or browse trending topics above.
+                Try searching for different keywords, usernames, or topics.
               </p>
             </div>
           )}

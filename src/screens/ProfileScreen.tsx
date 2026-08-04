@@ -39,6 +39,7 @@ interface ProfileScreenProps {
   userProfile: UserProfile | null;
   allPosts?: Post[];
   allComments?: Comment[];
+  bookmarkedPostIds?: string[];
   onSaveProfile: (
     nickname: string,
     department: string,
@@ -52,6 +53,7 @@ interface ProfileScreenProps {
   onLikeClick?: (post: Post) => void;
   onBookmarkClick?: (post: Post) => void;
   onCommentClick?: (post: Post) => void;
+  onAuthorClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onLogout?: () => void;
@@ -62,11 +64,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   userProfile,
   allPosts = [],
   allComments = [],
+  bookmarkedPostIds = [],
   onSaveProfile,
   onOpenAuthModal,
   onLikeClick,
   onBookmarkClick,
   onCommentClick,
+  onAuthorClick,
   onDeletePost,
   onDeleteComment,
   onLogout,
@@ -192,9 +196,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       return 0;
     });
 
-  // Saved / Bookmarked posts
+  // Saved / Bookmarked posts (Strictly isolated per account)
   const bookmarkedPosts = allPosts
-    .filter((p) => p.isBookmarkedByMe || p.isBookmarked)
+    .filter((p) => {
+      if (bookmarkedPostIds && bookmarkedPostIds.length > 0) {
+        return bookmarkedPostIds.includes(p.id);
+      }
+      return Boolean(p.isBookmarkedByMe);
+    })
     .sort((a, b) => {
       const timeA = new Date(a.timestamp).getTime();
       const timeB = new Date(b.timestamp).getTime();
@@ -578,7 +587,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
                   <Lock size={12} className="text-teal-600" />
-                  Full Name (Private - Hidden from other users)
+                  Full Name
                 </label>
                 <input
                   type="text"
@@ -592,7 +601,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <Mail size={12} className="text-teal-600" />
-                    Email Address (Private)
+                    Email Address
                   </label>
                   <input
                     type="email"
@@ -605,7 +614,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <Lock size={12} className="text-teal-600" />
-                    Phone Number (Private)
+                    Phone Number
                   </label>
                   <input
                     type="tel"
@@ -618,7 +627,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Department (Private)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
                   <select
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
@@ -631,7 +640,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Academic Level (Private)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Academic Level</label>
                   <select
                     value={level}
                     onChange={(e) => setLevel(e.target.value)}
@@ -792,6 +801,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       onLikeClick={onLikeClick}
                       onBookmarkClick={onBookmarkClick}
                       onCommentClick={onCommentClick}
+                      onAuthorClick={onAuthorClick}
                       onDeletePost={onDeletePost}
                     />
                   ))}
@@ -935,6 +945,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       onLikeClick={onLikeClick}
                       onBookmarkClick={onBookmarkClick}
                       onCommentClick={onCommentClick}
+                      onAuthorClick={onAuthorClick}
                       onDeletePost={onDeletePost}
                     />
                   ))}

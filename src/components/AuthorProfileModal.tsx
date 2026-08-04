@@ -138,7 +138,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
   const displayPoints = (authorPoints !== undefined && authorPoints !== null) ? authorPoints : (computedPoints ?? 0);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <div className="bg-slate-50 w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative animate-in zoom-in-95">
         {/* Header Banner */}
         <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-5 sm:p-6 text-white relative">

@@ -9,7 +9,8 @@ import {
   RefreshCw,
   SquarePen,
   ArrowUp,
-  Sparkles
+  Sparkles,
+  Users
 } from 'lucide-react';
 
 interface FeedScreenProps {

@@ -24,7 +24,7 @@ import { PWAInstallModal } from './components/PWAInstallModal';
 import { AuthModal } from './components/AuthModal';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
-import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Navigation State
@@ -33,6 +33,31 @@ export const App: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [appTotalMembers, setAppTotalMembers] = useState<number>(1);
+
+  // Dynamically calculate total registered community members based on approved user accounts
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const stored = localStorage.getItem('fuhsi_users_db');
+        if (stored) {
+          const list = JSON.parse(stored);
+          if (Array.isArray(list)) {
+            // Count ONLY approved user accounts (where isApproved is true or isAdmin is true)
+            const approvedList = list.filter((u: any) => u.isApproved === true || (u.isApproved !== false && u.isAdmin));
+            setAppTotalMembers(approvedList.length);
+            return;
+          }
+        }
+        setAppTotalMembers(1);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    updateCount();
+    const timer = setInterval(updateCount, 1500);
+    return () => clearInterval(timer);
+  }, []);
 
   // App Core State with Persistent LocalStorage Initialization
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
@@ -97,7 +122,26 @@ export const App: React.FC = () => {
     return INITIAL_REPORTS;
   });
 
+  const [userBookmarksMap, setUserBookmarksMap] = useState<Record<string, string[]>>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_user_bookmarks_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return {};
+  });
+
+  // Active user bookmark IDs key
+  const activeUserKey = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
+  const myBookmarkedPostIds = userBookmarksMap[activeUserKey] || [];
+
   // Auto Sync States to LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('fuhsi_user_bookmarks_db', JSON.stringify(userBookmarksMap));
+    } catch (e) { console.error(e); }
+  }, [userBookmarksMap]);
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_posts_db', JSON.stringify(posts));
@@ -214,10 +258,31 @@ export const App: React.FC = () => {
   }, []);
 
   const openAuthorProfile = useCallback((post: Post) => {
-    setSelectedAuthorPost(post);
-    setModalStack((prev) => [...prev, { type: 'authorProfile', post }]);
+    let enrichedPost = { ...post };
     try {
-      window.history.pushState({ type: 'modal', modalType: 'authorProfile', id: post.id, time: Date.now() }, '');
+      const storedUsers = localStorage.getItem('fuhsi_users_db');
+      if (storedUsers) {
+        const userList = JSON.parse(storedUsers);
+        if (Array.isArray(userList)) {
+          const targetNick = (post.authorNickname || (post as any).nickname || '').toLowerCase().replace(/^@/, '');
+          const found = userList.find((u: any) => u.nickname && u.nickname.toLowerCase().replace(/^@/, '') === targetNick);
+          if (found) {
+            enrichedPost.authorAvatarKey = found.avatarKey || post.authorAvatarKey || 'caduceus';
+            enrichedPost.authorAvatarUrl = found.avatarUrl || post.authorAvatarUrl;
+            enrichedPost.authorBadgeType = found.badgeType || post.authorBadgeType || 'GREEN';
+            enrichedPost.authorBadgeTitle = found.badgeTitle || post.authorBadgeTitle || 'Verified Student';
+            enrichedPost.authorPoints = found.reputationScore || post.authorPoints;
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    setSelectedAuthorPost(enrichedPost);
+    setModalStack((prev) => [...prev, { type: 'authorProfile', post: enrichedPost }]);
+    try {
+      window.history.pushState({ type: 'modal', modalType: 'authorProfile', id: enrichedPost.id, time: Date.now() }, '');
     } catch (e) { console.error(e); }
   }, []);
 
@@ -381,11 +446,25 @@ export const App: React.FC = () => {
   };
 
   const handleBookmarkClick = (post: Post) => {
+    const userKey = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
+    const currentList = userBookmarksMap[userKey] || [];
+    const isBookmarked = currentList.includes(post.id);
+
+    const updatedList = isBookmarked
+      ? currentList.filter((id) => id !== post.id)
+      : [...currentList, post.id];
+
+    const updatedMap = {
+      ...userBookmarksMap,
+      [userKey]: updatedList,
+    };
+
+    setUserBookmarksMap(updatedMap);
+
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === post.id) {
-          const currentlyBookmarked = p.isBookmarkedByMe !== undefined ? Boolean(p.isBookmarkedByMe) : Boolean(p.isBookmarked);
-          const nextState = !currentlyBookmarked;
+          const nextState = !isBookmarked;
           const updated = { ...p, isBookmarkedByMe: nextState, isBookmarked: nextState };
           if (selectedPost && selectedPost.id === post.id) {
             setSelectedPost(updated);
@@ -857,6 +936,15 @@ export const App: React.FC = () => {
 
           {/* Header Right Actions */}
           <div className="flex items-center gap-2">
+            {/* Live Total Registered Members Indicator Badge (Non-clickable community size indicator) */}
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-900/80 border border-teal-600/50 text-teal-100 text-xs font-black select-none pointer-events-none cursor-default"
+              title="Total Registered FUHSI Connect Members"
+            >
+              <Users size={13} className="text-teal-300 shrink-0" />
+              <span>{appTotalMembers.toLocaleString()}</span>
+            </div>
+
             {userProfile?.isAdmin && (
               <button
                 onClick={() => handleNavChange(5)}
@@ -923,6 +1011,7 @@ export const App: React.FC = () => {
             onSubmitMarketplaceItem={handleSubmitMarketplaceItem}
             onRecordDmBuyIntent={handleRecordDmBuyIntent}
             onMarkAsSold={handleMarkAsSold}
+            onAuthorClick={openAuthorProfile}
             onApplyVerificationWithFee={() =>
               handleSubmitVerificationRequest(
                 'Verification Review Fee Paid (₦1,500)',
@@ -944,6 +1033,7 @@ export const App: React.FC = () => {
           <LeaderboardScreen
             userProfile={userProfile}
             activePosts={posts}
+            onAuthorClick={openAuthorProfile}
             onSubmitVerificationRequest={handleSubmitVerificationRequest}
           />
         )}
@@ -958,8 +1048,8 @@ export const App: React.FC = () => {
             onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
             onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
             onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
-            onApproveVerification={(reqId) => setVerificationRequests((prev) => prev.filter((v) => v.id !== reqId))}
-            onRejectVerification={(reqId) => setVerificationRequests((prev) => prev.filter((v) => v.id !== reqId))}
+            onApproveVerification={(reqId) => setVerificationRequests((prev) => prev.map((v) => (v.id === reqId ? { ...v, status: 'APPROVED' } : v)))}
+            onRejectVerification={(reqId) => setVerificationRequests((prev) => prev.map((v) => (v.id === reqId ? { ...v, status: 'REJECTED' } : v)))}
             onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
             onUpdateBadge={(badgeType, badgeTitle) => {
               if (userProfile) {
@@ -1004,6 +1094,7 @@ export const App: React.FC = () => {
                 userProfile={userProfile}
                 allPosts={posts}
                 allComments={comments}
+                bookmarkedPostIds={myBookmarkedPostIds}
                 onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
                   const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
                   if (!err) closeModalUI();
@@ -1017,6 +1108,7 @@ export const App: React.FC = () => {
                 onLikeClick={handleLikeClick}
                 onBookmarkClick={handleBookmarkClick}
                 onCommentClick={openPostDetail}
+                onAuthorClick={openAuthorProfile}
                 onDeletePost={handleDeletePost}
                 onDeleteComment={handleDeleteComment}
                 onClose={closeModalUI}

@@ -27,6 +27,7 @@ interface LeaderboardScreenProps {
   departmentRankings?: DepartmentRanking[];
   activePosts?: Post[];
   onSubmitVerificationRequest?: (category: string, statement: string) => void;
+  onAuthorClick?: (post: any) => void;
 }
 
 const DEFAULT_DEPARTMENTS: DepartmentRanking[] = [
@@ -219,7 +220,25 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-900 text-xs sm:text-sm">{user.nickname}</span>
+                          <button
+                            onClick={() => {
+                              if (onAuthorClick) {
+                                onAuthorClick({
+                                  id: `ldr_${user.rank}_${user.nickname}`,
+                                  authorNickname: user.nickname,
+                                  timeAgo: 'Leaderboard',
+                                  categoryTag: user.department,
+                                  text: '',
+                                  likesCount: 0,
+                                  commentsCount: 0,
+                                  createdAt: '',
+                                });
+                              }
+                            }}
+                            className="font-bold text-slate-900 hover:text-amber-700 text-xs sm:text-sm hover:underline cursor-pointer"
+                          >
+                            {user.nickname}
+                          </button>
                           <VerificationBadge badgeType={user.badgeType} />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
@@ -262,7 +281,25 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-900 text-xs sm:text-sm">{user.nickname}</span>
+                          <button
+                            onClick={() => {
+                              if (onAuthorClick) {
+                                onAuthorClick({
+                                  id: `ldr_${user.rank}_${user.nickname}`,
+                                  authorNickname: user.nickname,
+                                  timeAgo: 'Leaderboard',
+                                  categoryTag: user.department,
+                                  text: '',
+                                  likesCount: 0,
+                                  commentsCount: 0,
+                                  createdAt: '',
+                                });
+                              }
+                            }}
+                            className="font-bold text-slate-900 hover:text-teal-700 text-xs sm:text-sm hover:underline cursor-pointer"
+                          >
+                            {user.nickname}
+                          </button>
                           <VerificationBadge badgeType={user.badgeType} />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>

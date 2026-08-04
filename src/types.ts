@@ -33,6 +33,8 @@ export interface UserProfile {
   strikes?: number;
   isBanned?: boolean;
   privacyMode?: PrivacyMode;
+  password?: string;
+  savedPassword?: string;
 }
 
 export interface Comment {

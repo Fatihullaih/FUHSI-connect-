@@ -39,6 +39,7 @@ interface CampusHubScreenProps {
   onRecordDmBuyIntent: (itemId: string) => void;
   onMarkAsSold: (itemId: string, ratingStars: number, ratingTag: string) => void;
   onApplyVerificationWithFee: () => void;
+  onAuthorClick?: (post: any) => void;
 }
 
 export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
@@ -49,6 +50,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   onRecordDmBuyIntent,
   onMarkAsSold,
   onApplyVerificationWithFee,
+  onAuthorClick,
 }) => {
   const [activeTab, setActiveTab] = useState<'marketplace' | 'chats'>('marketplace');
 
@@ -474,7 +476,27 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                 <div className="p-3.5 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2 mt-2">
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-slate-500 font-medium">
-                      Seller: <span className="font-bold text-slate-800">{item.sellerNickname}</span>
+                      Seller:{' '}
+                      <button
+                        onClick={() => {
+                          if (onAuthorClick) {
+                            onAuthorClick({
+                              id: `seller_${item.id}`,
+                              authorNickname: item.sellerNickname,
+                              timeAgo: 'Marketplace',
+                              categoryTag: 'Trade',
+                              text: `Seller of ${item.title}`,
+                              likesCount: 0,
+                              commentsCount: 0,
+                              createdAt: '',
+                            });
+                          }
+                        }}
+                        className="font-bold text-slate-800 hover:text-teal-700 hover:underline focus:outline-none transition-colors"
+                        title="Click to view seller profile"
+                      >
+                        {item.sellerNickname}
+                      </button>
                     </span>
                     <span className="text-teal-700 font-bold flex items-center gap-1">
                       <ShieldCheck className="w-3 h-3" /> Admin Protected Trade

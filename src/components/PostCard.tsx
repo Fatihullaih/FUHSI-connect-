@@ -421,11 +421,26 @@ export const PostCard: React.FC<PostCardProps> = ({
                 comments.map((comment) => (
                   <div key={comment.id} className="bg-white p-3 rounded-xl border border-slate-200/70 text-xs">
                     <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-teal-50 flex items-center justify-center">
-                          <AvatarIcon avatarKey={comment.authorAvatarKey || comment.authorAvatarId} size={12} />
+                      <div 
+                        onClick={() => {
+                          if (onAuthorClick) {
+                            onAuthorClick({
+                              ...post,
+                              authorNickname: comment.authorNickname,
+                              authorAvatarKey: comment.authorAvatarKey || comment.authorAvatarId,
+                              authorAvatarUrl: comment.authorAvatarUrl,
+                              authorBadgeType: comment.authorBadgeType,
+                              authorBadgeTitle: comment.authorBadgeTitle,
+                            });
+                          }
+                        }}
+                        className={`flex items-center gap-2 ${onAuthorClick ? 'cursor-pointer group/user' : ''}`}
+                        title={onAuthorClick ? `View ${comment.authorNickname}'s profile` : undefined}
+                      >
+                        <div className="w-5 h-5 rounded-full bg-teal-50 flex items-center justify-center shrink-0 group-hover/user:scale-105 transition-transform">
+                          <AvatarIcon avatarKey={comment.authorAvatarKey || comment.authorAvatarId} avatarUrl={comment.authorAvatarUrl} size={12} />
                         </div>
-                        <span className="font-bold text-slate-800">{comment.authorNickname}</span>
+                        <span className="font-bold text-slate-800 group-hover/user:text-teal-700 group-hover/user:underline">{comment.authorNickname}</span>
                       </div>
                       <span className="text-slate-400 text-[10px]">{comment.timestamp}</span>
                     </div>
