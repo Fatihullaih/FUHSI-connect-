@@ -44,7 +44,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
     };
   }
 
-  const badgeTitleText = title && title.trim() ? title.trim() : 'Verified';
+  const badgeTitleText = title && title.trim() ? title.trim() : '';
 
   if (showTitle && badgeTitleText) {
     return (
@@ -61,7 +61,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
   return (
     <span
       className={`inline-flex items-center shrink-0 ${className}`}
-      title={`Verified Account: ${badgeTitleText}`}
+      title={badgeTitleText ? `Verified Account: ${badgeTitleText}` : 'Verified Account'}
     >
       <CheckCircle2 size={size} className={colorClasses.icon} />
     </span>

@@ -115,7 +115,7 @@ export const CampusVideoPlayer: React.FC<CampusVideoPlayerProps> = ({
               </div>
               <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
                 <li className="flex items-center gap-1.5">✓ Save & download campus video threads</li>
-                <li className="flex items-center gap-1.5">✓ Upload clinical & lecture video posts (up to 1m 30s)</li>
+                <li className="flex items-center gap-1.5">✓ Upload any video posts (up to 1m 30s)</li>
                 <li className="flex items-center gap-1.5">✓ Live editing of published threads</li>
                 <li className="flex items-center gap-1.5">✓ Verified checkmark badge across FUHSI Connect</li>
               </ul>

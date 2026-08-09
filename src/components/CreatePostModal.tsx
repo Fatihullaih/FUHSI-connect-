@@ -641,7 +641,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 <span>Verification Benefits Include:</span>
               </div>
               <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
-                <li className="flex items-center gap-1.5">✓ Upload clinical & lecture video posts</li>
+                <li className="flex items-center gap-1.5">✓ Upload any video posts</li>
                 <li className="flex items-center gap-1.5">✓ Verified checkmark across the platform</li>
                 <li className="flex items-center gap-1.5">✓ Higher trust and marketplace credibility</li>
               </ul>

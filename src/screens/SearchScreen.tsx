@@ -431,28 +431,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         </div>
       )}
 
-      {/* Trending Topics (When no query typed) */}
-      {!query.trim() && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-2.5">
-          <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
-            <TrendingUp size={15} className="text-teal-600" />
-            <span>Trending Campus Searches</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {trendingTopics.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => handleQueryChange(tag)}
-                className="px-3 py-1.5 bg-slate-50 hover:bg-teal-50 text-slate-800 hover:text-teal-900 border border-slate-200/90 hover:border-teal-300 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
-              >
-                <Hash size={13} className="text-teal-600 shrink-0" />
-                <span>{tag}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Search Results */}
       {query.trim() && (
         <div className="space-y-5">

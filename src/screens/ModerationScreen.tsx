@@ -876,7 +876,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
           ) : (
             verificationRequests.map((req) => {
               const currentBadgeColor = selectedReqColors[req.id] || req.assignedBadgeType || (req.accountType === 'Executive' ? 'GREEN' : req.accountType === 'Organization' ? 'GOLD' : 'BLUE');
-              const currentBadgeTitle = selectedReqTitles[req.id] !== undefined ? selectedReqTitles[req.id] : (req.positionTitle || req.assignedBadgeTitle || 'Verified');
+              const currentBadgeTitle = selectedReqTitles[req.id] !== undefined ? selectedReqTitles[req.id] : (req.positionTitle || req.assignedBadgeTitle || '');
 
               return (
                 <div 

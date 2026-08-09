@@ -1095,11 +1095,11 @@ export const App: React.FC = () => {
             onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
             onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
             onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
-            onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = 'Verified Student') => {
+            onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = '') => {
               setVerificationRequests((prev) => prev.map((v) => {
                 if (v.id === reqId) {
                   const targetApplicantNick = v.applicantNickname;
-                  const assignedTitle = badgeTitle || v.positionTitle || 'Verified';
+                  const assignedTitle = badgeTitle !== undefined ? badgeTitle : (v.positionTitle || '');
                   const cleanTarget = targetApplicantNick.toLowerCase().replace(/^@/, '');
 
                   // 1. Update active user profile if matching
