@@ -23,9 +23,11 @@ interface AuthorProfileModalProps {
   authorAvatarUrl?: string;
   authorBadgeType?: BadgeType;
   authorBadgeTitle?: string;
+  authorIsVerified?: boolean;
   authorPoints?: number;
   authorJoinedDate?: string;
   currentUserNickname?: string;
+  userProfile?: UserProfile | null;
   allPosts?: Post[];
   posts?: Post[];
   allComments?: Comment[];
@@ -41,11 +43,13 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     authorNickname,
     authorAvatarKey = 'caduceus',
     authorAvatarUrl,
-    authorBadgeType = 'GREEN',
-    authorBadgeTitle = 'FUHSI Student',
+    authorBadgeType = 'NONE',
+    authorBadgeTitle = '',
+    authorIsVerified = false,
     authorPoints,
     authorJoinedDate = 'Jul 2026',
     currentUserNickname,
+    userProfile,
     allPosts = [],
     posts = [],
     allComments = [],
@@ -58,6 +62,37 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
 
   const [activeTab, setActiveTab] = useState<'threads' | 'replies'>('threads');
   const [showPictureModal, setShowPictureModal] = useState(false);
+
+  const isVerifiedAuthor = useMemo(() => {
+    if (authorIsVerified) return true;
+    try {
+      const cleanNick = (authorNickname || '').toLowerCase().replace(/^@/, '');
+      const vStr = localStorage.getItem('fuhsi_verifications_db');
+      if (vStr) {
+        const vList: any[] = JSON.parse(vStr);
+        const foundVerif = vList.find(
+          (req) =>
+            req.status === 'APPROVED' &&
+            (req.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
+              req.applicantNickname?.toLowerCase() === authorNickname.toLowerCase())
+        );
+        if (foundVerif) return true;
+      }
+      const uStr = localStorage.getItem('fuhsi_users_db');
+      if (uStr) {
+        const uList: any[] = JSON.parse(uStr);
+        const foundUser = uList.find(
+          (usr) =>
+            (usr.nickname || '').toLowerCase().replace(/^@/, '') === cleanNick ||
+            usr.id === authorNickname
+        );
+        if (foundUser && (foundUser.isVerified || foundUser.verificationStatus === 'approved')) return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  }, [authorNickname, authorIsVerified]);
 
   React.useEffect(() => {
     const handlePopState = () => {
@@ -170,7 +205,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-white truncate">{authorNickname}</h2>
                 <VerificationBadge 
-                  isVerified={Boolean(authorBadgeType) && authorBadgeType !== 'NONE'} 
+                  isVerified={isVerifiedAuthor} 
                   badgeType={authorBadgeType}
                   title={authorBadgeTitle}
                   showTitle 
@@ -248,6 +283,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                   key={post.id}
                   post={post}
                   currentUserNickname={currentUserNickname}
+                  userProfile={userProfile}
                   onLikeClick={onLikeClick}
                   onBookmarkClick={onBookmarkClick}
                   onCommentClick={(p) => {

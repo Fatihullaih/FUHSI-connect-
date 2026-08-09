@@ -44,10 +44,39 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   user,
   departmentRankings = DEFAULT_DEPARTMENTS,
   onSubmitVerificationRequest,
+  onAuthorClick,
 }) => {
   const [activeLeaderTab, setActiveLeaderTab] = useState<'students' | 'weekly' | 'departments' | 'badges' | 'verify'>('weekly');
   const [weeklySubCategory, setWeeklySubCategory] = useState<'engaging' | 'helpful' | 'trending'>('engaging');
   const [verifCategory, setVerifCategory] = useState('Trusted Student Leader (Clinical Skills Mentor)');
+
+  const checkIsVerified = (nickname?: string) => {
+    if (!nickname) return false;
+    try {
+      const cleanNick = nickname.toLowerCase().replace(/^@/, '');
+      const vStr = localStorage.getItem('fuhsi_verifications_db');
+      if (vStr) {
+        const vList: any[] = JSON.parse(vStr);
+        const found = vList.find(
+          (req) =>
+            req.status === 'APPROVED' &&
+            req.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick
+        );
+        if (found) return true;
+      }
+      const uStr = localStorage.getItem('fuhsi_users_db');
+      if (uStr) {
+        const uList: any[] = JSON.parse(uStr);
+        const foundU = uList.find(
+          (usr) => (usr.nickname || '').toLowerCase().replace(/^@/, '') === cleanNick
+        );
+        if (foundU && (foundU.isVerified || foundU.verificationStatus === 'approved')) return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
   const [verifStatement, setVerifStatement] = useState('');
   const [verifSubmitted, setVerifSubmitted] = useState(false);
 
@@ -239,7 +268,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                           >
                             {user.nickname}
                           </button>
-                          <VerificationBadge isVerified={(user as any).isVerified || user.badgeType === 'VERIFIED'} />
+                          <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
                       </div>
@@ -300,7 +329,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                           >
                             {user.nickname}
                           </button>
-                          <VerificationBadge isVerified={(user as any).isVerified || user.badgeType === 'VERIFIED'} />
+                          <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
                       </div>
@@ -392,7 +421,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                         <span className="font-extrabold text-slate-900 text-sm sm:text-base">
                           {student.nickname}
                         </span>
-                        <VerificationBadge isVerified={(student as any).isVerified || student.badgeType === 'VERIFIED'} showTitle />
+                        <VerificationBadge isVerified={checkIsVerified(student.nickname) || Boolean((student as any).isVerified)} showTitle />
                         {isCurrentUser && (
                           <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
                             YOU

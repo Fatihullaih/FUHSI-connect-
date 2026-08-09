@@ -22,8 +22,8 @@ export const INITIAL_POSTS: Post[] = [
   {
     id: 'post_1',
     authorNickname: '@FUHSI_SUG_Official',
-    authorBadgeType: 'GREEN',
-    authorBadgeTitle: 'SUG Welfare Executive',
+    authorBadgeType: 'NONE',
+    authorBadgeTitle: '',
     authorAvatarKey: 'caduceus',
     department: 'All Campus',
     content: '📢 OFFICIAL SUG NOTICE: Shuttle buses will resume early morning campus pickups tomorrow by 7:00 AM sharp at Ila Main Gate. Please ensure you have your FUHSI Student ID card displayed clearly.',
@@ -38,7 +38,8 @@ export const INITIAL_POSTS: Post[] = [
     pollOptB: 'No, staying at hostel',
     pollVotesA: 42,
     pollVotesB: 18,
-    isFlagged: false
+    isFlagged: false,
+    isVerified: false
   },
   {
     id: 'post_2',
@@ -54,13 +55,14 @@ export const INITIAL_POSTS: Post[] = [
     isLikedByMe: true,
     isBookmarkedByMe: false,
     isGhostMode: false,
-    isFlagged: false
+    isFlagged: false,
+    isVerified: false
   },
   {
     id: 'post_3',
     authorNickname: '@NurseQueen_Ila',
-    authorBadgeType: 'BLUE',
-    authorBadgeTitle: 'Clinical Skills Mentor',
+    authorBadgeType: 'NONE',
+    authorBadgeTitle: '',
     authorAvatarKey: 'stethoscope',
     department: 'Nursing Science',
     content: 'Practical examination reminders for 200L Nursing students: Sterile gloving & vitals assessment station checklist is available at the lab entrance bulletin board. Practice with your study partner today! 💉🩺',
@@ -70,13 +72,14 @@ export const INITIAL_POSTS: Post[] = [
     isLikedByMe: false,
     isBookmarkedByMe: false,
     isGhostMode: false,
-    isFlagged: false
+    isFlagged: false,
+    isVerified: false
   },
   {
     id: 'post_4',
     authorNickname: '@LabPro_MLS',
-    authorBadgeType: 'BLUE',
-    authorBadgeTitle: 'Lab Practical Helper',
+    authorBadgeType: 'NONE',
+    authorBadgeTitle: '',
     authorAvatarKey: 'microscope',
     department: 'Medical Lab Science',
     content: 'Found a black Littmann Stethoscope near the General Science Lecture Theater after BCH 201 lecture. Please verify your name tag with Admin to retrieve it at the MLS Departmental office.',
@@ -86,13 +89,14 @@ export const INITIAL_POSTS: Post[] = [
     isLikedByMe: false,
     isBookmarkedByMe: false,
     isGhostMode: false,
-    isFlagged: false
+    isFlagged: false,
+    isVerified: false
   },
   {
     id: 'post_sp1',
     authorNickname: '@Ila_Campus_Prints',
-    authorBadgeType: 'PURPLE',
-    authorBadgeTitle: 'Campus Business',
+    authorBadgeType: 'NONE',
+    authorBadgeTitle: '',
     authorAvatarKey: 'pill',
     department: 'Services & Businesses',
     content: '⚡ SPONSORED: Fast 24/7 Color Printing, Project Binding & Past Question Photocopying right opposite Ila Campus Gate 2! Student discount: ₦30 per page. Free WhatsApp PDF submission for instant pickup!',
@@ -105,7 +109,8 @@ export const INITIAL_POSTS: Post[] = [
     isSponsored: true,
     sponsorName: 'Ila Print & Digital Services',
     sponsorActionUrl: 'https://wa.me/2348000000000',
-    isFlagged: false
+    isFlagged: false,
+    isVerified: false
   }
 ];
 
@@ -117,16 +122,18 @@ export const INITIAL_COMMENTS: Comment[] = [
     authorBadgeType: 'NONE',
     authorAvatarKey: 'pill',
     content: 'Thank you SUG executive team! Does this shuttle schedule also apply on Saturday morning lectures?',
-    timestamp: '8 mins ago'
+    timestamp: '8 mins ago',
+    isVerified: false
   },
   {
     id: 'c_2',
     postId: 'post_1',
     authorNickname: '@FUHSI_SUG_Official',
-    authorBadgeType: 'GREEN',
+    authorBadgeType: 'NONE',
     authorAvatarKey: 'caduceus',
     content: 'Yes, Saturday morning shuttles run from 8:00 AM to 2:00 PM.',
-    timestamp: '5 mins ago'
+    timestamp: '5 mins ago',
+    isVerified: false
   }
 ];
 
@@ -255,16 +262,16 @@ export const INITIAL_REPORTS: Report[] = [
 ];
 
 export const TOP_LEADERBOARD_USERS: LeaderboardUser[] = [
-  { rank: 1, nickname: '@FUHSI_SUG_Official', department: 'Student Union Body', level: 'Executive', avatarKey: 'caduceus', badgeType: 'GREEN', reputationScore: 3850, title: 'SUG Welfare Committee' },
-  { rank: 2, nickname: '@IlaMedHero', department: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'BLUE', reputationScore: 2450, title: 'Class Rep & Tech Lead' },
-  { rank: 3, nickname: '@FutureDoctor', department: 'Medicine & Surgery', level: '400L', avatarKey: 'stethoscope', badgeType: 'GOLD', reputationScore: 2180, title: 'Academic Study Lead' },
-  { rank: 4, nickname: '@NurseQueen_Ila', department: 'Nursing Science', level: '300L', avatarKey: 'stethoscope', badgeType: 'BLUE', reputationScore: 1890, title: 'Clinical Skills Mentor' },
-  { rank: 5, nickname: '@LabPro_MLS', department: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'BLUE', reputationScore: 1620, title: 'Lab Practical Helper' },
-  { rank: 6, nickname: '@PreClinicalPro', department: 'Anatomy', level: '200L', avatarKey: 'caduceus', badgeType: 'NONE', reputationScore: 1250, title: 'Histology Contributor' },
-  { rank: 7, nickname: '@PharmBoss', department: 'Pharmacy', level: '300L', avatarKey: 'pill', badgeType: 'NONE', reputationScore: 980, title: 'Pharmacology Helper' },
-  { rank: 8, nickname: '@PhysoChamp', department: 'Physiology', level: '200L', avatarKey: 'stethoscope', badgeType: 'NONE', reputationScore: 760, title: 'CA Study Group Lead' },
-  { rank: 9, nickname: '@RadiologyExpert', department: 'Radiography', level: '400L', avatarKey: 'microscope', badgeType: 'NONE', reputationScore: 540, title: 'X-Ray Guide Creator' },
-  { rank: 10, nickname: '@BioChemWhiz', department: 'Biochemistry', level: '100L', avatarKey: 'pill', badgeType: 'NONE', reputationScore: 320, title: 'Enzyme Notes Share' }
+  { rank: 1, nickname: '@FUHSI_SUG_Official', department: 'Student Union Body', level: 'Executive', avatarKey: 'caduceus', badgeType: 'NONE', reputationScore: 3850, title: '' },
+  { rank: 2, nickname: '@IlaMedHero', department: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'NONE', reputationScore: 2450, title: '' },
+  { rank: 3, nickname: '@FutureDoctor', department: 'Medicine & Surgery', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE', reputationScore: 2180, title: '' },
+  { rank: 4, nickname: '@NurseQueen_Ila', department: 'Nursing Science', level: '300L', avatarKey: 'stethoscope', badgeType: 'NONE', reputationScore: 1890, title: '' },
+  { rank: 5, nickname: '@LabPro_MLS', department: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'NONE', reputationScore: 1620, title: '' },
+  { rank: 6, nickname: '@PreClinicalPro', department: 'Anatomy', level: '200L', avatarKey: 'caduceus', badgeType: 'NONE', reputationScore: 1250, title: '' },
+  { rank: 7, nickname: '@PharmBoss', department: 'Pharmacy', level: '300L', avatarKey: 'pill', badgeType: 'NONE', reputationScore: 980, title: '' },
+  { rank: 8, nickname: '@PhysoChamp', department: 'Physiology', level: '200L', avatarKey: 'stethoscope', badgeType: 'NONE', reputationScore: 760, title: '' },
+  { rank: 9, nickname: '@RadiologyExpert', department: 'Radiography', level: '400L', avatarKey: 'microscope', badgeType: 'NONE', reputationScore: 540, title: '' },
+  { rank: 10, nickname: '@BioChemWhiz', department: 'Biochemistry', level: '100L', avatarKey: 'pill', badgeType: 'NONE', reputationScore: 320, title: '' }
 ];
 
 export const INITIAL_ACHIEVEMENTS = [
@@ -396,34 +403,34 @@ export const INITIAL_VERIFICATION_CANDIDATES = [
     commentsCount: 148,
     qualityPostsCount: 31,
     strikes: 0,
-    status: 'APPROVED_VERIFIED' as const,
+    status: 'ELIGIBLE_PENDING_ADMIN' as const,
     submittedAt: '3 days ago'
   }
 ];
 
 export const WEEKLY_CAMPUS_RANKINGS = {
   topEngaging: [
-    { rank: 1, nickname: '@FutureDoctor', department: 'Medicine & Surgery', level: '400L', avatarKey: 'stethoscope', badgeType: 'GOLD' as const, badgeTitle: 'Academic Study Lead', metricLabel: 'Weekly Engagements', metricValue: '342 interactions', changeTag: '⬆️ +2 ranks' },
-    { rank: 2, nickname: '@IlaMedHero', department: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'BLUE' as const, badgeTitle: 'Class Rep & Tech Lead', metricLabel: 'Weekly Engagements', metricValue: '298 interactions', changeTag: '🔥 Hot' },
-    { rank: 3, nickname: '@NurseQueen_Ila', department: 'Nursing Science', level: '300L', avatarKey: 'stethoscope', badgeType: 'BLUE' as const, badgeTitle: 'Clinical Skills Mentor', metricLabel: 'Weekly Engagements', metricValue: '254 interactions', changeTag: '⭐ Steady' },
+    { rank: 1, nickname: '@FutureDoctor', department: 'Medicine & Surgery', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, badgeTitle: '', metricLabel: 'Weekly Engagements', metricValue: '342 interactions', changeTag: '⬆️ +2 ranks' },
+    { rank: 2, nickname: '@IlaMedHero', department: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'NONE' as const, badgeTitle: '', metricLabel: 'Weekly Engagements', metricValue: '298 interactions', changeTag: '🔥 Hot' },
+    { rank: 3, nickname: '@NurseQueen_Ila', department: 'Nursing Science', level: '300L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, badgeTitle: '', metricLabel: 'Weekly Engagements', metricValue: '254 interactions', changeTag: '⭐ Steady' },
     { rank: 4, nickname: '@PharmBoss', department: 'Pharmacy', level: '300L', avatarKey: 'pill', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '190 interactions', changeTag: '⬆️ +4 ranks' },
-    { rank: 5, nickname: '@LabPro_MLS', department: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'BLUE' as const, metricLabel: 'Weekly Engagements', metricValue: '175 interactions', changeTag: '⭐ Steady' },
+    { rank: 5, nickname: '@LabPro_MLS', department: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '175 interactions', changeTag: '⭐ Steady' },
     { rank: 6, nickname: '@PreClinicalPro', department: 'Anatomy', level: '200L', avatarKey: 'caduceus', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '148 interactions', changeTag: '⬆️ +1 rank' },
     { rank: 7, nickname: '@PhysoChamp', department: 'Physiology', level: '200L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '132 interactions', changeTag: '⭐ Steady' },
-    { rank: 8, nickname: '@QueenNurse', department: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'GOLD' as const, metricLabel: 'Weekly Engagements', metricValue: '115 interactions', changeTag: '⭐ Steady' },
+    { rank: 8, nickname: '@QueenNurse', department: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '115 interactions', changeTag: '⭐ Steady' },
     { rank: 9, nickname: '@RadiologyExpert', department: 'Radiography', level: '400L', avatarKey: 'microscope', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '98 interactions', changeTag: '⬆️ +2 ranks' },
     { rank: 10, nickname: '@BioChemWhiz', department: 'Biochemistry', level: '100L', avatarKey: 'pill', badgeType: 'NONE' as const, metricLabel: 'Weekly Engagements', metricValue: '84 interactions', changeTag: '🆕 New' }
   ],
   topHelpful: [
-    { rank: 1, nickname: '@IlaMedHero', department: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'BLUE' as const, metricLabel: 'Study Downloads', metricValue: '1,420 downloads', changeTag: '🥇 Top Helper' },
-    { rank: 2, nickname: '@LabPro_MLS', department: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'BLUE' as const, metricLabel: 'Study Downloads', metricValue: '980 downloads', changeTag: '🥈 Silver Helper' },
-    { rank: 3, nickname: '@FutureDoctor', department: 'Medicine & Surgery', level: '400L', avatarKey: 'stethoscope', badgeType: 'GOLD' as const, metricLabel: 'Study Downloads', metricValue: '860 downloads', changeTag: '🥉 Bronze Helper' },
-    { rank: 4, nickname: '@NurseQueen_Ila', department: 'Nursing Science', level: '300L', avatarKey: 'stethoscope', badgeType: 'BLUE' as const, metricLabel: 'Study Downloads', metricValue: '640 downloads', changeTag: '⭐ Steady' },
+    { rank: 1, nickname: '@IlaMedHero', department: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '1,420 downloads', changeTag: '🥇 Top Helper' },
+    { rank: 2, nickname: '@LabPro_MLS', department: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '980 downloads', changeTag: '🥈 Silver Helper' },
+    { rank: 3, nickname: '@FutureDoctor', department: 'Medicine & Surgery', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '860 downloads', changeTag: '🥉 Bronze Helper' },
+    { rank: 4, nickname: '@NurseQueen_Ila', department: 'Nursing Science', level: '300L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '640 downloads', changeTag: '⭐ Steady' },
     { rank: 5, nickname: '@PreClinicalPro', department: 'Anatomy', level: '200L', avatarKey: 'caduceus', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '510 downloads', changeTag: '⬆️ +3 ranks' },
     { rank: 6, nickname: '@PharmBoss', department: 'Pharmacy', level: '300L', avatarKey: 'pill', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '430 downloads', changeTag: '⭐ Steady' },
     { rank: 7, nickname: '@PhysoChamp', department: 'Physiology', level: '200L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '390 downloads', changeTag: '⭐ Steady' },
     { rank: 8, nickname: '@RadiologyExpert', department: 'Radiography', level: '400L', avatarKey: 'microscope', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '310 downloads', changeTag: '⭐ Steady' },
-    { rank: 9, nickname: '@QueenNurse', department: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'GOLD' as const, metricLabel: 'Study Downloads', metricValue: '280 downloads', changeTag: '⭐ Steady' },
+    { rank: 9, nickname: '@QueenNurse', department: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '280 downloads', changeTag: '⭐ Steady' },
     { rank: 10, nickname: '@BioChemWhiz', department: 'Biochemistry', level: '100L', avatarKey: 'pill', badgeType: 'NONE' as const, metricLabel: 'Study Downloads', metricValue: '210 downloads', changeTag: '🆕 New' }
   ],
   topTrendingPosts: [

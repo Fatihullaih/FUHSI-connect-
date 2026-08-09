@@ -1,11 +1,11 @@
 import { Post } from '../types';
 
 const SAMPLE_AUTHORS = [
-  { nickname: '@MedicCadet_Ila', dept: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'BLUE', badgeTitle: 'Class Rep' },
-  { nickname: '@NurseTutor_Faith', dept: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'GOLD', badgeTitle: 'Clinical Mentor' },
+  { nickname: '@MedicCadet_Ila', dept: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'NONE', badgeTitle: '' },
+  { nickname: '@NurseTutor_Faith', dept: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE', badgeTitle: '' },
   { nickname: '@BioChemEnthusiast', dept: 'Biochemistry', level: '200L', avatarKey: 'pill', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@MLS_LabLead', dept: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'BLUE', badgeTitle: 'Lab Practical Helper' },
-  { nickname: '@SUG_WelfareExec', dept: 'Student Union Body', level: 'Executive', avatarKey: 'caduceus', badgeType: 'GREEN', badgeTitle: 'SUG Executive' },
+  { nickname: '@MLS_LabLead', dept: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'NONE', badgeTitle: '' },
+  { nickname: '@SUG_WelfareExec', dept: 'Student Union Body', level: 'Executive', avatarKey: 'caduceus', badgeType: 'NONE', badgeTitle: '' },
   { nickname: '@PhysioGenius', dept: 'Physiology', level: '300L', avatarKey: 'stethoscope', badgeType: 'NONE', badgeTitle: '' },
   { nickname: '@PharmD_Scholar', dept: 'Pharmacy', level: '200L', avatarKey: 'pill', badgeType: 'NONE', badgeTitle: '' },
   { nickname: '@AnatomyPro_Ila', dept: 'Anatomy', level: '200L', avatarKey: 'caduceus', badgeType: 'NONE', badgeTitle: '' },

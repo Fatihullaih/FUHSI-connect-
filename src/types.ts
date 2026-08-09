@@ -29,6 +29,9 @@ export interface UserProfile {
   reputationPoints?: number;
   isVerified?: boolean;
   isApproved?: boolean;
+  isDeclined?: boolean;
+  declineReason?: string;
+  isAdmin?: boolean;
   isPremiumUser?: boolean;
   strikes?: number;
   isBanned?: boolean;

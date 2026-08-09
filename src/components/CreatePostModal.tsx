@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PostCategory, UserProfile } from '../types';
 import { compressImageFile } from '../utils/imageUtils';
 import { AvatarIcon } from './AvatarIcon';
+import { VerificationModal } from './VerificationModal';
+import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { X, Sparkles, Send, ShieldCheck, BarChart2, AlertTriangle, Image as ImageIcon, Video as VideoIcon, Upload, Trash2, Building2, Bell, Crown, Lock, Plus } from 'lucide-react';
 
 interface CreatePostModalProps {
@@ -26,6 +28,7 @@ interface CreatePostModalProps {
   ) => void;
   onCreatePost?: (content: string, category: PostCategory, customNickname?: string) => void;
   checkDoxxingThreats?: (text: string) => boolean;
+  onOpenVerification?: (data?: any) => void;
 }
 
 // Target Audience Options - General Campus is Priority 1 listed first, followed by Faculties & Dept Abbreviations
@@ -51,19 +54,6 @@ const TARGET_AUDIENCE_OPTIONS = [
   { label: '🦶 PRT - Prosthetics & Orthotics', value: 'PRT' },
 ];
 
-const SAMPLE_IMAGE_PRESETS = [
-  { name: 'Lecture Notes', url: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&auto=format&fit=crop&q=80' },
-  { name: 'Stethoscope & Ward', url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&auto=format&fit=crop&q=80' },
-  { name: 'Lab Microscope', url: 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=800&auto=format&fit=crop&q=80' },
-  { name: 'Medical Anatomy', url: 'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=800&auto=format&fit=crop&q=80' },
-  { name: 'Ila Campus Life', url: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&auto=format&fit=crop&q=80' },
-];
-
-const SAMPLE_VIDEO_PRESETS = [
-  { name: 'Surgical Anatomy Demonstration', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' },
-  { name: 'Laboratory Clinical Procedure', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
-];
-
 export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   userProfile,
   user,
@@ -72,17 +62,50 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onSubmit,
   onCreatePost,
   checkDoxxingThreats,
+  onOpenVerification,
 }) => {
   const currentUser = userProfile || user || INITIAL_USER_PROFILE;
-  const isPremiumUser = Boolean(currentUser?.badgeType && currentUser.badgeType !== 'NONE') || Boolean(currentUser?.reputationScore && currentUser.reputationScore >= 1000) || Boolean(currentUser?.badgeTitle);
+
+  const isVerifiedUser = useMemo(() => {
+    if (currentUser?.isVerified || currentUser?.verificationStatus === 'approved') return true;
+    try {
+      const cleanNick = (currentUser?.nickname || '').toLowerCase().replace(/^@/, '');
+      const vStr = localStorage.getItem('fuhsi_verifications_db');
+      if (vStr) {
+        const vList: any[] = JSON.parse(vStr);
+        const found = vList.find(
+          (req) =>
+            req.status === 'APPROVED' &&
+            (req.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
+              req.applicantNickname?.toLowerCase() === (currentUser?.nickname || '').toLowerCase())
+        );
+        if (found) return true;
+      }
+      const uStr = localStorage.getItem('fuhsi_users_db');
+      if (uStr) {
+        const uList: any[] = JSON.parse(uStr);
+        const foundU = uList.find(
+          (usr) =>
+            (usr.nickname || '').toLowerCase().replace(/^@/, '') === cleanNick ||
+            usr.id === currentUser?.id
+        );
+        if (foundU && (foundU.isVerified || foundU.verificationStatus === 'approved')) return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  }, [currentUser]);
 
   const [content, setContent] = useState('');
   const [targetDepartment, setTargetDepartment] = useState('General Campus');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [showImageInput, setShowImageInput] = useState(false);
   const [videoUri, setVideoUri] = useState('');
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [showVideoInput, setShowVideoInput] = useState(false);
-  const [showPremiumVideoModal, setShowPremiumVideoModal] = useState(false);
+  const [showVerifiedVideoModal, setShowVerifiedVideoModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [hasPoll, setHasPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
@@ -142,7 +165,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     }
 
     setImageUrls((prev) => [...prev, ...newProcessedImages].slice(0, 2));
-    // Clear input value so same file can be selected again if removed
     e.target.value = '';
   };
 
@@ -152,21 +174,75 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    setVideoError(null);
+    const tempVideo = document.createElement('video');
+    tempVideo.preload = 'metadata';
+    const tempUrl = URL.createObjectURL(file);
+    tempVideo.src = tempUrl;
+
+    tempVideo.onloadedmetadata = () => {
+      URL.revokeObjectURL(tempUrl);
+      if (tempVideo.duration > 90) {
+        setVideoError('Video exceeds maximum duration of 1 minute 30 seconds.');
+        setVideoUri('');
+        e.target.value = '';
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setVideoUri(reader.result as string);
       };
       reader.readAsDataURL(file);
-    }
+    };
+
+    tempVideo.onerror = () => {
+      URL.revokeObjectURL(tempUrl);
+      setVideoError('Failed to load video file. Please select a valid video.');
+      e.target.value = '';
+    };
   };
 
   const handleVideoClick = () => {
-    if (isPremiumUser) {
+    if (isVerifiedUser) {
       setShowVideoInput(!showVideoInput);
     } else {
-      setShowPremiumVideoModal(true);
+      setShowVerifiedVideoModal(true);
     }
+  };
+
+  const handleVerificationSubmit = (data: any) => {
+    try {
+      const existingReqs = JSON.parse(localStorage.getItem('fuhsi_verifications_db') || '[]');
+      const newReq = {
+        id: `verif_req_${Date.now()}`,
+        applicantNickname: currentUser.nickname,
+        applicantFullName: currentUser.realName || currentUser.nickname,
+        applicantEmail: currentUser.studentEmail || 'N/A',
+        applicantPhone: currentUser.emergencyHomePhone || 'N/A',
+        department: currentUser.department || 'N/A',
+        level: currentUser.level || 'N/A',
+        category: `${data.accountType || 'Student'} Verification`,
+        accountType: data.accountType || 'Student',
+        positionTitle: data.positionTitle || '',
+        matricNumber: currentUser.matricNumber || 'N/A',
+        proofDetails: data.proofDetails || 'Standard Verification Request',
+        paymentRef: data.paymentRef || `SQUADCO-${Math.floor(100000 + Math.random() * 900000)}`,
+        amountPaid: data.amountPaid || 1500,
+        submittedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        status: 'ELIGIBLE_PENDING_ADMIN',
+      };
+      localStorage.setItem('fuhsi_verifications_db', JSON.stringify([newReq, ...existingReqs]));
+
+      if (onOpenVerification) {
+        onOpenVerification(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setShowVerificationModal(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -184,7 +260,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         category: 'General',
         imageUrl: imageUrls[0] || undefined,
         imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-        videoUri: videoUri.trim() || undefined,
+        videoUri: isVerifiedUser ? (videoUri.trim() || undefined) : undefined,
         pollQuestion: isValidPoll ? pollQuestion.trim() : undefined,
         pollOptions: isValidPoll ? validPollOptions : undefined,
         pollOptA: isValidPoll ? validPollOptions[0] : undefined,
@@ -263,21 +339,14 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
           {/* Target Feed / Campus Faculty Selector (OPTIONAL) */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Building2 size={14} className="text-teal-600" />
-                Target Audience / Campus Faculty <span className="text-[10px] font-medium text-slate-400">(Optional)</span>
-              </span>
-              {targetDepartment !== 'General Campus' && (
-                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
-                  <Bell size={10} /> Priority Notification Sync
-                </span>
-              )}
+            <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <Building2 size={14} className="text-teal-600" />
+              Target Audience / Campus Faculty <span className="text-[10px] font-medium text-slate-400">(Optional)</span>
             </label>
             <select
               value={targetDepartment}
               onChange={(e) => setTargetDepartment(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors cursor-pointer"
             >
               {TARGET_AUDIENCE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -285,15 +354,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-              {targetDepartment === 'General Campus' ? (
-                '🌐 Broadcasts generally to the main campus feed for all FUHSI students.'
-              ) : (
-                <span className="text-teal-800 font-semibold">
-                  ⚡ Synchronizes automatically to all students in <span className="font-extrabold underline">{targetDepartment}</span> with a priority feed notification!
-                </span>
-              )}
-            </p>
           </div>
 
           {/* Post Content Area */}
@@ -302,7 +362,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               rows={4}
               value={content}
               onChange={(e) => handleContentChange(e.target.value)}
-              placeholder="What's happening on campus? Share revision notes, ask about clinical postings, or voice a concern..."
+              placeholder="What's happening?"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
             />
           </div>
@@ -314,25 +374,29 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowImageInput(!showImageInput)}
-                className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline"
+                className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline cursor-pointer"
               >
                 <ImageIcon size={16} />
-                <span>{imageUrls.length > 0 ? `📷 ${imageUrls.length}/2 Attached` : '+ Attach Image / Diagram'}</span>
+                <span>{imageUrls.length > 0 ? `📷 ${imageUrls.length}/2 Attached` : '+ Attach Image'}</span>
               </button>
 
-              {/* Video Toggle (Premium Only) */}
+              {/* Video Toggle (Verified Feature) */}
               <button
                 type="button"
                 onClick={handleVideoClick}
-                className={`text-xs font-bold flex items-center gap-1.5 hover:underline ${
-                  isPremiumUser ? 'text-indigo-700' : 'text-purple-600'
+                className={`text-xs font-bold flex items-center gap-1.5 hover:underline cursor-pointer ${
+                  isVerifiedUser ? 'text-indigo-700' : 'text-slate-600'
                 }`}
               >
                 <VideoIcon size={16} />
-                <span>{videoUri ? '🎥 Video Attached' : '+ Attach Video'}</span>
-                {!isPremiumUser && (
-                  <span className="text-[9px] font-extrabold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-purple-200">
-                    <Crown size={10} /> PRO
+                <span>{videoUri ? '🎥 Video Attached' : '+ Upload Video'}</span>
+                {isVerifiedUser ? (
+                  <span className="text-[9px] font-extrabold bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200">
+                    <ShieldCheck size={10} /> VERIFIED
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-extrabold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-amber-200">
+                    <Lock size={10} /> VERIFIED ONLY
                   </span>
                 )}
               </button>
@@ -349,7 +413,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setImageUrls([])}
-                      className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1"
+                      className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <Trash2 size={13} />
                       <span>Clear All</span>
@@ -361,7 +425,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 {imageUrls.length < 2 ? (
                   <label className="cursor-pointer bg-teal-600 hover:bg-teal-700 text-white rounded-xl p-3 text-xs font-extrabold flex items-center justify-center gap-2 transition-colors shadow-xs">
                     <Upload size={16} />
-                    <span>{imageUrls.length === 0 ? 'Click to Upload Image(s) (Up to 2)' : '+ Add 2nd Image'}</span>
+                    <span>{imageUrls.length === 0 ? 'Click to Select Image from Device (Max 2)' : '+ Add 2nd Image'}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -376,31 +440,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                   </p>
                 )}
 
-                {/* Preset sample images */}
-                {imageUrls.length < 2 && (
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Or attach a campus sample image:
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {SAMPLE_IMAGE_PRESETS.map((preset) => (
-                        <button
-                          key={preset.name}
-                          type="button"
-                          onClick={() => {
-                            if (imageUrls.length < 2) {
-                              setImageUrls((prev) => [...prev, preset.url].slice(0, 2));
-                            }
-                          }}
-                          className="text-[11px] px-2.5 py-1 rounded-lg border font-semibold bg-white text-slate-700 border-slate-200 hover:bg-teal-50 hover:border-teal-300 transition-all"
-                        >
-                          + {preset.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Attached Image Previews Grid */}
                 {imageUrls.length > 0 && (
                   <div className={`grid ${imageUrls.length === 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1`}>
@@ -413,7 +452,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveImage(idx)}
-                          className="absolute top-1.5 right-1.5 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md transition-colors"
+                          className="absolute top-1.5 right-1.5 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md transition-colors cursor-pointer"
                           title="Remove image"
                         >
                           <X size={14} />
@@ -425,36 +464,33 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               </div>
             )}
 
-            {/* Premium Video Input Drawer */}
-            {isPremiumUser && (showVideoInput || videoUri) && (
+            {/* Verified Video Input Drawer */}
+            {isVerifiedUser && (showVideoInput || videoUri || videoError) && (
               <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-indigo-950 flex items-center gap-1">
-                    <Crown size={14} className="text-amber-500" /> Premium Video Attachment
+                    <ShieldCheck size={14} className="text-emerald-600" /> Video Attachment
                   </span>
                   {videoUri && (
                     <button
                       type="button"
-                      onClick={() => setVideoUri('')}
-                      className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1"
+                      onClick={() => {
+                        setVideoUri('');
+                        setVideoError(null);
+                      }}
+                      className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <Trash2 size={13} />
-                      <span>Remove</span>
+                      <span>Remove Video</span>
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={videoUri}
-                    onChange={(e) => setVideoUri(e.target.value)}
-                    placeholder="Paste MP4 video URL (http://...)"
-                    className="flex-1 bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium focus:outline-none focus:border-indigo-500"
-                  />
-                  <label className="cursor-pointer bg-indigo-100 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded-lg px-3 py-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0">
-                    <Upload size={14} />
-                    <span>Upload MP4</span>
+                {/* Upload MP4 Button */}
+                {!videoUri && (
+                  <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl p-3 text-xs font-extrabold flex items-center justify-center gap-2 transition-colors shadow-xs w-full">
+                    <Upload size={16} />
+                    <span>Upload MP4 (Max length: 1m 30s)</span>
                     <input
                       type="file"
                       accept="video/*"
@@ -462,30 +498,15 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                       className="hidden"
                     />
                   </label>
-                </div>
+                )}
 
-                {/* Video presets */}
-                <div>
-                  <span className="text-[10px] font-bold text-indigo-700/80 uppercase tracking-wider block mb-1">
-                    Sample Clinical / Lecture Video Clips:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SAMPLE_VIDEO_PRESETS.map((preset) => (
-                      <button
-                        key={preset.name}
-                        type="button"
-                        onClick={() => setVideoUri(preset.url)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all ${
-                          videoUri === preset.url
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-100'
-                        }`}
-                      >
-                        {preset.name}
-                      </button>
-                    ))}
+                {/* Video Duration Error */}
+                {videoError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                    <span>{videoError}</span>
                   </div>
-                </div>
+                )}
 
                 {/* Video Preview */}
                 {videoUri && (
@@ -494,7 +515,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setVideoUri('')}
-                      className="absolute top-2 right-2 bg-slate-900/80 hover:bg-rose-600 text-white p-1 rounded-full transition-colors"
+                      className="absolute top-2 right-2 bg-slate-900/80 hover:bg-rose-600 text-white p-1 rounded-full transition-colors cursor-pointer"
+                      title="Remove video"
                     >
                       <X size={14} />
                     </button>
@@ -599,33 +621,62 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         </form>
       </div>
 
-      {/* Non-Premium Video Lock Modal */}
-      {showPremiumVideoModal && (
+      {/* Verified Video Lock Modal */}
+      {showVerifiedVideoModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto shadow-xs">
-              <Crown size={24} />
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
+              <Lock size={24} />
             </div>
-            <h4 className="font-extrabold text-slate-900 text-base">Video Uploads Reserved for Premium Members</h4>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Video attachments are available exclusively to students with active campus badges (Class Rep, SUG Executive, Tech Lead, or Gold badge members).
-            </p>
-            <div className="bg-purple-50 p-3 rounded-xl border border-purple-200 text-left text-xs space-y-1 text-purple-950">
-              <span className="font-bold block">How to unlock video posting:</span>
-              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-purple-900 font-medium">
-                <li>Reach 1,000+ Reputation Score via community likes</li>
-                <li>Request official badge approval in Moderation Council</li>
+            <div>
+              <h4 className="font-extrabold text-slate-900 text-base">Video Upload — Verified Feature</h4>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Video attachments (up to 1m 30s) are available exclusively to Verified accounts on FUHSI Connect.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-left text-xs space-y-2 text-slate-800 font-medium">
+              <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                <ShieldCheck size={16} />
+                <span>Verification Benefits Include:</span>
+              </div>
+              <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
+                <li className="flex items-center gap-1.5">✓ Upload clinical & lecture video posts</li>
+                <li className="flex items-center gap-1.5">✓ Verified checkmark across the platform</li>
+                <li className="flex items-center gap-1.5">✓ Higher trust and marketplace credibility</li>
               </ul>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowPremiumVideoModal(false)}
-              className="w-full py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shadow-md transition-colors"
-            >
-              Got It, Thank You
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowVerifiedVideoModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVerifiedVideoModal(false);
+                  setShowVerificationModal(true);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <ShieldCheck size={14} />
+                <span>Get Verified</span>
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {showVerificationModal && (
+        <VerificationModal
+          userProfile={currentUser}
+          onClose={() => setShowVerificationModal(false)}
+          onSubmitVerification={handleVerificationSubmit}
+        />
       )}
     </div>
   );

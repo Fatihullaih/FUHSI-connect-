@@ -10,6 +10,7 @@ import {
 } from './data/initialData';
 import fuhsiLogo from './assets/images/fuhsi_logo_1785485694958.jpg';
 import { calculateUserPoints } from './utils/reputationUtils';
+import { getApprovedMembersCount, getStoredUsers } from './utils/userDbUtils';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -35,29 +36,15 @@ export const App: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [appTotalMembers, setAppTotalMembers] = useState<number>(1);
+  const [appTotalMembers, setAppTotalMembers] = useState<number>(() => getApprovedMembersCount());
 
-  // Dynamically calculate total registered community members based on approved user accounts
+  // Dynamically calculate total registered community members based on approved user accounts only
   useEffect(() => {
     const updateCount = () => {
-      try {
-        const stored = localStorage.getItem('fuhsi_users_db');
-        if (stored) {
-          const list = JSON.parse(stored);
-          if (Array.isArray(list)) {
-            // Count ONLY approved user accounts (where isApproved is true or isAdmin is true)
-            const approvedList = list.filter((u: any) => u.isApproved === true || (u.isApproved !== false && u.isAdmin));
-            setAppTotalMembers(approvedList.length);
-            return;
-          }
-        }
-        setAppTotalMembers(1);
-      } catch (e) {
-        console.error(e);
-      }
+      setAppTotalMembers(getApprovedMembersCount());
     };
     updateCount();
-    const timer = setInterval(updateCount, 1500);
+    const timer = setInterval(updateCount, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -509,6 +496,20 @@ export const App: React.FC = () => {
     });
     if (selectedPost && selectedPost.id === postId) {
       setSelectedPost(null);
+    }
+  };
+
+  const handleEditPost = (postId: string, newContent: string) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return { ...p, content: newContent, text: newContent };
+        }
+        return p;
+      })
+    );
+    if (selectedPost && selectedPost.id === postId) {
+      setSelectedPost((prev) => (prev ? { ...prev, content: newContent, text: newContent } : null));
     }
   };
 
@@ -984,10 +985,10 @@ export const App: React.FC = () => {
             {/* Live Total Registered Members Indicator Badge (Non-clickable community size indicator) */}
             <div
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-900/80 border border-teal-600/50 text-teal-100 text-xs font-black select-none pointer-events-none cursor-default"
-              title="Total Registered FUHSI Connect Members"
+              title="Total Approved Registered FUHSI Connect Members"
             >
               <Users size={13} className="text-teal-300 shrink-0" />
-              <span>{appTotalMembers.toLocaleString()}</span>
+              <span>{appTotalMembers}</span>
             </div>
 
             {userProfile?.isAdmin && (
@@ -1028,6 +1029,7 @@ export const App: React.FC = () => {
             onBookmarkClick={handleBookmarkClick}
             onCommentClick={openPostDetail}
             onDeletePost={handleDeletePost}
+            onEditPost={handleEditPost}
             onAuthorClick={openAuthorProfile}
             onVotePoll={handleVotePoll}
             onReportPost={handleReportPost}
@@ -1336,6 +1338,7 @@ export const App: React.FC = () => {
           onToggleLike={handleLikeClick}
           onToggleBookmark={handleBookmarkClick}
           onDeletePost={handleDeletePost}
+          onEditPost={handleEditPost}
           onDeleteComment={handleDeleteComment}
           onVotePoll={handleVotePoll}
           onAuthorClick={(author) => {
@@ -1388,6 +1391,16 @@ export const App: React.FC = () => {
           onClose={closeModalUI}
           onSubmit={handleCreatePost}
           checkDoxxingThreats={checkDoxxingThreats}
+          onOpenVerification={(data) => {
+            if (userProfile) {
+              const updated = {
+                ...userProfile,
+                verificationStatus: 'pending' as const,
+              };
+              setUserProfile(updated);
+              localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+            }
+          }}
         />
       )}
 

@@ -667,6 +667,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           authorBadgeType={selectedAuthor.badgeType}
           authorBadgeTitle={selectedAuthor.badgeTitle}
           allPosts={posts}
+          userProfile={userProfile}
           onClose={() => setSelectedAuthor(null)}
           onCommentClick={(post) => {
             onSelectPost(post);

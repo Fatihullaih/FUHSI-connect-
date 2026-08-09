@@ -19,8 +19,11 @@ import {
   Info,
   CheckCircle2,
   ShieldAlert,
-  UserCheck
+  UserCheck,
+  Lock
 } from 'lucide-react';
+import { checkIsUserVerified } from '../utils/verificationUtils';
+import { VerificationModal } from '../components/VerificationModal';
 
 interface CampusHubScreenProps {
   userProfile: UserProfile | null;
@@ -80,6 +83,10 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   const [buyIntentType, setBuyIntentType] = useState<'interested' | 'buynow' | 'ready'>('ready');
   const [pledgeChecked, setPledgeChecked] = useState(false);
   const [buyIntentSuccess, setBuyIntentSuccess] = useState(false);
+  const [showMarketplaceLockModal, setShowMarketplaceLockModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  const isVerifiedUser = checkIsUserVerified(userProfile?.nickname, userProfile);
 
   // Admin Middleman Trade Desk Conversations State
   const [conversations, setConversations] = useState<ChatConversation[]>([
@@ -393,13 +400,19 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
             </div>
             <button
               onClick={() => {
-                setShowSellModal(true);
-                handleLoadSamplePhotos('Medical Equipment');
+                if (isVerifiedUser) {
+                  setShowSellModal(true);
+                  handleLoadSamplePhotos('Medical Equipment');
+                } else {
+                  setShowMarketplaceLockModal(true);
+                }
               }}
-              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors shrink-0"
+              className={`px-3.5 py-2 rounded-xl text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
+                isVerifiedUser ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-800 hover:bg-teal-900'
+              }`}
             >
-              <Plus className="w-4 h-4" />
-              Post Item to Sell
+              {isVerifiedUser ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-300" />}
+              <span>Post Item to Sell</span>
             </button>
           </div>
 
@@ -511,31 +524,40 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     <div className="grid grid-cols-2 gap-2 pt-1">
                       <button
                         onClick={() => {
-                          setBuyModalItem(item);
-                          setBuyIntentType('ready');
+                          if (isVerifiedUser) {
+                            setBuyModalItem(item);
+                            setBuyIntentType('ready');
+                          } else {
+                            setShowMarketplaceLockModal(true);
+                          }
                         }}
-                        className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                        className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        <ShieldCheck className="w-4 h-4" />
+                        {isVerifiedUser ? <ShieldCheck className="w-4 h-4" /> : <Lock className="w-3.5 h-3.5 text-amber-300" />}
                         <span>Request to Buy (via Admin)</span>
                       </button>
 
                       {item.sellerNickname === userProfile?.nickname ? (
                         <button
                           onClick={() => setSoldModalItem(item)}
-                          className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors"
+                          className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors cursor-pointer"
                         >
                           Mark Sold
                         </button>
                       ) : (
                         <button
                           onClick={() => {
-                            setBuyModalItem(item);
-                            setBuyIntentType('buynow');
+                            if (isVerifiedUser) {
+                              setBuyModalItem(item);
+                              setBuyIntentType('buynow');
+                            } else {
+                              setShowMarketplaceLockModal(true);
+                            }
                           }}
-                          className="py-2 px-3 rounded-xl bg-teal-900 hover:bg-slate-900 text-white font-bold text-xs transition-colors"
+                          className="py-2 px-3 rounded-xl bg-teal-900 hover:bg-slate-900 text-white font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
                         >
-                          ⚡ Buy Now
+                          {!isVerifiedUser && <Lock className="w-3.5 h-3.5 text-amber-300" />}
+                          <span>⚡ Buy Now</span>
                         </button>
                       )}
                     </div>
@@ -1149,6 +1171,65 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Marketplace Lock Modal for Unverified Users */}
+      {showMarketplaceLockModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
+              <Lock size={24} />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-slate-900 text-base">Marketplace Access — Verified Feature</h4>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Posting listings and trading on the FUHSI Marketplace is exclusive to Verified accounts to prevent scams, verify item ownership, and maintain high trust.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-left text-xs space-y-1.5 text-slate-800 font-medium">
+              <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                <ShieldCheck size={16} />
+                <span>Get Verified to unlock:</span>
+              </div>
+              <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
+                <li className="flex items-center gap-1.5">✓ Post items for sale with Admin Middleman Shield</li>
+                <li className="flex items-center gap-1.5">✓ Request to buy items and trade securely</li>
+                <li className="flex items-center gap-1.5">✓ Create custom threads with video attachments</li>
+                <li className="flex items-center gap-1.5">✓ Edit published threads & priority support</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowMarketplaceLockModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMarketplaceLockModal(false);
+                  setShowVerificationModal(true);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <ShieldCheck size={14} />
+                <span>Get Verified</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showVerificationModal && (
+        <VerificationModal
+          userProfile={userProfile}
+          onClose={() => setShowVerificationModal(false)}
+          onSubmitVerification={() => setShowVerificationModal(false)}
+        />
       )}
     </div>
   );

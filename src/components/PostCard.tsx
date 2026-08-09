@@ -1,9 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Post, Comment, PostCategory, BadgeType, PollOption } from '../types';
+import { Post, Comment, PostCategory, BadgeType, PollOption, UserProfile } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
+import { VerificationModal } from './VerificationModal';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { ImagePreviewModal } from './ImagePreviewModal';
+import { CampusVideoPlayer } from './CampusVideoPlayer';
+import { checkIsUserVerified } from '../utils/verificationUtils';
 import { 
   Heart, 
   MessageSquare, 
@@ -20,17 +23,22 @@ import {
   Check,
   Zap,
   Maximize2,
-  Trash2
+  Trash2,
+  Edit3,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 interface PostCardProps {
   post: Post;
   comments?: Comment[];
   currentUserNickname?: string;
+  userProfile?: UserProfile | null;
   onLikeClick?: (post: Post) => void;
   onBookmarkClick?: (post: Post) => void;
   onCommentClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
   onVotePoll?: (post: Post, option: 'A' | 'B') => void;
   onReportPost?: (post: Post, reason: string) => void;
   onAuthorClick?: (post: Post) => void;
@@ -45,10 +53,12 @@ export const PostCard: React.FC<PostCardProps> = ({
   post,
   comments = [],
   currentUserNickname,
+  userProfile,
   onLikeClick,
   onBookmarkClick,
   onCommentClick,
   onDeletePost,
+  onEditPost,
   onVotePoll,
   onReportPost,
   onAuthorClick,
@@ -65,11 +75,19 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [copiedShare, setCopiedShare] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(post.content);
+  const [showEditLockModal, setShowEditLockModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   const isMyPost = Boolean(
     (post as any).isOwner ||
     (currentUserNickname && post.authorNickname?.toLowerCase() === currentUserNickname.toLowerCase())
   );
+
+  const isVerifiedUser = useMemo(() => {
+    return checkIsUserVerified(post.authorNickname || currentUserNickname, userProfile);
+  }, [post.authorNickname, currentUserNickname, userProfile]);
 
   const likesCount = post.likesCount ?? post.upvotes ?? 0;
   const isLiked = post.isLikedByMe || post.userVote === 'up';
@@ -191,7 +209,7 @@ export const PostCard: React.FC<PostCardProps> = ({
                 </button>
 
                 <VerificationBadge 
-                  isVerified={post.isVerified || (post as any).authorIsVerified || (Boolean(post.authorBadgeType) && post.authorBadgeType !== 'NONE')} 
+                  isVerified={Boolean(post.isVerified || (post as any).authorIsVerified || isVerifiedUser)} 
                   badgeType={post.authorBadgeType}
                   title={post.authorBadgeTitle}
                   showTitle 
@@ -212,14 +230,36 @@ export const PostCard: React.FC<PostCardProps> = ({
               {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
             </button>
             {isMyPost && (
-              <button
-                type="button"
-                onClick={() => setShowConfirmDelete(true)}
-                className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
-                title="Delete your thread"
-              >
-                <Trash2 size={18} />
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isVerifiedUser) {
+                      setIsEditing(true);
+                      setEditedContent(post.content);
+                    } else {
+                      setShowEditLockModal(true);
+                    }
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold ${
+                    isVerifiedUser
+                      ? 'text-indigo-600 hover:bg-indigo-50'
+                      : 'text-slate-400 hover:bg-slate-100'
+                  }`}
+                  title={isVerifiedUser ? 'Edit your thread' : 'Edit Thread (Verified Feature Only)'}
+                >
+                  <Edit3 size={16} />
+                  {!isVerifiedUser && <Lock size={12} className="text-amber-500" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(true)}
+                  className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                  title="Delete your thread"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -253,14 +293,48 @@ export const PostCard: React.FC<PostCardProps> = ({
           </div>
         )}
 
-        {/* Post Content */}
-        <p 
-          onClick={() => onCommentClick?.(post)}
-          className="mt-2 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal cursor-pointer hover:text-teal-950 transition-colors"
-          title="Click to view full thread, comments & replies"
-        >
-          {post.content}
-        </p>
+        {/* Post Content or Inline Edit */}
+        {isEditing ? (
+          <div className="mt-3 space-y-2">
+            <textarea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              rows={3}
+              className="w-full text-sm p-3 rounded-xl border border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-normal"
+              placeholder="Edit your thread content..."
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (editedContent.trim() && onEditPost) {
+                    onEditPost(post.id, editedContent.trim());
+                  }
+                  setIsEditing(false);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-extrabold hover:bg-teal-700 transition-colors shadow-xs cursor-pointer flex items-center gap-1"
+              >
+                <Check size={14} />
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p 
+            onClick={() => onCommentClick?.(post)}
+            className="mt-2 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal cursor-pointer hover:text-teal-950 transition-colors"
+            title="Click to view full thread, comments & replies"
+          >
+            {post.content}
+          </p>
+        )}
 
         {/* Attached Images (Supports up to 2 images) */}
         {(() => {
@@ -308,15 +382,13 @@ export const PostCard: React.FC<PostCardProps> = ({
           );
         })()}
 
-        {/* Attached Video (Premium Feature) */}
+        {/* Attached Video (Publicly Viewable; Download Exclusive to Verified) */}
         {post.videoUri && (
-          <div className="mt-3.5 rounded-xl overflow-hidden border border-indigo-200/90 bg-slate-950 relative">
-            <video
-              src={post.videoUri}
-              controls
-              className="w-full max-h-96 object-contain"
-            />
-          </div>
+          <CampusVideoPlayer
+            videoUri={post.videoUri}
+            userProfile={userProfile}
+            className="mt-3.5"
+          />
         )}
 
         {/* Optional Poll Component */}
@@ -576,6 +648,65 @@ export const PostCard: React.FC<PostCardProps> = ({
           imageUrl={previewImage}
           title={`Attachment by ${post.authorNickname}`}
           onClose={() => setPreviewImage(null)}
+        />
+      )}
+
+      {/* Edit Thread Lock Modal for Unverified Users */}
+      {showEditLockModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
+              <Lock size={24} />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-slate-900 text-base">Edit Thread — Verified Feature</h4>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Editing published threads and custom posts is exclusive to Verified accounts on FUHSI Connect to maintain content integrity and community trust.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-left text-xs space-y-1.5 text-slate-800 font-medium">
+              <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                <ShieldCheck size={16} />
+                <span>Get Verified to unlock:</span>
+              </div>
+              <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
+                <li className="flex items-center gap-1.5">✓ Live editing of your published threads</li>
+                <li className="flex items-center gap-1.5">✓ Create custom threads with video attachments</li>
+                <li className="flex items-center gap-1.5">✓ Verified checkmark across FUHSI Connect</li>
+                <li className="flex items-center gap-1.5">✓ Marketplace seller access & priority support</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEditLockModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditLockModal(false);
+                  setShowVerificationModal(true);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <ShieldCheck size={14} />
+                <span>Get Verified</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showVerificationModal && (
+        <VerificationModal
+          userProfile={userProfile || null}
+          onClose={() => setShowVerificationModal(false)}
+          onSubmitVerification={() => setShowVerificationModal(false)}
         />
       )}
     </article>

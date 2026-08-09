@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
+import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
 import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
@@ -70,12 +71,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   // Identity Lookup State
   const [lookupQuery, setLookupQuery] = useState('');
-  const [lookupResult, setLookupResult] = useState<{
-    realName: string;
-    matricNumber: string;
-    emergencyHomePhone: string;
-    department: string;
-  } | null>(null);
+  const [lookupResult, setLookupResult] = useState<UserProfile | null>(null);
+  const [lookupNotFound, setLookupNotFound] = useState(false);
 
   // Admin Hotline Chat State
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'admin'; text: string; time: string }>>([
@@ -110,61 +107,17 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   // Pending Student Registrations Approval State
   const [allUsersList, setAllUsersList] = useState<UserProfile[]>([]);
-  const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'ALL'>('PENDING');
+  const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'APPROVED' | 'DECLINED' | 'ALL'>('PENDING');
 
   const refreshUsersList = () => {
-    try {
-      const stored = localStorage.getItem('fuhsi_users_db');
-      if (stored) {
-        const list: UserProfile[] = JSON.parse(stored);
-        if (list && list.length > 0) {
-          setAllUsersList(list);
-          return;
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-    const defaultUsersList: UserProfile[] = [
-      {
-        ...INITIAL_USER_PROFILE,
-        isApproved: true,
-      },
-      {
-        id: 'usr_pending_demo_1',
-        nickname: '@FreshMedStudent',
-        realName: 'Adegoke Emmanuel Temitope',
-        matricNumber: '25/MBS/088',
-        emergencyHomePhone: '08023456789',
-        department: 'Medicine and Surgery',
-        level: '100L',
-        bio: 'Fresh 100L MBBS Student seeking account approval.',
-        isApproved: false,
-        isVerified: false,
-      },
-      {
-        id: 'usr_pending_demo_2',
-        nickname: '@NurseGrace_Ila',
-        realName: 'Olanrewaju Grace Omowumi',
-        matricNumber: '24/NSC/412',
-        emergencyHomePhone: '08134567890',
-        department: 'Nursing Science',
-        level: '200L',
-        bio: '200L Nursing student registered on FUHSI Connect.',
-        isApproved: false,
-        isVerified: false,
-      },
-    ];
-    setAllUsersList(defaultUsersList);
-    try {
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(defaultUsersList));
-    } catch (e) {
-      console.error(e);
-    }
+    const list = getStoredUsers();
+    setAllUsersList(list);
   };
 
   useEffect(() => {
     refreshUsersList();
+    const interval = setInterval(refreshUsersList, 1500);
+    return () => clearInterval(interval);
   }, []);
 
   const [approvalToast, setApprovalToast] = useState<string | null>(null);
@@ -173,18 +126,25 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     let targetEmail = '';
     let targetRealName = '';
     try {
-      const stored = localStorage.getItem('fuhsi_users_db');
-      let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
-      list = list.map((u) => {
+      const storedList = getStoredUsers();
+      const updatedList = storedList.map((u) => {
         if (u.id === userId || u.nickname.toLowerCase() === nick.toLowerCase()) {
           targetEmail = u.studentEmail || `${u.nickname.replace(/^@/, '')}@fuhsi.edu.ng`;
           targetRealName = u.realName || u.nickname;
-          return { ...u, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'FUHSI Student', isAdmin: false };
+          return {
+            ...u,
+            isApproved: true,
+            isDeclined: false,
+            badgeType: u.badgeType && u.badgeType !== 'NONE' ? u.badgeType : 'GREEN',
+            badgeTitle: u.badgeTitle && u.badgeTitle !== 'Pending Approval' ? u.badgeTitle : 'FUHSI Student',
+            isAdmin: false,
+          };
         }
         return u;
       });
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
-      setAllUsersList(list);
+
+      saveStoredUsers(updatedList);
+      setAllUsersList(updatedList);
 
       // Create official automated email object sent from fuhsiconnect@gmail.com
       const cleanNick = nick.toLowerCase().replace(/^@/, '');
@@ -237,7 +197,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
         if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
-          const updatedActive = { ...activeUser, isApproved: true, isVerified: true, badgeType: 'GREEN', badgeTitle: 'FUHSI Student', isAdmin: false };
+          const updatedActive = { ...activeUser, isApproved: true, isDeclined: false, badgeTitle: 'FUHSI Student' };
           localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
         }
       }
@@ -245,46 +205,32 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       console.error(err);
     }
 
-    setApprovalToast(`✉️ Email Notification Dispatched to ${targetEmail}!\n• Sender: FUHSI Connect <fuhsiconnect@gmail.com> [Do Not Reply]\n• Message: "Your FUHSI Connect account has been verified and approved. You can now log in and start using the platform."`);
-    setTimeout(() => setApprovalToast(null), 6000);
+    setApprovalToast(`✅ Account Approved & Active for ${nick}! Total Member Counter updated.`);
+    setTimeout(() => setApprovalToast(null), 5000);
   };
 
-  const handleRevokeRegistration = (userId: string, nick: string) => {
+  const handleDeclineRegistration = (userId: string, nick: string) => {
     try {
-      const stored = localStorage.getItem('fuhsi_users_db');
-      let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
-      list = list.map((u) => u.id === userId ? { ...u, isApproved: false, isAdmin: false } : u);
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
-      setAllUsersList(list);
-
-      const activeJson = localStorage.getItem('fuhsi_active_user');
-      if (activeJson) {
-        const activeUser: UserProfile = JSON.parse(activeJson);
-        if (activeUser && activeUser.id === userId) {
-          const updatedActive = { ...activeUser, isApproved: false, isAdmin: false };
-          localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
+      const storedList = getStoredUsers();
+      const updatedList = storedList.map((u) => {
+        if (u.id === userId || u.nickname.toLowerCase() === nick.toLowerCase()) {
+          return {
+            ...u,
+            isApproved: false,
+            isDeclined: true,
+            badgeTitle: 'Declined',
+          };
         }
-      }
-    } catch (err) {
-      console.error(err);
-    }
+        return u;
+      });
 
-    setApprovalToast(`Access restricted for ${nick}.`);
-    setTimeout(() => setApprovalToast(null), 3000);
-  };
-
-  const handleDeleteUserAccount = (userId: string, nick: string) => {
-    try {
-      const stored = localStorage.getItem('fuhsi_users_db');
-      let list: UserProfile[] = stored ? JSON.parse(stored) : allUsersList;
-      list = list.filter((u) => u.id !== userId);
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
-      setAllUsersList(list);
+      saveStoredUsers(updatedList);
+      setAllUsersList(updatedList);
 
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
-        if (activeUser && activeUser.id === userId) {
+        if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
           localStorage.removeItem('fuhsi_active_user');
         }
       }
@@ -292,7 +238,29 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       console.error(err);
     }
 
-    setApprovalToast(`Account deleted for ${nick}.`);
+    setApprovalToast(`❌ Account declined for ${nick}. Access restricted.`);
+    setTimeout(() => setApprovalToast(null), 4000);
+  };
+
+  const handleDeleteUserAccount = (userId: string, nick: string) => {
+    try {
+      const storedList = getStoredUsers();
+      const updatedList = storedList.filter((u) => u.id !== userId && u.nickname.toLowerCase() !== nick.toLowerCase());
+      saveStoredUsers(updatedList);
+      setAllUsersList(updatedList);
+
+      const activeJson = localStorage.getItem('fuhsi_active_user');
+      if (activeJson) {
+        const activeUser: UserProfile = JSON.parse(activeJson);
+        if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
+          localStorage.removeItem('fuhsi_active_user');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    setApprovalToast(`🗑️ Account deleted for ${nick}.`);
     setTimeout(() => setApprovalToast(null), 3000);
   };
 
@@ -327,25 +295,39 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     }
   ]);
 
-  const handleLookup = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!lookupQuery.trim()) return;
+  const handleLookup = (e?: React.FormEvent, searchOverride?: string) => {
+    if (e) e.preventDefault();
+    const query = (searchOverride !== undefined ? searchOverride : lookupQuery).trim();
+    if (!query) {
+      setLookupResult(null);
+      setLookupNotFound(false);
+      return;
+    }
 
-    // Simulate encrypted lookup in FUHSI Admin Database
-    if (lookupQuery.includes('1042') || lookupQuery.toLowerCase().includes('medhero')) {
-      setLookupResult({
-        realName: 'Adeyemo Oluwaseun Joseph',
-        matricNumber: '2023/1042',
-        emergencyHomePhone: '08031234567',
-        department: 'Medicine & Surgery (300L)',
-      });
+    const cleanQuery = query.toLowerCase().replace(/^@/, '');
+    const users = getStoredUsers();
+
+    const matched = users.find((u) => {
+      const uNick = (u.nickname || '').toLowerCase().replace(/^@/, '');
+      const uReal = (u.realName || '').toLowerCase();
+      const uMatric = (u.matricNumber || '').toLowerCase();
+      const uEmail = (u.studentEmail || '').toLowerCase();
+
+      return (
+        uNick === cleanQuery ||
+        uNick.includes(cleanQuery) ||
+        (uMatric && uMatric.includes(cleanQuery)) ||
+        (uReal && uReal.includes(cleanQuery)) ||
+        (uEmail && uEmail.includes(cleanQuery))
+      );
+    });
+
+    if (matched) {
+      setLookupResult(matched);
+      setLookupNotFound(false);
     } else {
-      setLookupResult({
-        realName: 'Okonkwo Chinedu Emmanuel',
-        matricNumber: '2022/0891',
-        emergencyHomePhone: '08098765432',
-        department: 'Nursing Science (400L)',
-      });
+      setLookupResult(null);
+      setLookupNotFound(true);
     }
   };
 
@@ -447,74 +429,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         </div>
       </div>
 
-      {/* ADMIN ONLY: FUHSI CONNECT SERVER FUND & TRANSPARENCY DESK */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 flex-wrap gap-2">
-          <div>
-            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <span>📊 FUHSI Connect Server Fund & Transparency Desk</span>
-              <span className="text-[10px] font-black bg-indigo-100 text-indigo-900 px-2 py-0.5 rounded-md border border-indigo-200">ADMIN CONTROL</span>
-            </h2>
-            <p className="text-[11px] text-slate-500">
-              System Cloud infrastructure budget, database storage costs, and community supporter contributions ledger.
-            </p>
-          </div>
-          <span className="font-extrabold text-teal-700 text-xs bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
-            78% Funded
-          </span>
-        </div>
-
-        {/* Progress Meter */}
-        <div className="space-y-1.5 text-xs">
-          <div className="flex justify-between font-bold text-slate-700">
-            <span>Total Contributions: ₦117,000</span>
-            <span>Annual Goal: ₦150,000 / Year</span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200">
-            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full w-[78%]" />
-          </div>
-        </div>
-
-        {/* Budget Breakdown */}
-        <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-slate-500 font-medium text-[11px]">Cloud Server Hosting</p>
-            <p className="font-extrabold text-slate-800">₦90,000 / year</p>
-          </div>
-          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-slate-500 font-medium text-[11px]">Database & Media Vault</p>
-            <p className="font-extrabold text-slate-800">₦40,000 / year</p>
-          </div>
-          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-slate-500 font-medium text-[11px]">Custom Domain & SSL</p>
-            <p className="font-extrabold text-slate-800">₦12,000 / year</p>
-          </div>
-          <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-slate-500 font-medium text-[11px]">Domain Privacy Shield</p>
-            <p className="font-extrabold text-slate-800">₦8,000 / year</p>
-          </div>
-        </div>
-
-        {/* Recent Donors List */}
-        <div className="pt-1 space-y-1.5 text-xs">
-          <h3 className="font-bold text-slate-800 text-xs">Recent Community Supporters Ledger</h3>
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between items-center p-2 rounded-lg bg-teal-50/50 border border-teal-100">
-              <span className="font-bold text-slate-800">👑 Anonymous MB;BS Alumnus</span>
-              <span className="font-extrabold text-teal-700">₦50,000</span>
-            </div>
-            <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="font-bold text-slate-800">@IlaMedHero (300L Medicine)</span>
-              <span className="font-extrabold text-teal-700">₦15,000</span>
-            </div>
-            <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="font-bold text-slate-800">@NurseQueen_Ila (Nursing)</span>
-              <span className="font-extrabold text-teal-700">₦10,000</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* PENDING STUDENT ACCOUNT REGISTRATIONS APPROVAL DESK */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
@@ -527,26 +441,46 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl flex-wrap">
             <button
               onClick={() => setActiveUserTab('PENDING')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 activeUserTab === 'PENDING'
-                  ? 'bg-teal-700 text-white shadow-xs'
+                  ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Pending ({allUsersList.filter((u) => !u.isApproved && !u.isAdmin).length})
+              Pending ({allUsersList.filter((u) => !u.isApproved && !u.isDeclined && !u.isAdmin).length})
+            </button>
+            <button
+              onClick={() => setActiveUserTab('APPROVED')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeUserTab === 'APPROVED'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Approved ({allUsersList.filter((u) => u.isApproved && !u.isDeclined && !u.isAdmin).length})
+            </button>
+            <button
+              onClick={() => setActiveUserTab('DECLINED')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeUserTab === 'DECLINED'
+                  ? 'bg-rose-700 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Declined ({allUsersList.filter((u) => u.isDeclined && !u.isAdmin).length})
             </button>
             <button
               onClick={() => setActiveUserTab('ALL')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 activeUserTab === 'ALL'
                   ? 'bg-teal-700 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All Registered ({allUsersList.filter((u) => !u.isAdmin).length})
+              All ({allUsersList.filter((u) => !u.isAdmin).length})
             </button>
           </div>
         </div>
@@ -560,7 +494,9 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         {(() => {
           const displayUsers = allUsersList.filter((u) => {
             if (u.isAdmin) return false;
-            if (activeUserTab === 'PENDING') return !u.isApproved;
+            if (activeUserTab === 'PENDING') return !u.isApproved && !u.isDeclined;
+            if (activeUserTab === 'APPROVED') return u.isApproved && !u.isDeclined;
+            if (activeUserTab === 'DECLINED') return u.isDeclined;
             return true;
           });
 
@@ -569,10 +505,16 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
               <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                 <CheckCircle2 size={24} className="mx-auto text-teal-600 mb-1" />
                 <p className="font-bold text-slate-800">
-                  {activeUserTab === 'PENDING' ? 'No pending student approvals!' : 'No registered students found.'}
+                  {activeUserTab === 'PENDING'
+                    ? 'No pending student account registrations!'
+                    : activeUserTab === 'APPROVED'
+                    ? 'No approved active students found.'
+                    : activeUserTab === 'DECLINED'
+                    ? 'No declined accounts.'
+                    : 'No registered student accounts found.'}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  New account registrations submitted by students will appear here for admin review.
+                  New account registrations submitted by students will automatically appear here for Admin approval.
                 </p>
               </div>
             );
@@ -599,11 +541,17 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                     </div>
 
                     <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                      user.isApproved
+                      user.isApproved && !user.isDeclined
                         ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        : user.isDeclined
+                        ? 'bg-rose-100 text-rose-900 border-rose-300'
                         : 'bg-amber-100 text-amber-900 border-amber-300'
                     }`}>
-                      {user.isApproved ? '✅ APPROVED & ACTIVE' : '⏳ PENDING APPROVAL'}
+                      {user.isApproved && !user.isDeclined
+                        ? '✅ APPROVED & ACTIVE'
+                        : user.isDeclined
+                        ? '❌ DECLINED / BLOCKED'
+                        : '⏳ PENDING APPROVAL'}
                     </span>
                   </div>
 
@@ -614,85 +562,31 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                   )}
 
                   <div className="flex gap-2 pt-1 flex-wrap">
-                    {!user.isApproved ? (
+                    {!user.isApproved || user.isDeclined ? (
                       <button
                         onClick={() => handleApproveRegistration(user.id, user.nickname)}
                         className="flex-1 py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
                       >
                         <CheckCircle2 size={14} />
-                        <span>Approve Student Account</span>
+                        <span>Approve Account</span>
                       </button>
-                    ) : (
+                    ) : null}
+
+                    {!user.isDeclined ? (
                       <button
-                        onClick={() => handleRevokeRegistration(user.id, user.nickname)}
-                        className="py-1.5 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-colors"
+                        onClick={() => handleDeclineRegistration(user.id, user.nickname)}
+                        className="py-1.5 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold text-xs transition-colors"
                       >
-                        Restrict Access
+                        Decline Account
                       </button>
-                    )}
+                    ) : null}
 
                     <button
                       onClick={() => handleDeleteUserAccount(user.id, user.nickname)}
                       className="py-1.5 px-3 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
                     >
-                      Delete Account
+                      Delete
                     </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* AUTOMATED EMAIL DISPATCH AUDIT LOG */}
-      <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 border border-slate-800 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div>
-            <h2 className="font-bold text-teal-400 text-sm flex items-center gap-2">
-              <Mail className="w-4 h-4 text-teal-400" /> Dispatched Automated Email Logs (fuhsiconnect@gmail.com)
-            </h2>
-            <p className="text-[11px] text-slate-400">
-              System automated account notifications sent to student emails upon Admin approval.
-            </p>
-          </div>
-          <span className="text-[10px] font-extrabold bg-teal-950 text-teal-300 px-2.5 py-1 rounded-full border border-teal-800">
-            Do Not Reply Address
-          </span>
-        </div>
-
-        {(() => {
-          let sentEmails = [];
-          try {
-            const stored = localStorage.getItem('fuhsi_sent_emails_db');
-            if (stored) sentEmails = JSON.parse(stored);
-          } catch (e) { console.error(e); }
-
-          if (sentEmails.length === 0) {
-            return (
-              <div className="p-4 text-center text-slate-400 bg-slate-950/50 rounded-xl border border-slate-800/80 text-xs font-mono">
-                No automated emails dispatched yet. Approving a student account will automatically send and log an email to their registered address from fuhsiconnect@gmail.com.
-              </div>
-            );
-          }
-
-          return (
-            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-              {sentEmails.map((email: any) => (
-                <div key={email.id} className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono space-y-1.5">
-                  <div className="flex justify-between items-center text-teal-400 font-bold text-[11px] border-b border-slate-800/80 pb-1">
-                    <span>From: FUHSI Connect &lt;fuhsiconnect@gmail.com&gt;</span>
-                    <span className="text-[10px] text-slate-400 font-normal">{email.formattedDate || email.sentAt}</span>
-                  </div>
-                  <div className="text-slate-300 space-y-0.5 text-[11px]">
-                    <p><span className="text-slate-500">To:</span> <strong className="text-white">{email.to}</strong> ({email.recipientNickname})</p>
-                    <p><span className="text-slate-500">Subject:</span> {email.subject}</p>
-                    <p className="p-2 bg-slate-900 rounded border border-slate-800/80 text-emerald-300 font-sans text-xs mt-1">
-                      "{email.body}"
-                    </p>
-                    <p className="text-[10px] text-amber-300 font-sans italic pt-1">
-                      ⚠️ {email.notice}
-                    </p>
                   </div>
                 </div>
               ))}
@@ -795,96 +689,115 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         </div>
       </div>
 
-      {/* Confidential Private Chat with Admin Hotline */}
+      {/* Admin Student Identity & Emergency Phone Lookup */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-teal-600" /> Confidential Private Admin Hotline
+            <Lock className="w-4 h-4 text-indigo-600" /> Student Identity & Secret Phone Vault
           </h2>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
-            Strictly Private
+          <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-800 px-2.5 py-1 rounded-full border border-indigo-200">
+            Real Database Lookup
           </span>
         </div>
-
-        <div className="h-40 overflow-y-auto space-y-2 p-2 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-          {chatMessages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`p-2.5 rounded-xl max-w-[85%] ${
-                msg.sender === 'user'
-                  ? 'bg-teal-600 text-white ml-auto text-right'
-                  : 'bg-white text-slate-800 border border-slate-200 mr-auto'
-              }`}
-            >
-              <p className="font-medium">{msg.text}</p>
-              <span className={`text-[9px] mt-0.5 block opacity-75`}>{msg.time}</span>
-            </div>
-          ))}
-        </div>
-
-        <form onSubmit={handleSendChatMessage} className="flex gap-2">
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Type private confidential message to FUHSI Admin..."
-            className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-colors"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
-        </form>
-      </div>
-
-      {/* Admin Student Identity & Emergency Phone Lookup */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-          <Lock className="w-4 h-4 text-indigo-600" /> Student Identity & Secret Phone Vault
-        </h2>
         <p className="text-xs text-slate-500">
-          Search matriculation number or handle to decrypt student real identity & emergency home contact:
+          Enter or click a student's handle, matriculation number, or email to retrieve their verified real name, phone number, and account details:
         </p>
 
-        <form onSubmit={handleLookup} className="flex gap-2">
+        {/* Quick Click Registered Student Badges */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Select Registered Student Handle:</p>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
+            {allUsersList.filter(u => !u.isAdmin).map((usr) => (
+              <button
+                key={usr.id}
+                type="button"
+                onClick={() => {
+                  setLookupQuery(usr.nickname);
+                  handleLookup(undefined, usr.nickname);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all border ${
+                  lookupResult?.id === usr.id
+                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                    : 'bg-white hover:bg-indigo-50 text-slate-700 border-slate-200'
+                }`}
+              >
+                {usr.nickname}
+              </button>
+            ))}
+            {allUsersList.filter(u => !u.isAdmin).length === 0 && (
+              <span className="text-xs text-slate-400 italic p-1">No registered students in database.</span>
+            )}
+          </div>
+        </div>
+
+        <form onSubmit={(e) => handleLookup(e)} className="flex gap-2">
           <input
             type="text"
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
-            placeholder="Enter @nickname or Matric No..."
-            className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800"
+            placeholder="Enter @nickname, Matric No, or Name..."
+            className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <button
             type="submit"
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors"
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-xs"
           >
-            Decrypt Lookup
+            Search Identity
           </button>
         </form>
 
+        {lookupNotFound && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>User not found. No registered account matching "<strong>{lookupQuery}</strong>" exists in the user database.</span>
+          </div>
+        )}
+
         {lookupResult && (
-          <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200 text-xs space-y-1.5 animate-in fade-in">
-            <p className="font-bold text-indigo-950 flex items-center gap-1">
-              <Key className="w-3.5 h-3.5 text-indigo-600" /> Decrypted Student Record:
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-indigo-900 font-medium">
+          <div className="p-4 rounded-xl bg-indigo-50/80 border border-indigo-200 text-xs space-y-3 animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-indigo-200/80 pb-2">
+              <p className="font-bold text-indigo-950 flex items-center gap-1.5 text-sm">
+                <Key className="w-4 h-4 text-indigo-600" /> Decrypted Student Identity Record:
+              </p>
+              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                lookupResult.isApproved && !lookupResult.isDeclined
+                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  : lookupResult.isDeclined
+                  ? 'bg-rose-100 text-rose-900 border-rose-300'
+                  : 'bg-amber-100 text-amber-900 border-amber-300'
+              }`}>
+                {lookupResult.isApproved && !lookupResult.isDeclined
+                  ? '✅ Active Approved Member'
+                  : lookupResult.isDeclined
+                  ? '❌ Declined Account'
+                  : '⏳ Pending Approval'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-indigo-950 font-medium bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs">
               <div>
-                <span className="text-slate-500 block text-[10px]">REAL NAME:</span>
-                <span className="font-bold">{lookupResult.realName}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">FULL REAL NAME</span>
+                <span className="font-extrabold text-sm text-slate-900">{lookupResult.realName || 'Not Provided'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px]">MATRIC NUMBER:</span>
-                <span className="font-bold">{lookupResult.matricNumber}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">USERNAME / NICKNAME</span>
+                <span className="font-extrabold text-sm text-indigo-700">{lookupResult.nickname}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px]">COMPULSORY PHONE:</span>
-                <span className="font-bold text-teal-700">{lookupResult.emergencyHomePhone}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">MATRICULATION NUMBER</span>
+                <span className="font-extrabold font-mono text-slate-800">{lookupResult.matricNumber || 'Not Provided'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px]">DEPARTMENT:</span>
-                <span className="font-bold">{lookupResult.department}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">COMPULSORY PHONE NUMBER</span>
+                <span className="font-extrabold text-teal-700 text-sm">{lookupResult.emergencyHomePhone || 'Not Provided'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">STUDENT EMAIL ADDRESS</span>
+                <span className="font-bold text-slate-800 font-mono text-[11px]">{lookupResult.studentEmail || 'Not Provided'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">DEPARTMENT & LEVEL</span>
+                <span className="font-bold text-slate-800">{lookupResult.department || 'FUHSI'} ({lookupResult.level || '100L'})</span>
               </div>
             </div>
           </div>
@@ -1116,168 +1029,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
           )}
         </div>
       </div>
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <div>
-            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-indigo-900">
-              <UserCheck className="w-4 h-4 text-indigo-600" /> ⭐ Student Identity & Verification Review Processing Fee Desk (₦1,500)
-            </h2>
-            <p className="text-[11px] text-slate-500">
-              Students who met multi-factor formula (90+ days tenure, 0 strikes, 1200+ rep score, quality posts)
-            </p>
-          </div>
-          <span className="text-xs font-extrabold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-            {verifCandidates.filter(c => c.status === 'ELIGIBLE_PENDING_ADMIN').length} Pending Approval
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          {verifCandidates.map((cand) => (
-            <div key={cand.id} className={`p-3.5 rounded-xl border space-y-2.5 text-xs ${
-              cand.status === 'APPROVED_VERIFIED' ? 'bg-emerald-50/60 border-emerald-200' :
-              cand.status === 'REJECTED' ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div className="flex items-start justify-between flex-wrap gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-slate-900 text-sm">{cand.nickname}</span>
-                    <span className="text-[10px] font-bold bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
-                      {cand.department} ({cand.level})
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 font-medium mt-0.5">
-                    👤 Encrypted Identity: <span className="font-bold text-slate-900">{cand.realName}</span> • Matric: <span className="font-mono text-slate-800">{cand.matricNumber}</span>
-                  </p>
-                </div>
-
-                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                  cand.status === 'APPROVED_VERIFIED' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
-                  cand.status === 'REJECTED' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
-                }`}>
-                  {cand.status === 'APPROVED_VERIFIED' ? '✔️ VERIFIED BY ADMIN' :
-                   cand.status === 'REJECTED' ? '❌ REJECTED' : '🔔 AUTO-ELIGIBLE: PENDING ADMIN'}
-                </span>
-              </div>
-
-              {/* Metrics grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 text-center text-[11px]">
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Tenure</span>
-                  <span className="font-black text-slate-800">{cand.accountAgeDays} days</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Rep Score</span>
-                  <span className="font-black text-amber-600">{cand.reputationScore} pts</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Likes / Comments</span>
-                  <span className="font-black text-teal-700">{cand.likesReceived} 👍 / {cand.commentsCount} 💬</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Violations</span>
-                  <span className="font-black text-emerald-600">{cand.strikes} strikes (Clean)</span>
-                </div>
-              </div>
-
-              {cand.status === 'ELIGIBLE_PENDING_ADMIN' && (
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => {
-                      setVerifCandidates(prev => prev.map(c => c.id === cand.id ? { ...c, status: 'APPROVED_VERIFIED' } : c));
-                      onUpdateBadge('GOLD', 'Verified Gold Campus Contributor');
-                    }}
-                    className="flex-1 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Approve Official Verification</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setVerifCandidates(prev => prev.map(c => c.id === cand.id ? { ...c, status: 'REJECTED' } : c));
-                    }}
-                    className="px-4 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
-                  >
-                    Decline
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Admin Badge & Reputation Manager */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-          <Award className="w-4 h-4 text-purple-600" /> Badge Tier & Reputation Score Manager
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Badge Tier</label>
-            <select
-              value={selectedBadgeType}
-              onChange={(e) => setSelectedBadgeType(e.target.value as BadgeType)}
-              className="w-full rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-bold"
-            >
-              <option value="BLUE">BLUE (Trusted Leader)</option>
-              <option value="GREEN">GREEN (SUG Official)</option>
-              <option value="PURPLE">PURPLE (System Admin)</option>
-              <option value="GOLD">GOLD (Honorary Member)</option>
-              <option value="NONE">NONE (Standard Student)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Badge Title</label>
-            <input
-              type="text"
-              value={badgeTitleInput}
-              onChange={(e) => setBadgeTitleInput(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 p-2.5 text-slate-800"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Reputation Score (Pts)</label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              value={reputationInput}
-              onChange={(e) => setReputationInput(Number(e.target.value))}
-              className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800"
-            />
-            <button
-              onClick={() => setReputationInput((r) => r + 50)}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs"
-            >
-              +50
-            </button>
-            <button
-              onClick={() => setReputationInput((r) => Math.max(0, r - 50))}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs"
-            >
-              -50
-            </button>
-          </div>
-        </div>
-
-        {adminUpdateToast && (
-          <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2 rounded-xl text-center">
-            ✓ Admin changes saved successfully!
-          </p>
-        )}
-
-        <button
-          onClick={handleSaveBadgeAndRep}
-          className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-colors"
-        >
-          Update Student Badges & Score
-        </button>
-      </div>
-
       {/* Marketplace Price Review & Benchmark Queue */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">

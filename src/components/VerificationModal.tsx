@@ -179,41 +179,27 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
           {isAlreadyVerified ? (
             <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center gap-3 shadow-xs">
               <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
-              <div>
-                <div className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
-                  <span>Your Account is Verified</span>
-                  <VerificationBadge isVerified badgeType={userProfile?.badgeType} title={userProfile?.badgeTitle} showTitle />
-                </div>
-                <p className="text-xs text-emerald-800 font-medium mt-0.5 leading-relaxed">
-                  Your official identity has been authenticated by FUHSI Administration. Your posts and profile display your verified checkmark everywhere across the platform.
-                </p>
+              <div className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
+                <span>Your Account is Verified</span>
+                <VerificationBadge isVerified badgeType={userProfile?.badgeType} title={userProfile?.badgeTitle} showTitle />
               </div>
             </div>
           ) : isPending ? (
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-3">
-                <Clock className="w-6 h-6 text-amber-600 shrink-0 animate-pulse" />
-                <div>
-                  <span className="font-extrabold text-sm text-amber-900">Verification Application Submitted</span>
-                  <p className="text-xs text-amber-800 font-medium mt-0.5">
-                    Your request & payment reference <strong className="font-mono text-slate-900">{submittedPaymentRef || 'PAY-SQUADCO-SUBMITTED'}</strong> were sent to Admin for approval.
-                  </p>
-                </div>
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-center gap-3 shadow-xs">
+              <Clock className="w-6 h-6 text-amber-600 shrink-0 animate-pulse" />
+              <div>
+                <span className="font-extrabold text-sm text-amber-900">Verification Application Submitted</span>
+                <p className="text-xs text-amber-800 font-medium mt-0.5">
+                  Your request reference: <strong className="font-mono text-slate-900">{submittedPaymentRef || 'PAY-SQUADCO-SUBMITTED'}</strong>
+                </p>
               </div>
             </div>
           ) : (
             <div className="p-4 rounded-2xl bg-slate-100 border border-slate-200/90 text-slate-800 flex items-center gap-3 shadow-xs">
-              <div className="p-2 rounded-xl bg-amber-100/80 text-amber-700 shrink-0 border border-amber-200/60">
-                <ShieldAlert className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <div className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                  <span>Account Not Verified</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-extrabold uppercase tracking-wider">Unverified</span>
-                </div>
-                <p className="text-xs text-slate-600 font-medium mt-0.5 leading-relaxed">
-                  Your account is currently unverified. Review the benefits below, select your category, and click Subscribe & Pay to apply for verification.
-                </p>
+              <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+              <div className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <span>Account Not Verified</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-extrabold uppercase tracking-wider">Unverified</span>
               </div>
             </div>
           )}
@@ -224,31 +210,21 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
               Verification Benefits
             </h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-800 font-medium">
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
-                <CheckCircle className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
-                <span>Verified account status displayed on profile, posts, and comments.</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Higher trust and credibility within the campus community.</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
-                <Award className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-                <span>Increased visibility for academic posts, threads, and marketplace listings.</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
-                <UserCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                <span>Priority support from the FUHSI Connect administration team.</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <span>Early access to selected new features and campus tool updates.</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5">
-                <Crown className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                <span>Eligibility for future premium campus features, badges, and services.</span>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-800 font-bold">
+              {[
+                'Verified Checkmark',
+                'Video Posting Access',
+                'Higher Trust and Credibility',
+                'Editable Thread',
+                'Handle Marketplace',
+                'Priority Support',
+                'Eligibility for Future Premium Features',
+              ].map((benefit, idx) => (
+                <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{benefit}</span>
+                </div>
+              ))}
             </div>
           </div>
 

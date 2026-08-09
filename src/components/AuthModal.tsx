@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import fuhsiLogo from '../assets/images/fuhsi_logo_1785485694958.jpg';
 import { UserProfile } from '../types';
+import { getStoredUsers, upsertUser } from '../utils/userDbUtils';
 import { AvatarIcon } from './AvatarIcon';
 import { 
   ShieldCheck, 
@@ -373,6 +374,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       reputationScore: 20,
       isVerified: false,
       isApproved: false, // Must be approved via Admin Portal
+      isDeclined: false,
       isAdmin: false,
       strikes: 0,
       isBanned: false,
@@ -380,12 +382,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       password: password.trim(),
     };
 
-    // Store user with password credentials permanently in user DB on server
+    // Store user permanently in user DB
     try {
-      const stored = localStorage.getItem('fuhsi_users_db');
-      const usersList: any[] = stored ? JSON.parse(stored) : [];
-      usersList.push(newUserProfile);
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(usersList));
+      upsertUser(newUserProfile);
     } catch (err) {
       console.error('Error storing user profile:', err);
     }
@@ -526,8 +525,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
+      if (matchedUser.isDeclined === true) {
+        setErrorMessage('❌ Account Registration Declined by Admin. You do not have access to FUHSI Connect. Please contact Admin Desk if you believe this is an error.');
+        return;
+      }
+
       if (matchedUser.isApproved === false && !matchedUser.isAdmin) {
-        setErrorMessage('⏳ Account pending Admin approval.');
+        setErrorMessage('⏳ Account Registration Pending Admin Approval. Please check back once Admin approves your account.');
         return;
       }
 

@@ -24,6 +24,7 @@ interface FeedScreenProps {
   onBookmarkClick?: (post: Post) => void;
   onCommentClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
   onVotePoll?: (post: Post, option: 'A' | 'B') => void;
   onReportPost?: (post: Post, reason: string) => void;
   onAuthorClick?: (post: Post) => void;
@@ -48,6 +49,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   onBookmarkClick,
   onCommentClick,
   onDeletePost,
+  onEditPost,
   onVotePoll,
   onReportPost,
   onAuthorClick,
@@ -243,10 +245,12 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
             post={post}
             comments={comments[post.id] || []}
             currentUserNickname={userProfile?.nickname || user?.nickname}
+            userProfile={userProfile || user}
             onLikeClick={onLikeClick}
             onBookmarkClick={onBookmarkClick}
             onCommentClick={onCommentClick}
             onDeletePost={onDeletePost}
+            onEditPost={onEditPost}
             onVotePoll={onVotePoll}
             onReportPost={onReportPost}
             onAuthorClick={onAuthorClick}
