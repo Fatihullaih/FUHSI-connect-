@@ -3,6 +3,7 @@ import { Post, MarketplaceItem, UserProfile } from '../types';
 import { PostCard } from '../components/PostCard';
 import { AuthorProfileModal } from '../components/AuthorProfileModal';
 import { AvatarIcon } from '../components/AvatarIcon';
+import { VerificationBadge } from '../components/VerificationBadge';
 import { calculateUserPoints } from '../utils/reputationUtils';
 import {
   Search,
@@ -124,6 +125,34 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const allAccounts = useMemo<CampusAccount[]>(() => {
     const accMap = new Map<string, CampusAccount>();
 
+    let verifsList: any[] = [];
+    try {
+      const vStr = localStorage.getItem('fuhsi_verifications_db');
+      if (vStr) verifsList = JSON.parse(vStr);
+    } catch (e) {
+      console.error(e);
+    }
+
+    const checkVerif = (nick: string, defaultVerified = false, defaultType = 'NONE', defaultTitle = '') => {
+      const clean = (nick || '').toLowerCase().replace(/^@/, '');
+      const v = verifsList.find((req: any) => 
+        req.status === 'APPROVED' && 
+        (req.applicantNickname?.toLowerCase().replace(/^@/, '') === clean || req.applicantNickname?.toLowerCase() === nick.toLowerCase())
+      );
+      if (v) {
+        return {
+          isVerified: true,
+          badgeType: v.assignedBadgeType || 'GREEN',
+          badgeTitle: v.assignedBadgeTitle || 'Verified'
+        };
+      }
+      return {
+        isVerified: defaultVerified,
+        badgeType: defaultType,
+        badgeTitle: defaultTitle
+      };
+    };
+
     // Add registered users from local storage if available
     try {
       const storedUsers = localStorage.getItem('fuhsi_users_db');
@@ -134,6 +163,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             const key = normalize(u.nickname);
             if (!accMap.has(key)) {
               const exactScore = calculateUserPoints(u.nickname, u, posts, []);
+              const verifInfo = checkVerif(u.nickname, Boolean(u.isVerified), u.badgeType, u.badgeTitle);
               accMap.set(key, {
                 id: u.id || `usr_${key}`,
                 nickname: u.nickname.startsWith('@') ? u.nickname : `@${u.nickname}`,
@@ -141,12 +171,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 department: u.department || 'FUHSI Student',
                 level: u.level || 'Student',
                 bio: u.bio || 'FUHSI Student Community Member.',
-                badgeType: 'NONE',
-                badgeTitle: '',
+                badgeType: verifInfo.badgeType,
+                badgeTitle: verifInfo.badgeTitle,
                 avatarKey: u.avatarKey || 'caduceus',
                 avatarUrl: u.avatarUrl,
                 reputationScore: exactScore,
-                isVerified: false,
+                isVerified: verifInfo.isVerified,
               });
             }
           }
@@ -161,6 +191,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       const key = normalize(userProfile.nickname);
       if (!accMap.has(key)) {
         const exactScore = calculateUserPoints(userProfile.nickname, userProfile, posts, []);
+        const verifInfo = checkVerif(userProfile.nickname, Boolean(userProfile.isVerified), userProfile.badgeType, userProfile.badgeTitle);
         accMap.set(key, {
           id: userProfile.id || `usr_${key}`,
           nickname: userProfile.nickname.startsWith('@') ? userProfile.nickname : `@${userProfile.nickname}`,
@@ -168,12 +199,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
           department: userProfile.department || 'FUHSI Student',
           level: userProfile.level || 'Student',
           bio: userProfile.bio || 'FUHSI Student Community Member.',
-          badgeType: 'NONE',
-          badgeTitle: '',
+          badgeType: verifInfo.badgeType,
+          badgeTitle: verifInfo.badgeTitle,
           avatarKey: userProfile.avatarKey || 'caduceus',
           avatarUrl: userProfile.avatarUrl,
           reputationScore: exactScore,
-          isVerified: false,
+          isVerified: verifInfo.isVerified,
         });
       }
     }
@@ -185,6 +216,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         const key = normalize(nick);
         if (!accMap.has(key)) {
           const exactScore = calculateUserPoints(nick, { nickname: nick }, posts, []);
+          const verifInfo = checkVerif(nick, Boolean(p.isVerified || (p as any).authorIsVerified), p.authorBadgeType, p.authorBadgeTitle);
           accMap.set(key, {
             id: `post_author_${key}`,
             nickname: nick.startsWith('@') ? nick : `@${nick}`,
@@ -192,12 +224,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             department: p.department || 'FUHSI Campus',
             level: 'Student',
             bio: `Active campus contributor on FUHSI Connect.`,
-            badgeType: 'NONE',
-            badgeTitle: '',
+            badgeType: verifInfo.badgeType,
+            badgeTitle: verifInfo.badgeTitle,
             avatarKey: p.authorAvatarKey || 'caduceus',
             avatarUrl: p.authorAvatarUrl,
             reputationScore: exactScore,
-            isVerified: false,
+            isVerified: verifInfo.isVerified,
           });
         }
       }
@@ -450,9 +482,12 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                       </div>
 
                       <div className="min-w-0 leading-snug">
-                        <h3 className="font-extrabold text-sm text-slate-900 group-hover:text-teal-700 transition-colors">
-                          {acc.nickname}
-                        </h3>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-extrabold text-sm text-slate-900 group-hover:text-teal-700 transition-colors">
+                            {acc.nickname}
+                          </h3>
+                          <VerificationBadge isVerified={acc.isVerified} badgeType={acc.badgeType} title={acc.badgeTitle} showTitle />
+                        </div>
                       </div>
                     </div>
 

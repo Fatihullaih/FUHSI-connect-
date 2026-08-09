@@ -23,6 +23,7 @@ import { PostDetailModal } from './components/PostDetailModal';
 import { AuthorProfileModal } from './components/AuthorProfileModal';
 import { PWAInstallModal } from './components/PWAInstallModal';
 import { AuthModal } from './components/AuthModal';
+import { VerificationBadge } from './components/VerificationBadge';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
 import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users } from 'lucide-react';
@@ -186,6 +187,27 @@ export const App: React.FC = () => {
       } catch (e) { console.error(e); }
     }
   }, [userProfile]);
+
+  useEffect(() => {
+    if (userProfile && userProfile.nickname) {
+      const cleanNick = userProfile.nickname.toLowerCase().replace(/^@/, '');
+      const appVerif = verificationRequests.find(
+        (v) =>
+          v.status === 'APPROVED' &&
+          (v.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
+            v.applicantNickname?.toLowerCase() === userProfile.nickname.toLowerCase())
+      );
+      if (appVerif && (!userProfile.isVerified || userProfile.verificationStatus !== 'approved')) {
+        setUserProfile((prev) => ({
+          ...prev,
+          isVerified: true,
+          verificationStatus: 'approved' as const,
+          badgeType: appVerif.assignedBadgeType || prev.badgeType || 'GREEN',
+          badgeTitle: appVerif.assignedBadgeTitle || prev.badgeTitle || 'Verified',
+        }));
+      }
+    }
+  }, [verificationRequests, userProfile?.nickname]);
 
   // Requirement: Session & Security - Require user authentication on initial load or reload
   useEffect(() => {
@@ -926,7 +948,12 @@ export const App: React.FC = () => {
               <div className="hidden sm:block leading-tight">
                 <h2 className="font-extrabold text-xs text-white group-hover:text-teal-100 flex items-center gap-1">
                   <span>{userProfile?.nickname || '@Student'}</span>
-                  <CheckCircle2 size={12} className="text-teal-300" />
+                  <VerificationBadge
+                    isVerified={Boolean(userProfile?.isVerified || userProfile?.verificationStatus === 'approved')}
+                    badgeType={userProfile?.badgeType}
+                    title={userProfile?.badgeTitle}
+                    size={13}
+                  />
                 </h2>
                 <p className="text-[10px] text-teal-200/90 font-medium">{userProfile?.department || 'FUHSI'} • Check Profile</p>
               </div>
@@ -1069,49 +1096,129 @@ export const App: React.FC = () => {
             onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = 'Verified Student') => {
               setVerificationRequests((prev) => prev.map((v) => {
                 if (v.id === reqId) {
-                  const applicantNick = v.applicantNickname;
-                  
-                  // Update active user if matching
-                  if (userProfile && (userProfile.nickname.toLowerCase() === applicantNick.toLowerCase() || userProfile.id === applicantNick)) {
+                  const targetApplicantNick = v.applicantNickname;
+                  const assignedTitle = badgeTitle || v.positionTitle || 'Verified';
+                  const cleanTarget = targetApplicantNick.toLowerCase().replace(/^@/, '');
+
+                  // 1. Update active user profile if matching
+                  if (userProfile && (
+                    userProfile.nickname.toLowerCase() === targetApplicantNick.toLowerCase() ||
+                    userProfile.nickname.toLowerCase().replace(/^@/, '') === cleanTarget ||
+                    userProfile.id === targetApplicantNick
+                  )) {
                     const updated = { 
                       ...userProfile, 
                       isVerified: true, 
                       verificationStatus: 'approved' as const, 
                       badgeType: badgeType, 
-                      badgeTitle: badgeTitle || v.positionTitle || 'Verified'
+                      badgeTitle: assignedTitle
                     };
                     setUserProfile(updated);
-                    localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                    try {
+                      localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                    } catch (e) {}
                   }
 
-                  // Update user in fuhsi_users_db
+                  // 2. Update user in fuhsi_users_db
                   try {
                     const storedUsers = localStorage.getItem('fuhsi_users_db');
-                    if (storedUsers) {
-                      const usersList: UserProfile[] = JSON.parse(storedUsers);
-                      const updatedUsers = usersList.map((u) => {
-                        if (u.nickname.toLowerCase() === applicantNick.toLowerCase() || u.id === applicantNick) {
-                          return {
-                            ...u,
-                            isVerified: true,
-                            verificationStatus: 'approved' as const,
-                            badgeType: badgeType,
-                            badgeTitle: badgeTitle || v.positionTitle || 'Verified'
-                          };
-                        }
-                        return u;
+                    let usersList: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : [];
+                    let matched = false;
+                    usersList = usersList.map((u) => {
+                      const uNick = (u.nickname || '').toLowerCase().replace(/^@/, '');
+                      if (uNick === cleanTarget || u.id === targetApplicantNick) {
+                        matched = true;
+                        return {
+                          ...u,
+                          isVerified: true,
+                          verificationStatus: 'approved' as const,
+                          badgeType: badgeType,
+                          badgeTitle: assignedTitle
+                        };
+                      }
+                      return u;
+                    });
+
+                    if (!matched && userProfile && (userProfile.nickname.toLowerCase().replace(/^@/, '') === cleanTarget)) {
+                      usersList.push({
+                        ...userProfile,
+                        isVerified: true,
+                        verificationStatus: 'approved' as const,
+                        badgeType: badgeType,
+                        badgeTitle: assignedTitle
                       });
-                      localStorage.setItem('fuhsi_users_db', JSON.stringify(updatedUsers));
                     }
+                    localStorage.setItem('fuhsi_users_db', JSON.stringify(usersList));
+                  } catch (e) {
+                    console.error(e);
+                  }
+
+                  // 3. Update all posts in state and fuhsi_posts_db
+                  setPosts((prevPosts) => {
+                    const updatedPosts = prevPosts.map((p) => {
+                      const pNick = (p.authorNickname || '').toLowerCase().replace(/^@/, '');
+                      if (pNick === cleanTarget || p.authorNickname === targetApplicantNick) {
+                        return {
+                          ...p,
+                          isVerified: true,
+                          authorBadgeType: badgeType,
+                          authorBadgeTitle: assignedTitle,
+                          authorIsVerified: true
+                        };
+                      }
+                      return p;
+                    });
+                    try {
+                      localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
+                    } catch (e) {}
+                    return updatedPosts;
+                  });
+
+                  // 4. Update all comments in state and fuhsi_comments_db
+                  setComments((prevComments) => {
+                    const updatedComments = prevComments.map((c) => {
+                      const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '');
+                      if (cNick === cleanTarget || c.authorNickname === targetApplicantNick) {
+                        return {
+                          ...c,
+                          isVerified: true,
+                          authorIsVerified: true,
+                          authorBadgeType: badgeType,
+                          authorBadgeTitle: assignedTitle
+                        };
+                      }
+                      return c;
+                    });
+                    try {
+                      localStorage.setItem('fuhsi_comments_db', JSON.stringify(updatedComments));
+                    } catch (e) {}
+                    return updatedComments;
+                  });
+
+                  // 5. Send in-app notification
+                  try {
+                    const notifKey = `fuhsi_user_notifications_${cleanTarget}`;
+                    const verifNotif = {
+                      id: `verif_appr_${Date.now()}`,
+                      type: 'VERIFICATION',
+                      title: '🎉 Account Verified!',
+                      message: `Congratulations! Your verification application has been approved by the Administrator. Your profile now displays your verified checkmark badge (${assignedTitle}) across FUHSI Connect.`,
+                      timestamp: 'Just now',
+                      isRead: false,
+                    };
+                    let existingNotifs = [];
+                    const storedNotifs = localStorage.getItem(notifKey);
+                    if (storedNotifs) existingNotifs = JSON.parse(storedNotifs);
+                    localStorage.setItem(notifKey, JSON.stringify([verifNotif, ...existingNotifs]));
                   } catch (e) {
                     console.error(e);
                   }
 
                   return { 
                     ...v, 
-                    status: 'APPROVED', 
+                    status: 'APPROVED' as const, 
                     assignedBadgeType: badgeType, 
-                    assignedBadgeTitle: badgeTitle || v.positionTitle || 'Verified' 
+                    assignedBadgeTitle: assignedTitle 
                   };
                 }
                 return v;
@@ -1172,9 +1279,6 @@ export const App: React.FC = () => {
                   if (userProfile) {
                     const updated = {
                       ...userProfile,
-                      matricNumber: data.matricNumber || userProfile.matricNumber,
-                      department: data.department || userProfile.department,
-                      level: data.level || userProfile.level,
                       verificationStatus: 'pending' as const,
                     };
                     setUserProfile(updated);
@@ -1183,14 +1287,19 @@ export const App: React.FC = () => {
                     const newReq: VerificationRequest = {
                       id: `verif_req_${Date.now()}`,
                       applicantNickname: userProfile.nickname,
+                      applicantFullName: userProfile.realName || userProfile.nickname,
+                      applicantEmail: userProfile.studentEmail || 'N/A',
+                      applicantPhone: userProfile.emergencyHomePhone || 'N/A',
+                      department: userProfile.department || 'N/A',
+                      level: userProfile.level || 'N/A',
                       category: `${data.accountType || 'Student'} Verification`,
                       accountType: data.accountType || 'Student',
                       positionTitle: data.positionTitle || '',
-                      matricNumber: data.matricNumber || '',
-                      proofDetails: data.proofDetails || '',
-                      paymentRef: data.paymentRef || `PAY-FUHSI-${Date.now()}`,
+                      matricNumber: userProfile.matricNumber || 'N/A',
+                      proofDetails: data.proofDetails || 'Standard Verification Request',
+                      paymentRef: data.paymentRef || `SQUADCO-FY7TM2-${Math.floor(100000 + Math.random() * 900000)}`,
                       amountPaid: data.amountPaid || 1500,
-                      statement: `Category: ${data.accountType || 'Student'}${data.positionTitle ? ` (${data.positionTitle})` : ''} | Matric/Reg: ${data.matricNumber} | Proof: ${data.proofDetails}`,
+                      statement: `Category: ${data.accountType || 'Student'}${data.positionTitle ? ` | Position: ${data.positionTitle}` : ''} | Name: ${userProfile.realName || userProfile.nickname} | Dept: ${userProfile.department} (${userProfile.level})`,
                       timestamp: new Date().toISOString(),
                       status: 'PENDING',
                     };

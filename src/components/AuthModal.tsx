@@ -183,7 +183,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         badgeType: 'GOLD',
         badgeTitle: 'Official Admin',
         reputationScore: 9999,
-        isVerified: true,
+        isVerified: false,
         isApproved: true,
         isAdmin: true,
         strikes: 0,
@@ -429,7 +429,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         badgeType: 'GOLD',
         badgeTitle: 'Official Admin',
         reputationScore: 9999,
-        isVerified: true,
+        isVerified: false,
         isApproved: true,
         isAdmin: true,
       };
@@ -441,6 +441,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           const found = list.find((u) => u.nickname?.toLowerCase() === '@modula' || u.id === 'usr_admin_modula');
           if (found) {
             modulaAdmin = { ...modulaAdmin, ...found };
+          }
+        }
+        // Check if there is an approved verification request in fuhsi_verifications_db
+        const verifStr = localStorage.getItem('fuhsi_verifications_db');
+        if (verifStr) {
+          const verifs: any[] = JSON.parse(verifStr);
+          const appVerif = verifs.find(
+            (v) =>
+              v.status === 'APPROVED' &&
+              (v.applicantNickname?.toLowerCase().replace(/^@/, '') === 'modula' ||
+                v.applicantNickname?.toLowerCase() === '@modula')
+          );
+          if (appVerif) {
+            modulaAdmin = {
+              ...modulaAdmin,
+              isVerified: true,
+              verificationStatus: 'approved' as const,
+              badgeType: appVerif.assignedBadgeType || modulaAdmin.badgeType || 'GOLD',
+              badgeTitle: appVerif.assignedBadgeTitle || modulaAdmin.badgeTitle || 'Official Admin',
+            };
           }
         }
       } catch (err) {
@@ -492,7 +512,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           badgeType: 'BLUE',
           badgeTitle: 'Class Rep & Tech Lead',
           reputationScore: 2450,
-          isVerified: true,
+          isVerified: false,
           isApproved: true,
         };
       }
@@ -511,7 +531,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      const userToLogin: UserProfile = {
+      let userToLogin: UserProfile = {
         id: matchedUser.id,
         nickname: matchedUser.nickname,
         realName: matchedUser.realName,
@@ -526,10 +546,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         badgeType: matchedUser.badgeType || 'GREEN',
         badgeTitle: matchedUser.badgeTitle || 'FUHSI Student',
         reputationScore: matchedUser.reputationScore !== undefined ? matchedUser.reputationScore : 20,
-        isVerified: Boolean(matchedUser.isVerified),
+        isVerified: Boolean(matchedUser.isVerified || matchedUser.verificationStatus === 'approved'),
+        verificationStatus: matchedUser.verificationStatus || (matchedUser.isVerified ? 'approved' : 'none'),
         isApproved: matchedUser.isApproved !== false,
         isAdmin: Boolean(matchedUser.isAdmin),
       };
+
+      try {
+        const verifStr = localStorage.getItem('fuhsi_verifications_db');
+        if (verifStr) {
+          const verifs: any[] = JSON.parse(verifStr);
+          const cleanNick = userToLogin.nickname?.toLowerCase().replace(/^@/, '');
+          const appVerif = verifs.find(
+            (v) =>
+              v.status === 'APPROVED' &&
+              (v.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
+                v.applicantNickname?.toLowerCase() === userToLogin.nickname?.toLowerCase())
+          );
+          if (appVerif) {
+            userToLogin = {
+              ...userToLogin,
+              isVerified: true,
+              verificationStatus: 'approved' as const,
+              badgeType: appVerif.assignedBadgeType || userToLogin.badgeType || 'GREEN',
+              badgeTitle: appVerif.assignedBadgeTitle || userToLogin.badgeTitle || 'Verified',
+            };
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
 
       localStorage.setItem('fuhsi_active_user', JSON.stringify(userToLogin));
       onLoginSuccess(userToLogin);

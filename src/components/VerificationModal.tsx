@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   ShieldCheck, 
+  ShieldAlert,
   CheckCircle, 
   Award, 
   Sparkles, 
@@ -25,10 +26,10 @@ interface VerificationModalProps {
   onSubmitVerification: (data: {
     accountType: 'Student' | 'Executive' | 'Organization';
     positionTitle: string;
-    matricNumber: string;
-    department: string;
-    level: string;
-    proofDetails: string;
+    matricNumber?: string;
+    department?: string;
+    level?: string;
+    proofDetails?: string;
     paymentRef: string;
     amountPaid: number;
   }) => void;
@@ -55,10 +56,6 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
   const [accountType, setAccountType] = useState<'Student' | 'Executive' | 'Organization'>('Student');
   const [positionTitle, setPositionTitle] = useState('');
-  const [matricNumber, setMatricNumber] = useState(userProfile?.matricNumber || '');
-  const [department, setDepartment] = useState(userProfile?.department || 'Medicine & Surgery');
-  const [level, setLevel] = useState(userProfile?.level || '300L');
-  const [proofDetails, setProofDetails] = useState('');
 
   const [showPaymentGateway, setShowPaymentGateway] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'transfer' | 'ussd'>('card');
@@ -67,19 +64,29 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   const [submittedPaymentRef, setSubmittedPaymentRef] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const isAlreadyVerified = Boolean(userProfile?.isVerified);
+  const isAlreadyVerified = useMemo(() => {
+    if (userProfile?.isVerified || userProfile?.verificationStatus === 'approved') return true;
+    try {
+      const vStr = localStorage.getItem('fuhsi_verifications_db');
+      if (vStr && userProfile?.nickname) {
+        const vList: any[] = JSON.parse(vStr);
+        const cleanNick = userProfile.nickname.toLowerCase().replace(/^@/, '');
+        return vList.some(
+          (v) =>
+            v.status === 'APPROVED' &&
+            (v.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
+              v.applicantNickname?.toLowerCase() === userProfile.nickname.toLowerCase())
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  }, [userProfile]);
   const isPending = userProfile?.verificationStatus === 'pending' || isSubmittedSuccess;
 
   const handleOpenPaymentGateway = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!matricNumber.trim()) {
-      setErrorMsg('Please enter your valid Student Matriculation Number or Organization ID.');
-      return;
-    }
-    if (accountType !== 'Student' && !positionTitle.trim()) {
-      setErrorMsg(`Please specify the position/organization title (e.g. ${accountType === 'Executive' ? 'SUG President' : 'MSSN FUHSI'}).`);
-      return;
-    }
     setErrorMsg('');
 
     const ref = `SQUADCO-FY7TM2-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -89,10 +96,10 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     onSubmitVerification({
       accountType,
       positionTitle: positionTitle.trim(),
-      matricNumber: matricNumber.trim(),
-      department,
-      level,
-      proofDetails: proofDetails.trim() || 'Payment via SquadCo Gateway (https://pay.squadco.com/FY7TM2)',
+      matricNumber: userProfile?.matricNumber || 'N/A',
+      department: userProfile?.department || 'N/A',
+      level: userProfile?.level || 'N/A',
+      proofDetails: positionTitle.trim() ? `Position Held: ${positionTitle.trim()}` : 'Standard Verification Request',
       paymentRef: ref,
       amountPaid: feeAmount,
     });
@@ -118,10 +125,10 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
       onSubmitVerification({
         accountType,
         positionTitle: positionTitle.trim(),
-        matricNumber: matricNumber.trim(),
-        department,
-        level,
-        proofDetails: proofDetails.trim() || 'Verified via online subscription gateway.',
+        matricNumber: userProfile?.matricNumber || 'N/A',
+        department: userProfile?.department || 'N/A',
+        level: userProfile?.level || 'N/A',
+        proofDetails: positionTitle.trim() ? `Position Held: ${positionTitle.trim()}` : 'Verified via subscription gateway',
         paymentRef: ref,
         amountPaid: feeAmount,
       });
@@ -144,7 +151,6 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
               <h2 className="font-black text-lg text-white tracking-tight flex items-center gap-2">
                 <span>Get Verified</span>
               </h2>
-              <p className="text-xs text-slate-400 font-medium">Official Campus Identity & Trust Authentication</p>
             </div>
           </div>
           <button
@@ -161,10 +167,6 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
           {/* Intro Description */}
           <div className="bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-2 border border-slate-800">
-            <div className="flex items-center gap-2 text-sky-400 text-xs font-bold uppercase tracking-wider">
-              <Sparkles size={14} />
-              <span>Campus Verification Program</span>
-            </div>
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
               Get Verified on FUHSI Connect
             </h1>
@@ -175,41 +177,46 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
           {/* Current Status Banner */}
           {isAlreadyVerified ? (
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center gap-3">
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center gap-3 shadow-xs">
               <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
               <div>
                 <div className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
                   <span>Your Account is Verified</span>
                   <VerificationBadge isVerified badgeType={userProfile?.badgeType} title={userProfile?.badgeTitle} showTitle />
                 </div>
-                <p className="text-xs text-emerald-800 font-medium mt-0.5">
+                <p className="text-xs text-emerald-800 font-medium mt-0.5 leading-relaxed">
                   Your official identity has been authenticated by FUHSI Administration. Your posts and profile display your verified checkmark everywhere across the platform.
                 </p>
               </div>
             </div>
           ) : isPending ? (
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-3">
                 <Clock className="w-6 h-6 text-amber-600 shrink-0 animate-pulse" />
                 <div>
                   <span className="font-extrabold text-sm text-amber-900">Verification Application Submitted</span>
                   <p className="text-xs text-amber-800 font-medium mt-0.5">
-                    Your details & payment reference <strong className="font-mono text-slate-900">{submittedPaymentRef || 'PAY-SQUADCO-SUBMITTED'}</strong> were sent to Admin. Complete payment on SquadCo if you haven't done so yet.
+                    Your request & payment reference <strong className="font-mono text-slate-900">{submittedPaymentRef || 'PAY-SQUADCO-SUBMITTED'}</strong> were sent to Admin for approval.
                   </p>
                 </div>
               </div>
-
-              <a
-                href="https://pay.squadco.com/FY7TM2"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 flex items-center gap-1.5"
-              >
-                <span>Pay on SquadCo</span>
-                <ArrowRight size={14} />
-              </a>
             </div>
-          ) : null}
+          ) : (
+            <div className="p-4 rounded-2xl bg-slate-100 border border-slate-200/90 text-slate-800 flex items-center gap-3 shadow-xs">
+              <div className="p-2 rounded-xl bg-amber-100/80 text-amber-700 shrink-0 border border-amber-200/60">
+                <ShieldAlert className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <div className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                  <span>Account Not Verified</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-extrabold uppercase tracking-wider">Unverified</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium mt-0.5 leading-relaxed">
+                  Your account is currently unverified. Review the benefits below, select your category, and click Subscribe & Pay to apply for verification.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Verification Benefits */}
           <div className="space-y-3">
@@ -248,10 +255,6 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
           {/* Form & Fee Section (if not yet verified/pending) */}
           {!isAlreadyVerified && !isPending && (
             <form onSubmit={handleOpenPaymentGateway} className="pt-3 border-t border-slate-200 space-y-4">
-              <h3 className="text-sm font-black text-slate-900">
-                Provide Your Verification Details
-              </h3>
-
               {errorMsg && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
                   <AlertCircle size={16} className="text-rose-600 shrink-0" />
@@ -267,7 +270,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => { setAccountType('Student'); setPositionTitle(''); }}
+                    onClick={() => { setAccountType('Student'); }}
                     className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                       accountType === 'Student' 
                         ? 'bg-sky-50 border-sky-400 text-sky-900 shadow-xs' 
@@ -280,7 +283,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => { setAccountType('Executive'); if (!positionTitle) setPositionTitle('SUG Executive'); }}
+                    onClick={() => { setAccountType('Executive'); }}
                     className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                       accountType === 'Executive' 
                         ? 'bg-emerald-50 border-emerald-400 text-emerald-900 shadow-xs' 
@@ -293,7 +296,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => { setAccountType('Organization'); if (!positionTitle) setPositionTitle('MSSN FUHSI'); }}
+                    onClick={() => { setAccountType('Organization'); }}
                     className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                       accountType === 'Organization' 
                         ? 'bg-amber-50 border-amber-400 text-amber-900 shadow-xs' 
@@ -306,74 +309,21 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 </div>
               </div>
 
-              {/* Title / Position Held Field (Key feature requested by user) */}
-              {accountType !== 'Student' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Position Held / Organization Name <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={positionTitle}
-                    onChange={(e) => setPositionTitle(e.target.value)}
-                    placeholder={accountType === 'Executive' ? 'e.g. SUG President, Welfare Director, Class Rep' : 'e.g. MSSN, NAMS, Health Club'}
-                    className="w-full text-xs rounded-xl border border-slate-300 p-2.5 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
-                  <p className="text-[11px] text-slate-500 font-medium mt-1">
-                    This detail will be reviewed by Admin after payment and assigned a custom color badge (e.g. Green for Executives, Orange/Gold for Organizations).
-                  </p>
-                </div>
-              )}
-
-              {/* Matric Number / Staff ID */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Matric No. / Staff / Reg ID <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={matricNumber}
-                    onChange={(e) => setMatricNumber(e.target.value)}
-                    placeholder="e.g. 2023/1042"
-                    className="w-full text-xs rounded-xl border border-slate-300 p-2.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
-                  <select
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full text-xs rounded-xl border border-slate-300 p-2.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-                  >
-                    <option value="Medicine & Surgery">Medicine & Surgery</option>
-                    <option value="Nursing Science">Nursing Science</option>
-                    <option value="Medical Lab Science">Medical Lab Science</option>
-                    <option value="Biochemistry">Biochemistry</option>
-                    <option value="Physiology">Physiology</option>
-                    <option value="Anatomy">Anatomy</option>
-                    <option value="Public Health">Public Health</option>
-                    <option value="Pharmacy">Pharmacy</option>
-                    <option value="Radiography">Radiography</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Additional Proof Details */}
+              {/* Additional Position Held (Optional) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Additional Proof / Verification Statement (Optional)
+                  Additional Position Held (Optional)
                 </label>
-                <textarea
-                  value={proofDetails}
-                  onChange={(e) => setProofDetails(e.target.value)}
-                  placeholder="Provide any additional details or credential links for faster Admin verification..."
-                  rows={2}
-                  className="w-full text-xs rounded-xl border border-slate-300 p-2.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
+                <input
+                  type="text"
+                  value={positionTitle}
+                  onChange={(e) => setPositionTitle(e.target.value)}
+                  placeholder="e.g. Class Representative, Departmental President, SUG Executive, Club President"
+                  className="w-full text-xs rounded-xl border border-slate-300 p-2.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
+                <p className="text-[11px] text-slate-500 font-medium mt-1">
+                  If you hold any leadership or official campus position, enter it here. Otherwise, leave this field empty.
+                </p>
               </div>
 
               {/* Verification Fee Display */}
@@ -383,44 +333,34 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                     Verification Fee
                   </span>
                   <div className="text-xl font-black text-white mt-0.5">
-                    ₦{feeAmount.toLocaleString()} <span className="text-xs font-medium text-slate-400">(One-time Payment)</span>
+                    ₦{feeAmount.toLocaleString()}
                   </div>
                 </div>
 
-                <div className="text-right text-[11px] text-slate-400 font-medium">
-                  Instant secure payment gateway
+                <div className="text-right text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
+                  <Lock size={12} className="text-emerald-400" />
+                  <span>Secure Payment Gateway</span>
                 </div>
               </div>
 
               {/* Subscribe & Pay Button */}
-              <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <a
-                  href="https://pay.squadco.com/FY7TM2"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-bold text-sky-600 hover:text-sky-800 underline flex items-center gap-1"
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2.5 rounded-full border border-slate-300 text-slate-700 font-extrabold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  Direct SquadCo Link: https://pay.squadco.com/FY7TM2
-                </a>
-
-                <div className="flex items-center gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 rounded-full border border-slate-300 text-slate-700 font-extrabold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  
-                  <button
-                    type="submit"
-                    className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-full text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
-                  >
-                    <CreditCard size={16} />
-                    <span>Subscribe & Pay ₦{feeAmount.toLocaleString()}</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
+                  Cancel
+                </button>
+                
+                <button
+                  type="submit"
+                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-full text-xs font-black transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <CreditCard size={16} />
+                  <span>Subscribe & Pay ₦{feeAmount.toLocaleString()}</span>
+                  <ArrowRight size={14} />
+                </button>
               </div>
             </form>
           )}

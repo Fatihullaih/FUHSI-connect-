@@ -318,6 +318,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 {userProfile?.nickname || '@IlaMedHero'}
               </h1>
+              <VerificationBadge
+                isVerified={Boolean(userProfile?.isVerified || userProfile?.verificationStatus === 'approved')}
+                badgeType={userProfile?.badgeType}
+                title={userProfile?.badgeTitle}
+                showTitle
+              />
             </div>
           </div>
 
