@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "Registered FUHSI Connect student and admin accounts",
+      "properties": {
+        "id": { "type": "string" },
+        "nickname": { "type": "string" },
+        "realName": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "matricNumber": { "type": "string" },
+        "department": { "type": "string" },
+        "level": { "type": "string" },
+        "gender": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "emergencyHomePhone": { "type": "string" },
+        "emergencyContactName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "isVerified": { "type": "boolean" },
+        "isDeclined": { "type": "boolean" },
+        "isAdmin": { "type": "boolean" },
+        "reputationScore": { "type": "number" },
+        "badgeType": { "type": "string" },
+        "badgeTitle": { "type": "string" },
+        "savedPassword": { "type": "string" }
+      },
+      "required": ["id", "nickname"]
+    },
+    "posts": {
+      "title": "posts",
+      "description": "Feed community posts, polls, and announcements",
+      "properties": {
+        "id": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorNickname": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorIsVerified": { "type": "boolean" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "bookmarks": { "type": "array", "items": { "type": "string" } },
+        "commentsCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "content"]
+    },
+    "comments": {
+      "title": "comments",
+      "description": "Post replies and comments",
+      "properties": {
+        "id": { "type": "string" },
+        "postId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorNickname": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "postId", "content"]
+    },
+    "marketplace_items": {
+      "title": "marketplace_items",
+      "description": "Marketplace campus items",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "sellerName": { "type": "string" },
+        "sellerNickname": { "type": "string" },
+        "sellerPhone": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "price"]
+    },
+    "verification_requests": {
+      "title": "verification_requests",
+      "description": "Student badge verification requests",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userNickname": { "type": "string" },
+        "badgeType": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userNickname", "status"]
+    }
+  }
+}

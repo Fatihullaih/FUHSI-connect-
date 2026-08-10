@@ -22,6 +22,16 @@ import {
   mergeReports,
   mergeVerifCandidates,
 } from './utils/apiSync';
+import {
+  subscribeUsers,
+  subscribePosts,
+  subscribeComments,
+  subscribeVerificationRequests,
+  subscribeMarketplaceApproved,
+  savePostToFirestore,
+  saveCommentToFirestore,
+  seedFirestoreInitialDataIfNeeded,
+} from './lib/firestoreSync';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -836,6 +846,8 @@ export const App: React.FC = () => {
     const calculatedPoints = calculateUserPoints(userProfile.nickname, userProfile, [newPost, ...posts], comments, reports);
     newPost.authorPoints = calculatedPoints;
 
+    savePostToFirestore(newPost).catch((err) => console.error('Error saving post to Firestore:', err));
+
     setPosts((prev) => [newPost, ...prev]);
     // Recalculate exact points dynamically
     setUserProfile((prev) => ({
@@ -872,6 +884,7 @@ export const App: React.FC = () => {
     };
 
     const newCommentsList = [...comments, newComment];
+    saveCommentToFirestore(newComment).catch((err) => console.error('Error saving comment to Firestore:', err));
     setComments(newCommentsList);
     setPosts((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p))

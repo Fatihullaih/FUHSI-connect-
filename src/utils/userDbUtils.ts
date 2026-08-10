@@ -1,6 +1,7 @@
 import { UserProfile } from '../types';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { pushServerDbSync } from './apiSync';
+import { saveUserToFirestore, saveUsersBatchToFirestore } from '../lib/firestoreSync';
 
 export const USER_DB_KEY = 'fuhsi_users_db';
 
@@ -90,7 +91,7 @@ export function getStoredUsers(): UserProfile[] {
 }
 
 /**
- * Save user list to database and sync across devices via server API
+ * Save user list to database and sync across devices via Firestore and server API
  */
 export function saveStoredUsers(users: UserProfile[]): void {
   try {
@@ -98,6 +99,10 @@ export function saveStoredUsers(users: UserProfile[]): void {
   } catch (e) {
     console.error('Error saving user database:', e);
   }
+  // Sync to Firestore cloud database
+  saveUsersBatchToFirestore(users).catch((err) => {
+    console.error('Error batch saving users to Firestore:', err);
+  });
   // Sync to central server database asynchronously
   pushServerDbSync({ users }).catch((err) => {
     console.error('Error syncing users to server:', err);
@@ -124,11 +129,18 @@ export function upsertUser(user: UserProfile): UserProfile[] {
       (u.nickname && u.nickname.toLowerCase() === user.nickname.toLowerCase())
   );
 
+  let updatedUser = user;
   if (index >= 0) {
     users[index] = { ...users[index], ...user };
+    updatedUser = users[index];
   } else {
     users.push(user);
   }
+
+  // Save single user to Firestore immediately
+  saveUserToFirestore(updatedUser).catch((err) => {
+    console.error('Error saving single user to Firestore:', err);
+  });
 
   saveStoredUsers(users);
   return users;
