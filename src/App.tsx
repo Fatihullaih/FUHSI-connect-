@@ -1564,7 +1564,7 @@ export const App: React.FC = () => {
           <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
             <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
               <div className="flex items-center gap-2.5">
-                <AvatarIcon avatarKey={userProfile.avatarKey} avatarUrl={userProfile.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
+                <AvatarIcon avatarKey={userProfile?.avatarKey || 'caduceus'} avatarUrl={userProfile?.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
                 <div>
                   <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
                   <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
@@ -1596,24 +1596,28 @@ export const App: React.FC = () => {
                       verificationStatus: 'pending' as const,
                     };
                     setUserProfile(updated);
-                    localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                    try {
+                      localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                    } catch (e) {
+                      console.error(e);
+                    }
 
                     const newReq: VerificationRequest = {
                       id: `verif_req_${Date.now()}`,
-                      applicantNickname: userProfile.nickname,
-                      applicantFullName: userProfile.realName || userProfile.nickname,
+                      applicantNickname: userProfile.nickname || 'Student',
+                      applicantFullName: userProfile.realName || userProfile.nickname || 'Student',
                       applicantEmail: userProfile.studentEmail || 'N/A',
                       applicantPhone: userProfile.emergencyHomePhone || 'N/A',
                       department: userProfile.department || 'N/A',
                       level: userProfile.level || 'N/A',
-                      category: `${data.accountType || 'Student'} Verification`,
-                      accountType: data.accountType || 'Student',
-                      positionTitle: data.positionTitle || '',
+                      category: `${data?.accountType || 'Student'} Verification`,
+                      accountType: data?.accountType || 'Student',
+                      positionTitle: data?.positionTitle || '',
                       matricNumber: userProfile.matricNumber || 'N/A',
-                      proofDetails: data.proofDetails || 'Standard Verification Request',
-                      paymentRef: data.paymentRef || `SQUADCO-FY7TM2-${Math.floor(100000 + Math.random() * 900000)}`,
-                      amountPaid: data.amountPaid || 1500,
-                      statement: `Category: ${data.accountType || 'Student'}${data.positionTitle ? ` | Position: ${data.positionTitle}` : ''} | Name: ${userProfile.realName || userProfile.nickname} | Dept: ${userProfile.department} (${userProfile.level})`,
+                      proofDetails: data?.proofDetails || 'Standard Verification Request',
+                      paymentRef: data?.paymentRef || `SQUADCO-FY7TM2-${Math.floor(100000 + Math.random() * 900000)}`,
+                      amountPaid: data?.amountPaid || 1500,
+                      statement: `Category: ${data?.accountType || 'Student'}${data?.positionTitle ? ` | Position: ${data.positionTitle}` : ''} | Name: ${userProfile.realName || userProfile.nickname || 'Student'} | Dept: ${userProfile.department || 'FUHSI'} (${userProfile.level || 'N/A'})`,
                       timestamp: new Date().toISOString(),
                       status: 'PENDING',
                     };
@@ -1642,7 +1646,7 @@ export const App: React.FC = () => {
       {selectedPost && (
         <PostDetailModal
           post={selectedPost}
-          comments={comments.filter((c) => c.postId === selectedPost.id)}
+          comments={(comments || []).filter((c) => c && c.postId === selectedPost.id)}
           userProfile={userProfile}
           onClose={closeModalUI}
           onAddComment={(text, parentId, replyToNickname, imageUrl) => handleAddComment(selectedPost.id, text, parentId, replyToNickname, imageUrl)}
@@ -1685,7 +1689,8 @@ export const App: React.FC = () => {
           authorBadgeTitle={selectedAuthorPost.authorBadgeTitle}
           authorPoints={selectedAuthorPost.authorPoints}
           authorJoinedDate="Jul 2026"
-          currentUserNickname={userProfile.nickname}
+          currentUserNickname={userProfile?.nickname || ''}
+          userProfile={userProfile}
           allPosts={posts}
           allComments={comments}
           onClose={closeModalUI}

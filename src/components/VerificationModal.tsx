@@ -70,12 +70,12 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
       const vStr = localStorage.getItem('fuhsi_verifications_db');
       if (vStr && userProfile?.nickname) {
         const vList: any[] = JSON.parse(vStr);
-        const cleanNick = userProfile.nickname.toLowerCase().replace(/^@/, '');
+        const cleanNick = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
         return vList.some(
           (v) =>
             v.status === 'APPROVED' &&
             (v.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
-              v.applicantNickname?.toLowerCase() === userProfile.nickname.toLowerCase())
+              v.applicantNickname?.toLowerCase() === (userProfile?.nickname || '').toLowerCase())
         );
       }
     } catch (e) {

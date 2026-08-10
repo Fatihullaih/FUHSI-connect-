@@ -173,27 +173,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const myNickname = userProfile?.nickname || '';
   const normMyNick = myNickname ? myNickname.toLowerCase().replace(/^@/, '').trim() : '';
 
-  const myPosts = allPosts
+  const myPosts = (allPosts || [])
     .filter((p) => {
+      if (!p) return false;
       const author = (p.authorNickname || p.nickname || (p as any).customNickname || '')
         .toLowerCase()
         .replace(/^@/, '')
         .trim();
-      return author === normMyNick;
+      return normMyNick && author === normMyNick;
     })
     .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   // User comments (replies) sorted chronologically (newest first)
-  const myReplies = allComments
+  const myReplies = (allComments || [])
     .filter((c) => {
+      if (!c) return false;
       const author = (c.authorNickname || '').toLowerCase().replace(/^@/, '').trim();
-      return author === normMyNick;
+      return normMyNick && author === normMyNick;
     })
     .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   // Saved / Bookmarked posts (Strictly isolated per account)
-  const bookmarkedPosts = allPosts
+  const bookmarkedPosts = (allPosts || [])
     .filter((p) => {
+      if (!p) return false;
       if (bookmarkedPostIds && bookmarkedPostIds.length > 0) {
         return bookmarkedPostIds.includes(p.id);
       }

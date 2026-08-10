@@ -28,7 +28,7 @@ interface PostDetailModalProps {
 
 export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   post,
-  comments,
+  comments = [],
   userProfile,
   onClose,
   onAddComment,
@@ -40,6 +40,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   onVotePoll,
   onAuthorClick,
 }) => {
+  if (!post) return null;
+
   const [commentText, setCommentText] = useState('');
   const [commentImage, setCommentImage] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
@@ -47,13 +49,13 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   const [confirmDeletePost, setConfirmDeletePost] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(post.content);
+  const [editedContent, setEditedContent] = useState(post?.content || (post as any)?.text || '');
   const [showEditLockModal, setShowEditLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   const isVerifiedUser = useMemo(() => {
-    return checkIsUserVerified(post.authorNickname || userProfile?.nickname, userProfile);
-  }, [post.authorNickname, userProfile]);
+    return checkIsUserVerified(post?.authorNickname || userProfile?.nickname, userProfile);
+  }, [post?.authorNickname, userProfile]);
 
   React.useEffect(() => {
     const handlePopState = () => {
@@ -287,7 +289,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
           {(() => {
             const isMyPost = Boolean(
               userProfile?.nickname &&
-              post.authorNickname?.toLowerCase() === userProfile.nickname.toLowerCase()
+              post?.authorNickname &&
+              post.authorNickname.toLowerCase() === userProfile.nickname.toLowerCase()
             );
             return (
               <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-3 shadow-2xs">
