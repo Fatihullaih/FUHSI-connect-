@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
+import { pushServerDbSync } from '../utils/apiSync';
 import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
@@ -60,6 +61,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_verif_candidates_db', JSON.stringify(verifCandidates));
+      pushServerDbSync({ verifCandidates });
     } catch (e) {
       console.error(e);
     }

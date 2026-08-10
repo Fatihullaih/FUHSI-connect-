@@ -91,7 +91,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Edit Form state (owner personal details)
   const [nickname, setNickname] = useState(userProfile?.nickname || '@IlaMedHero');
   const [realName, setRealName] = useState(userProfile?.realNameHidden || userProfile?.realName || 'Adeyemo Oluwaseun Joseph');
-  const [studentEmail, setStudentEmail] = useState(userProfile?.studentEmail || 'student@fuhsi.edu.ng');
+  const [studentEmail, setStudentEmail] = useState(userProfile?.studentEmail || '');
   const [department, setDepartment] = useState(userProfile?.department || 'Medicine and Surgery (MBBS)');
   const [level, setLevel] = useState(userProfile?.level || '300L');
   const [bio, setBio] = useState(userProfile?.bio || 'FUHSI Student | Learning & Saving Lives');

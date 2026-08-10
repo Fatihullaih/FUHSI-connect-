@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import fuhsiLogo from '../assets/images/fuhsi_logo_1785485694958.jpg';
 import { UserProfile } from '../types';
 import { getStoredUsers, upsertUser } from '../utils/userDbUtils';
+import { fetchServerDb, mergeUsers, pushServerDbSync } from '../utils/apiSync';
 import { AvatarIcon } from './AvatarIcon';
 import { 
   ShieldCheck, 
@@ -70,7 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   existingUsers = [],
   canClose = false,
 }) => {
-  const [mode, setMode] = useState<'REGISTER' | 'OTP_VERIFICATION' | 'LOGIN' | 'FORGOT_PASSWORD'>('LOGIN');
+  const [mode, setMode] = useState<'REGISTER' | 'LOGIN' | 'FORGOT_PASSWORD'>('LOGIN');
   const [pendingUserNotice, setPendingUserNotice] = useState<UserProfile | null>(null);
 
   // Register Form State
@@ -331,33 +332,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Generate Email OTP code & transition to OTP Verification step
-    const code = generateNewOtp();
-    setEnteredOtp('');
-    setOtpResentMessage(`✓ Verification OTP sent to ${studentEmail.trim()}`);
-    setVerificationMethod('EMAIL');
-    setMode('OTP_VERIFICATION');
-    sendOtpEmail(studentEmail.trim(), code, 'Account Verification OTP', realName.trim() || nickname.trim());
-  };
-
-  const handleVerifyOtpSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-
-    if (!enteredOtp.trim()) {
-      setErrorMessage('Please enter the 6-digit OTP code.');
-      return;
-    }
-
-    if (enteredOtp.trim() !== generatedOtp && enteredOtp.trim() !== '123456') {
-      setErrorMessage('Invalid OTP verification code. Please check the code and try again.');
-      return;
-    }
-
-    // OTP Verified successfully! Create new user pending admin portal review
-    const cleanNickname = nickname.trim().startsWith('@') ? nickname.trim() : `@${nickname.trim()}`;
-    const matricTrimmed = matricNumber.trim().toUpperCase();
-
+    // Create new user profile directly pending internal Admin approval
     const newUserProfile: UserProfile = {
       id: `usr_${Date.now()}`,
       nickname: cleanNickname,
@@ -396,7 +371,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setMode('LOGIN');
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -434,10 +409,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       };
 
       try {
-        const stored = localStorage.getItem('fuhsi_users_db');
-        if (stored) {
-          const list: any[] = JSON.parse(stored);
-          const found = list.find((u) => u.nickname?.toLowerCase() === '@modula' || u.id === 'usr_admin_modula');
+        // Query latest central database to ensure admin record is fresh
+        const serverDb = await fetchServerDb();
+        if (serverDb && Array.isArray(serverDb.users)) {
+          const stored = localStorage.getItem('fuhsi_users_db');
+          const localUsers = stored ? JSON.parse(stored) : [];
+          const merged = mergeUsers(localUsers, serverDb.users);
+          localStorage.setItem('fuhsi_users_db', JSON.stringify(merged));
+
+          const found = merged.find((u) => u.nickname?.toLowerCase() === '@modula' || u.id === 'usr_admin_modula');
           if (found) {
             modulaAdmin = { ...modulaAdmin, ...found };
           }
@@ -492,6 +472,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ) || null;
     } catch {
       matchedUser = null;
+    }
+
+    // If not found in local cache, query server central database immediately
+    if (!matchedUser) {
+      try {
+        const serverDb = await fetchServerDb();
+        if (serverDb && Array.isArray(serverDb.users)) {
+          const stored = localStorage.getItem('fuhsi_users_db');
+          const localUsers = stored ? JSON.parse(stored) : [];
+          const merged = mergeUsers(localUsers, serverDb.users);
+          localStorage.setItem('fuhsi_users_db', JSON.stringify(merged));
+
+          matchedUser = merged.find(
+            (u) =>
+              u.nickname?.toLowerCase() === searchKey ||
+              u.nickname?.toLowerCase() === `@${searchKey}` ||
+              `@${u.nickname?.toLowerCase()}` === searchKey ||
+              (u.studentEmail && u.studentEmail.toLowerCase() === searchKey)
+          ) || null;
+        }
+      } catch (err) {
+        console.error('Failed to query server DB during login:', err);
+      }
     }
 
     // Default sample student (@IlaMedHero) fallback if not found in db
@@ -756,90 +759,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {mode === 'OTP_VERIFICATION' ? (
-            <form onSubmit={handleVerifyOtpSubmit} className="space-y-4 animate-in fade-in">
-              <div className="bg-teal-50 border border-teal-200 p-4 rounded-xl space-y-2 text-xs">
-                <div className="flex items-center gap-2 font-bold text-teal-900 text-sm">
-                  <Mail size={18} className="text-teal-700 shrink-0" />
-                  <span>Email Verification Code Dispatched</span>
-                </div>
-                <p className="text-teal-800 leading-relaxed">
-                  A 6-digit verification code (OTP) has been dispatched from <strong className="text-teal-950 font-semibold font-mono">fuhsiconnectsupport@gmail.com</strong> to your email address{' '}
-                  <strong className="text-teal-950 font-bold font-mono">{studentEmail.trim()}</strong>. Please check your inbox (and spam folder) or use the quick verification code below.
-                </p>
-              </div>
-
-              {/* Instant Code Helper Badge */}
-              <div className="bg-amber-50 border border-amber-200/90 p-3 rounded-xl text-xs text-amber-950 flex items-center justify-between gap-2 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-amber-900">🔑 Code:</span>
-                  <span className="font-mono font-black text-sm bg-amber-200/90 px-2.5 py-0.5 rounded-md text-amber-950 tracking-wider select-all">{generatedOtp}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEnteredOtp(generatedOtp)}
-                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold text-xs rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs"
-                >
-                  Auto-fill Code
-                </button>
-              </div>
-
-              {/* OTP Input Box */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Enter 6-Digit Verification Code <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <KeyRound size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={enteredOtp}
-                    onChange={(e) => setEnteredOtp(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="e.g. 482910"
-                    className="w-full text-center tracking-[0.5em] text-lg font-black font-mono py-2.5 pl-8 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:border-teal-600 focus:outline-none"
-                    required
-                  />
-                </div>
-              </div>
-
-              {otpResentMessage && (
-                <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-center">
-                  {otpResentMessage}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between text-xs text-slate-500 font-medium pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newCode = generateNewOtp();
-                    setOtpResentMessage(`✓ A new verification code has been dispatched to ${studentEmail.trim()}`);
-                    sendOtpEmail(studentEmail.trim(), newCode, 'Account Verification OTP', realName.trim() || nickname.trim());
-                  }}
-                  className="text-teal-700 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw size={13} />
-                  <span>Resend Code</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('REGISTER')}
-                  className="text-slate-500 font-semibold hover:underline cursor-pointer"
-                >
-                  ← Edit Registration Details
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 px-4 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <CheckCircle2 size={16} />
-                <span>Verify Code & Complete Registration</span>
-              </button>
-            </form>
-          ) : mode === 'REGISTER' ? (
+          {mode === 'REGISTER' ? (
             <form onSubmit={handleRegister} className="space-y-4">
               {/* Student Handle / Nickname */}
               <div>
@@ -888,7 +808,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="email"
                     value={studentEmail}
                     onChange={(e) => setStudentEmail(e.target.value)}
-                    placeholder="e.g. student@fuhsi.edu.ng"
+                    placeholder="Enter your email address"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
                     required
                   />
@@ -1003,8 +923,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="submit"
                 className="w-full py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer"
               >
-                <ArrowRight size={16} />
-                <span>Continue to Account Verification (OTP)</span>
+                <CheckCircle2 size={16} />
+                <span>Create Student Account</span>
               </button>
 
               <div className="text-center pt-2 border-t border-slate-100">
@@ -1024,6 +944,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </form>
           ) : mode === 'LOGIN' ? (
             <form onSubmit={handleLogin} className="space-y-4">
+              {pendingUserNotice && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-1.5 animate-in fade-in">
+                  <div className="font-extrabold text-emerald-950 flex items-center gap-1.5 text-sm">
+                    <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                    <span>Account Registration Submitted!</span>
+                  </div>
+                  <p className="text-emerald-900 font-medium leading-relaxed">
+                    Your account (<strong className="text-emerald-950 font-bold">{pendingUserNotice.nickname}</strong>) has been registered. Please wait for internal Admin review. The Admin will confirm your studentship credentials and notify you via your email (<strong className="font-mono text-emerald-950 font-bold">{pendingUserNotice.studentEmail}</strong>).
+                  </p>
+                </div>
+              )}
+
               {isAdminPortal ? (
                 <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-xl text-xs text-amber-900 space-y-2 animate-in fade-in">
                   <div className="font-extrabold flex items-center justify-between text-amber-800">
@@ -1145,7 +1077,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         type="email"
                         value={forgotEmailInput}
                         onChange={(e) => setForgotEmailInput(e.target.value)}
-                        placeholder="e.g. student@fuhsi.edu.ng"
+                        placeholder="Enter your email address"
                         className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
                         required
                       />

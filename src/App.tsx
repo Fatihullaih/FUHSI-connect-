@@ -10,7 +10,18 @@ import {
 } from './data/initialData';
 import fuhsiLogo from './assets/images/fuhsi_logo_1785485694958.jpg';
 import { calculateUserPoints } from './utils/reputationUtils';
-import { getApprovedMembersCount, getStoredUsers } from './utils/userDbUtils';
+import { getApprovedMembersCount, getStoredUsers, saveStoredUsers } from './utils/userDbUtils';
+import {
+  fetchServerDb,
+  pushServerDbSync,
+  mergeUsers,
+  mergePosts,
+  mergeComments,
+  mergeMarketplaceItems,
+  mergeVerificationRequests,
+  mergeReports,
+  mergeVerifCandidates,
+} from './utils/apiSync';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -125,47 +136,203 @@ export const App: React.FC = () => {
   const activeUserKey = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
   const myBookmarkedPostIds = userBookmarksMap[activeUserKey] || [];
 
-  // Auto Sync States to LocalStorage
+  // Auto Sync States to LocalStorage and Server Central Database
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_user_bookmarks_db', JSON.stringify(userBookmarksMap));
     } catch (e) { console.error(e); }
   }, [userBookmarksMap]);
+
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_posts_db', JSON.stringify(posts));
+      pushServerDbSync({ posts });
     } catch (e) { console.error(e); }
   }, [posts]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_comments_db', JSON.stringify(comments));
+      pushServerDbSync({ comments });
     } catch (e) { console.error(e); }
   }, [comments]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(marketplaceItems));
+      pushServerDbSync({ marketplaceItems });
     } catch (e) { console.error(e); }
   }, [marketplaceItems]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(pendingMarketplaceItems));
+      pushServerDbSync({ pendingMarketplaceItems });
     } catch (e) { console.error(e); }
   }, [pendingMarketplaceItems]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_verifications_db', JSON.stringify(verificationRequests));
+      pushServerDbSync({ verificationRequests });
     } catch (e) { console.error(e); }
   }, [verificationRequests]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_reports_db', JSON.stringify(reports));
+      pushServerDbSync({ reports });
     } catch (e) { console.error(e); }
   }, [reports]);
+
+  // Periodic Cross-Device Central Database Synchronizer
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncWithCentralServerDb = async () => {
+      const db = await fetchServerDb();
+      if (!db || !isMounted) return;
+
+      // 1. Sync Users List
+      let localUsers: UserProfile[] = [];
+      try {
+        const uStr = localStorage.getItem('fuhsi_users_db');
+        if (uStr) localUsers = JSON.parse(uStr);
+      } catch (e) {}
+
+      const mergedUsers = mergeUsers(localUsers, db.users || []);
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(mergedUsers));
+      setAppTotalMembers(mergedUsers.filter((u) => u.isApproved === true && !u.isDeclined).length);
+
+      if (mergedUsers.length > (db.users || []).length) {
+        pushServerDbSync({ users: mergedUsers });
+      }
+
+      // Update active logged-in user if their status/profile was modified by Admin or on another device
+      const activeUserJson = localStorage.getItem('fuhsi_active_user');
+      if (activeUserJson) {
+        try {
+          const parsed = JSON.parse(activeUserJson);
+          const found = mergedUsers.find(
+            (u) => u.id === parsed.id || (u.nickname && u.nickname.toLowerCase() === parsed.nickname?.toLowerCase())
+          );
+          if (found) {
+            setUserProfile((prev) => {
+              if (
+                prev.isApproved !== found.isApproved ||
+                prev.isVerified !== found.isVerified ||
+                prev.isDeclined !== found.isDeclined ||
+                prev.badgeType !== found.badgeType ||
+                prev.badgeTitle !== found.badgeTitle ||
+                prev.reputationScore !== found.reputationScore ||
+                prev.studentEmail !== found.studentEmail
+              ) {
+                const updated = { ...prev, ...found };
+                localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                return updated;
+              }
+              return prev;
+            });
+          }
+        } catch (e) {
+          console.error('Error updating active user profile from server db:', e);
+        }
+      }
+
+      // 2. Sync Posts
+      let localPosts: Post[] = [];
+      try {
+        const pStr = localStorage.getItem('fuhsi_posts_db');
+        if (pStr) localPosts = JSON.parse(pStr);
+      } catch (e) {}
+      const mergedPosts = mergePosts(localPosts, db.posts || []);
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(mergedPosts));
+      setPosts((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedPosts) ? mergedPosts : prev));
+      if (mergedPosts.length > (db.posts || []).length) {
+        pushServerDbSync({ posts: mergedPosts });
+      }
+
+      // 3. Sync Comments
+      let localComments: Comment[] = [];
+      try {
+        const cStr = localStorage.getItem('fuhsi_comments_db');
+        if (cStr) localComments = JSON.parse(cStr);
+      } catch (e) {}
+      const mergedComments = mergeComments(localComments, db.comments || []);
+      localStorage.setItem('fuhsi_comments_db', JSON.stringify(mergedComments));
+      setComments((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedComments) ? mergedComments : prev));
+      if (mergedComments.length > (db.comments || []).length) {
+        pushServerDbSync({ comments: mergedComments });
+      }
+
+      // 4. Sync Marketplace Approved Items
+      let localApproved: MarketplaceItem[] = [];
+      try {
+        const aStr = localStorage.getItem('fuhsi_marketplace_approved_db');
+        if (aStr) localApproved = JSON.parse(aStr);
+      } catch (e) {}
+      const mergedApproved = mergeMarketplaceItems(localApproved, db.marketplaceItems || []);
+      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(mergedApproved));
+      setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedApproved) ? mergedApproved : prev));
+
+      // 5. Sync Marketplace Pending Items
+      let localPending: MarketplaceItem[] = [];
+      try {
+        const penStr = localStorage.getItem('fuhsi_marketplace_pending_db');
+        if (penStr) localPending = JSON.parse(penStr);
+      } catch (e) {}
+      const mergedPending = mergeMarketplaceItems(localPending, db.pendingMarketplaceItems || []);
+      localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(mergedPending));
+      setPendingMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedPending) ? mergedPending : prev));
+
+      // 6. Sync Verification Requests
+      let localVerifs: VerificationRequest[] = [];
+      try {
+        const vStr = localStorage.getItem('fuhsi_verifications_db');
+        if (vStr) localVerifs = JSON.parse(vStr);
+      } catch (e) {}
+      const mergedVerifs = mergeVerificationRequests(localVerifs, db.verificationRequests || []);
+      localStorage.setItem('fuhsi_verifications_db', JSON.stringify(mergedVerifs));
+      setVerificationRequests((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedVerifs) ? mergedVerifs : prev));
+
+      // 7. Sync Reports
+      let localReports: Report[] = [];
+      try {
+        const rStr = localStorage.getItem('fuhsi_reports_db');
+        if (rStr) localReports = JSON.parse(rStr);
+      } catch (e) {}
+      const mergedReports = mergeReports(localReports, db.reports || []);
+      localStorage.setItem('fuhsi_reports_db', JSON.stringify(mergedReports));
+      setReports((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedReports) ? mergedReports : prev));
+
+      // 8. Sync Verification Candidates
+      let localCands: any[] = [];
+      try {
+        const candStr = localStorage.getItem('fuhsi_verif_candidates_db');
+        if (candStr) localCands = JSON.parse(candStr);
+      } catch (e) {}
+      const mergedCands = mergeVerifCandidates(localCands, db.verifCandidates || []);
+      localStorage.setItem('fuhsi_verif_candidates_db', JSON.stringify(mergedCands));
+    };
+
+    // Initial sync immediately on mount
+    syncWithCentralServerDb();
+
+    // Poll server every 2.5 seconds
+    const interval = setInterval(syncWithCentralServerDb, 2500);
+
+    // Sync immediately when user switches back to this browser window / phone tab
+    const handleFocus = () => syncWithCentralServerDb();
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, []);
 
   useEffect(() => {
     if (userProfile && userProfile.nickname) {

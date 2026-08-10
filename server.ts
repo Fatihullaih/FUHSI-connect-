@@ -1,12 +1,139 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
+import { DEFAULT_SERVER_DB } from './src/data/serverDefaults';
+import {
+  mergeUsers,
+  mergePosts,
+  mergeComments,
+  mergeMarketplaceItems,
+  mergeVerificationRequests,
+  mergeReports,
+  mergeVerifCandidates,
+} from './src/utils/apiSync';
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// Central Server Database Persistence File
+const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+let activeDb: typeof DEFAULT_SERVER_DB = { ...DEFAULT_SERVER_DB };
+
+function initAndLoadServerDb() {
+  try {
+    const dataDir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(DB_FILE)) {
+      fs.writeFileSync(DB_FILE, JSON.stringify(DEFAULT_SERVER_DB, null, 2), 'utf-8');
+      activeDb = { ...DEFAULT_SERVER_DB };
+      console.log('[DB Init] Created initial data/db.json on server disk.');
+    } else {
+      const content = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      activeDb = {
+        ...DEFAULT_SERVER_DB,
+        ...parsed,
+        users: mergeUsers(DEFAULT_SERVER_DB.users, parsed.users || []),
+        posts: mergePosts(DEFAULT_SERVER_DB.posts, parsed.posts || []),
+        comments: mergeComments(DEFAULT_SERVER_DB.comments, parsed.comments || []),
+        marketplaceItems: mergeMarketplaceItems(DEFAULT_SERVER_DB.marketplaceItems, parsed.marketplaceItems || []),
+        pendingMarketplaceItems: mergeMarketplaceItems(DEFAULT_SERVER_DB.pendingMarketplaceItems, parsed.pendingMarketplaceItems || []),
+        verificationRequests: mergeVerificationRequests(DEFAULT_SERVER_DB.verificationRequests, parsed.verificationRequests || []),
+        reports: mergeReports(DEFAULT_SERVER_DB.reports, parsed.reports || []),
+        verifCandidates: mergeVerifCandidates(DEFAULT_SERVER_DB.verifCandidates, parsed.verifCandidates || []),
+      };
+      console.log('[DB Init] Loaded central database from data/db.json on server disk with smart merge.');
+    }
+  } catch (err) {
+    console.error('[DB Error] Failed to initialize server DB file:', err);
+    activeDb = { ...DEFAULT_SERVER_DB };
+  }
+}
+
+function persistServerDb() {
+  try {
+    const dataDir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(activeDb, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[DB Error] Failed to persist DB to file:', err);
+  }
+}
+
+// Load DB on startup
+initAndLoadServerDb();
+
+// Central DB API Endpoints
+app.get('/api/db', (req, res) => {
+  return res.json({ success: true, db: activeDb });
+});
+
+app.post('/api/db/sync', (req, res) => {
+  try {
+    const updates = req.body;
+    if (updates && typeof updates === 'object') {
+      let changed = false;
+
+      if (Array.isArray(updates.users)) {
+        activeDb.users = mergeUsers(activeDb.users, updates.users);
+        changed = true;
+      }
+      if (Array.isArray(updates.posts)) {
+        activeDb.posts = mergePosts(activeDb.posts, updates.posts);
+        changed = true;
+      }
+      if (Array.isArray(updates.comments)) {
+        activeDb.comments = mergeComments(activeDb.comments, updates.comments);
+        changed = true;
+      }
+      if (Array.isArray(updates.marketplaceItems)) {
+        activeDb.marketplaceItems = mergeMarketplaceItems(activeDb.marketplaceItems, updates.marketplaceItems);
+        changed = true;
+      }
+      if (Array.isArray(updates.pendingMarketplaceItems)) {
+        activeDb.pendingMarketplaceItems = mergeMarketplaceItems(activeDb.pendingMarketplaceItems, updates.pendingMarketplaceItems);
+        changed = true;
+      }
+      if (Array.isArray(updates.verificationRequests)) {
+        activeDb.verificationRequests = mergeVerificationRequests(activeDb.verificationRequests, updates.verificationRequests);
+        changed = true;
+      }
+      if (Array.isArray(updates.reports)) {
+        activeDb.reports = mergeReports(activeDb.reports, updates.reports);
+        changed = true;
+      }
+      if (Array.isArray(updates.verifCandidates)) {
+        activeDb.verifCandidates = mergeVerifCandidates(activeDb.verifCandidates, updates.verifCandidates);
+        changed = true;
+      }
+      if (typeof updates.verificationFee === 'number') {
+        activeDb.verificationFee = updates.verificationFee;
+        changed = true;
+      }
+      if (updates.notifications && typeof updates.notifications === 'object') {
+        activeDb.notifications = { ...(activeDb.notifications || {}), ...updates.notifications };
+        changed = true;
+      }
+
+      if (changed) {
+        persistServerDb();
+      }
+    }
+    return res.json({ success: true, db: activeDb });
+  } catch (err: any) {
+    console.error('[DB Sync Error]:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Sync failed' });
+  }
+});
 
 // Configure Transporter with official FUHSI Connect support email
 const transporter = nodemailer.createTransport({

@@ -1,5 +1,6 @@
 import { UserProfile } from '../types';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
+import { pushServerDbSync } from './apiSync';
 
 export const USER_DB_KEY = 'fuhsi_users_db';
 
@@ -89,7 +90,7 @@ export function getStoredUsers(): UserProfile[] {
 }
 
 /**
- * Save user list to database
+ * Save user list to database and sync across devices via server API
  */
 export function saveStoredUsers(users: UserProfile[]): void {
   try {
@@ -97,6 +98,10 @@ export function saveStoredUsers(users: UserProfile[]): void {
   } catch (e) {
     console.error('Error saving user database:', e);
   }
+  // Sync to central server database asynchronously
+  pushServerDbSync({ users }).catch((err) => {
+    console.error('Error syncing users to server:', err);
+  });
 }
 
 /**
