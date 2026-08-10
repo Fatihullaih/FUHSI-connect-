@@ -195,6 +195,127 @@ export const App: React.FC = () => {
     } catch (e) { console.error(e); }
   }, [reports]);
 
+  // Real-time Cloud Firestore Database Listener (Instant Sync across all devices)
+  useEffect(() => {
+    let isMounted = true;
+
+    // Seed initial data to Firestore if Firestore is empty
+    const initialUsers = getStoredUsers();
+    seedFirestoreInitialDataIfNeeded(initialUsers, posts).catch((err) =>
+      console.error('Firestore seed check failed:', err)
+    );
+
+    // 1. Subscribe Users
+    const unsubUsers = subscribeUsers((fsUsers) => {
+      if (!isMounted || !fsUsers || fsUsers.length === 0) return;
+      let localUsers: UserProfile[] = [];
+      try {
+        const uStr = localStorage.getItem('fuhsi_users_db');
+        if (uStr) localUsers = JSON.parse(uStr);
+      } catch (e) {}
+
+      const merged = mergeUsers(localUsers, fsUsers);
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(merged));
+      setAppTotalMembers(merged.filter((u) => u.isApproved === true && !u.isDeclined).length);
+
+      // Update active user profile if updated from Firestore
+      const activeUserJson = localStorage.getItem('fuhsi_active_user');
+      if (activeUserJson) {
+        try {
+          const parsed = JSON.parse(activeUserJson);
+          const found = merged.find(
+            (u) => u.id === parsed.id || (u.nickname && u.nickname.toLowerCase() === parsed.nickname?.toLowerCase())
+          );
+          if (found) {
+            setUserProfile((prev) => {
+              if (
+                prev.isApproved !== found.isApproved ||
+                prev.isVerified !== found.isVerified ||
+                prev.isDeclined !== found.isDeclined ||
+                prev.badgeType !== found.badgeType ||
+                prev.badgeTitle !== found.badgeTitle ||
+                prev.reputationScore !== found.reputationScore ||
+                prev.studentEmail !== found.studentEmail
+              ) {
+                const updated = { ...prev, ...found };
+                localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                return updated;
+              }
+              return prev;
+            });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+
+    // 2. Subscribe Posts
+    const unsubPosts = subscribePosts((fsPosts) => {
+      if (!isMounted || !fsPosts || fsPosts.length === 0) return;
+      let localPosts: Post[] = [];
+      try {
+        const pStr = localStorage.getItem('fuhsi_posts_db');
+        if (pStr) localPosts = JSON.parse(pStr);
+      } catch (e) {}
+
+      const merged = mergePosts(localPosts, fsPosts);
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(merged));
+      setPosts((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+    });
+
+    // 3. Subscribe Comments
+    const unsubComments = subscribeComments((fsComments) => {
+      if (!isMounted || !fsComments || fsComments.length === 0) return;
+      let localComments: Comment[] = [];
+      try {
+        const cStr = localStorage.getItem('fuhsi_comments_db');
+        if (cStr) localComments = JSON.parse(cStr);
+      } catch (e) {}
+
+      const merged = mergeComments(localComments, fsComments);
+      localStorage.setItem('fuhsi_comments_db', JSON.stringify(merged));
+      setComments((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+    });
+
+    // 4. Subscribe Verification Requests
+    const unsubVerifs = subscribeVerificationRequests((fsVerifs) => {
+      if (!isMounted || !fsVerifs || fsVerifs.length === 0) return;
+      let localVerifs: VerificationRequest[] = [];
+      try {
+        const vStr = localStorage.getItem('fuhsi_verifications_db');
+        if (vStr) localVerifs = JSON.parse(vStr);
+      } catch (e) {}
+
+      const merged = mergeVerificationRequests(localVerifs, fsVerifs);
+      localStorage.setItem('fuhsi_verifications_db', JSON.stringify(merged));
+      setVerificationRequests((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+    });
+
+    // 5. Subscribe Marketplace Approved Items
+    const unsubMarketplace = subscribeMarketplaceApproved((fsItems) => {
+      if (!isMounted || !fsItems || fsItems.length === 0) return;
+      let localItems: MarketplaceItem[] = [];
+      try {
+        const mStr = localStorage.getItem('fuhsi_marketplace_approved_db');
+        if (mStr) localItems = JSON.parse(mStr);
+      } catch (e) {}
+
+      const merged = mergeMarketplaceItems(localItems, fsItems);
+      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(merged));
+      setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+    });
+
+    return () => {
+      isMounted = false;
+      unsubUsers();
+      unsubPosts();
+      unsubComments();
+      unsubVerifs();
+      unsubMarketplace();
+    };
+  }, []);
+
   // Periodic Cross-Device Central Database Synchronizer
   useEffect(() => {
     let isMounted = true;
@@ -1198,7 +1319,7 @@ export const App: React.FC = () => {
       </header>
 
       {/* Main Screen Body */}
-      <main className="flex-1">
+      <main className="flex-1 pb-20">
         {navIndex === 0 && (
           <FeedScreen
             posts={posts}
