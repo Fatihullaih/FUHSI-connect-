@@ -29,7 +29,10 @@ import {
   subscribeVerificationRequests,
   subscribeMarketplaceApproved,
   savePostToFirestore,
+  deletePostFromFirestore,
   saveCommentToFirestore,
+  saveMarketplaceApprovedToFirestore,
+  saveVerificationRequestToFirestore,
   seedFirestoreInitialDataIfNeeded,
 } from './lib/firestoreSync';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
@@ -743,11 +746,13 @@ export const App: React.FC = () => {
       prev.map((p) => {
         if (p.id === post.id) {
           const isLiked = !p.isLikedByMe;
-          return {
+          const updated = {
             ...p,
             isLikedByMe: isLiked,
             likesCount: isLiked ? p.likesCount + 1 : p.likesCount - 1,
           };
+          savePostToFirestore(updated).catch((err) => console.error(err));
+          return updated;
         }
         return p;
       })
@@ -778,6 +783,7 @@ export const App: React.FC = () => {
           if (selectedPost && selectedPost.id === post.id) {
             setSelectedPost(updated);
           }
+          savePostToFirestore(updated).catch((err) => console.error(err));
           return updated;
         }
         return p;
@@ -786,6 +792,7 @@ export const App: React.FC = () => {
   };
 
   const handleDeletePost = (postId: string) => {
+    deletePostFromFirestore(postId).catch((err) => console.error(err));
     setPosts((prev) => prev.filter((p) => p.id !== postId));
     setComments((prev) => {
       const next = { ...prev };
@@ -801,7 +808,9 @@ export const App: React.FC = () => {
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
-          return { ...p, content: newContent, text: newContent };
+          const updated = { ...p, content: newContent, text: newContent };
+          savePostToFirestore(updated).catch((err) => console.error(err));
+          return updated;
         }
         return p;
       })
@@ -868,7 +877,7 @@ export const App: React.FC = () => {
           if (optionId === 'A' || optionId === 'opt_0') votesA += 1;
           if (optionId === 'B' || optionId === 'opt_1') votesB += 1;
 
-          return {
+          const updatedPost = {
             ...p,
             userVotedOpt: optionId,
             pollVotesByUser: updatedVotesByUser,
@@ -876,6 +885,8 @@ export const App: React.FC = () => {
             pollVotesA: votesA,
             pollVotesB: votesB,
           };
+          savePostToFirestore(updatedPost).catch((err) => console.error(err));
+          return updatedPost;
         }
         return p;
       })

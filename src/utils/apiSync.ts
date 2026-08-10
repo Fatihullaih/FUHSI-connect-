@@ -80,8 +80,10 @@ export function mergePosts(a: Post[] = [], b: Post[] = []): Post[] {
   b.forEach(processPost);
 
   return Array.from(map.values()).sort((x, y) => {
-    const tX = new Date(x.createdAt || 0).getTime();
-    const tY = new Date(y.createdAt || 0).getTime();
+    const valX = x.createdAt || x.timestamp || 0;
+    const valY = y.createdAt || y.timestamp || 0;
+    const tX = isNaN(new Date(valX).getTime()) ? 0 : new Date(valX).getTime();
+    const tY = isNaN(new Date(valY).getTime()) ? 0 : new Date(valY).getTime();
     return tY - tX;
   });
 }
@@ -158,12 +160,16 @@ export async function fetchServerDb(): Promise<ServerDbState | null> {
   try {
     const res = await fetch('/api/db');
     if (!res.ok) return null;
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return null;
+    }
     const data = await res.json();
     if (data && data.success && data.db) {
       return data.db as ServerDbState;
     }
   } catch (err) {
-    console.error('Failed to fetch server DB:', err);
+    // Silent catch if backend server sync endpoint is not available or returning non-JSON
   }
   return null;
 }
@@ -179,12 +185,16 @@ export async function pushServerDbSync(partialDb: Partial<ServerDbState>): Promi
       body: JSON.stringify(partialDb),
     });
     if (!res.ok) return null;
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return null;
+    }
     const data = await res.json();
     if (data && data.success && data.db) {
       return data.db as ServerDbState;
     }
   } catch (err) {
-    console.error('Failed to sync to server DB:', err);
+    // Silent catch if backend server sync endpoint is not available or returning non-JSON
   }
   return null;
 }
