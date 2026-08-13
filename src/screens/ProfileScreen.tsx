@@ -27,8 +27,12 @@ import {
   Bookmark,
   AlertTriangle,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
+import { ThemeMode, getStoredTheme, setStoredTheme } from '../utils/themeUtils';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { PostCard } from '../components/PostCard';
@@ -96,12 +100,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [level, setLevel] = useState(userProfile?.level || '300L');
   const [bio, setBio] = useState(userProfile?.bio || 'FUHSI Student');
   const [emergencyPhone, setEmergencyPhone] = useState(userProfile?.emergencyHomePhone || '');
-  const [selectedAvatarKey, setSelectedAvatarKey] = useState(userProfile?.avatarKey || 'caduceus');
+  const [selectedAvatarKey, setSelectedAvatarKey] = useState(userProfile?.avatarKey || 'user');
   const [avatarUrl, setAvatarUrl] = useState<string>(userProfile?.avatarUrl || '');
-  const [customUrlInput, setCustomUrlInput] = useState<string>('');
 
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [showSavedToast, setShowSavedToast] = useState(false);
+
+  // Theme Mode State (Persisted in Local Storage)
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredTheme());
+
+  useEffect(() => {
+    const handleThemeEvent = (e: any) => {
+      if (e.detail) {
+        setThemeMode(e.detail);
+      }
+    };
+    window.addEventListener('fuhsi-theme-changed', handleThemeEvent);
+    return () => window.removeEventListener('fuhsi-theme-changed', handleThemeEvent);
+  }, []);
+
+  const handleThemeChange = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    setStoredTheme(mode);
+  };
 
   // Sync form state when userProfile changes
   useEffect(() => {
@@ -162,11 +183,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const levels = ['100L', '200L', '300L', '400L', '500L'];
 
   const avatarOptions = [
-    { key: 'caduceus', label: 'Medicine 🩺' },
-    { key: 'stethoscope', label: 'Nursing 💉' },
-    { key: 'microscope', label: 'MLS 🔬' },
-    { key: 'dna', label: 'Biochem 🧪' },
-    { key: 'pill', label: 'Pharmacy 💊' },
+    { key: 'user', label: 'Student Icon 👤' },
+    { key: 'grad', label: 'Scholar Cap 🎓' },
   ];
 
   // User posts (threads) sorted chronologically (newest first)
@@ -233,14 +251,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setSaveErrorMessage(null);
     setShowSavedToast(false);
 
-    const finalAvatarUrl = customUrlInput.trim() ? customUrlInput.trim() : avatarUrl;
-
-    const error = onSaveProfile(nickname, department, level, bio, selectedAvatarKey, emergencyPhone, finalAvatarUrl);
+    const error = onSaveProfile(nickname, department, level, bio, selectedAvatarKey, emergencyPhone, avatarUrl);
     if (error) {
       setSaveErrorMessage(error);
     } else {
-      setAvatarUrl(finalAvatarUrl);
-      setCustomUrlInput('');
       setShowSavedToast(true);
       setIsEditingSettings(false);
       setTimeout(() => setShowSavedToast(false), 3000);
@@ -518,7 +532,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <div className="flex items-center gap-4">
                 <AvatarIcon
                   avatarKey={selectedAvatarKey}
-                  avatarUrl={avatarUrl || customUrlInput}
+                  avatarUrl={avatarUrl}
                   sizeClassName="w-16 h-16 rounded-full ring-2 ring-teal-500/30 object-cover shrink-0"
                 />
 
@@ -526,46 +540,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   <div className="flex items-center gap-2">
                     <label className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors">
                       <Upload size={14} />
-                      <span>Upload New Photo</span>
+                      <span>Upload Profile Picture</span>
                       <input type="file" accept="image/*" onChange={handleImageFileUpload} className="hidden" />
                     </label>
                     {avatarUrl && (
                       <button
                         type="button"
                         onClick={() => setAvatarUrl('')}
-                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
                       >
                         <Trash2 size={12} />
                         <span>Remove</span>
                       </button>
                     )}
                   </div>
-
-                  <div className="relative">
-                    <Link size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
-                    <input
-                      type="url"
-                      value={customUrlInput}
-                      onChange={(e) => setCustomUrlInput(e.target.value)}
-                      placeholder="Or paste image web link..."
-                      className="w-full pl-7 pr-2.5 py-1.5 text-xs rounded-xl border border-slate-200 text-slate-800 bg-white"
-                    />
-                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Upload an image directly from your device, or select a built-in icon below.
+                  </p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Or Choose Built-in Icon:</label>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Use Built-in Icon:</label>
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                   {avatarOptions.map(({ key, label }) => {
-                    const isSelected = selectedAvatarKey === key && !avatarUrl && !customUrlInput;
+                    const isSelected = selectedAvatarKey === key && !avatarUrl;
                     return (
                       <button
                         key={key}
                         type="button"
-                        onClick={() => setSelectedAvatarKey(key)}
-                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all shrink-0 ${
-                          isSelected ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-500/20' : 'border-slate-200 bg-white'
+                        onClick={() => {
+                          setSelectedAvatarKey(key);
+                          setAvatarUrl('');
+                        }}
+                        className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
+                          isSelected ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-500/20' : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
                       >
                         <AvatarIcon avatarKey={key} sizeClassName="w-8 h-8" />
@@ -574,6 +583,60 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     );
                   })}
                 </div>
+              </div>
+            </div>
+
+            {/* Appearance & Campus Display Mode (Compact Dark Mode Toggle) */}
+            <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  {themeMode === 'dark' ? <Moon className="w-3.5 h-3.5 text-indigo-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
+                  <span>Appearance & Display Mode</span>
+                </label>
+                <span className="text-[9px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-700">
+                  Low-Light Care
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange('light')}
+                  className={`py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1 transition-all text-[11px] font-bold cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-amber-50 border-amber-400 text-amber-950 ring-1 ring-amber-400/30 shadow-xs'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Sun size={13} className={themeMode === 'light' ? 'text-amber-500' : 'text-slate-400'} />
+                  <span>Light</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange('dark')}
+                  className={`py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1 transition-all text-[11px] font-bold cursor-pointer ${
+                    themeMode === 'dark'
+                      ? 'bg-slate-900 border-indigo-500 text-slate-100 ring-1 ring-indigo-500/30 shadow-xs'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Moon size={13} className={themeMode === 'dark' ? 'text-indigo-400' : 'text-slate-400'} />
+                  <span>Dark</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange('system')}
+                  className={`py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1 transition-all text-[11px] font-bold cursor-pointer ${
+                    themeMode === 'system'
+                      ? 'bg-teal-50 dark:bg-teal-950 border-teal-500 text-teal-900 dark:text-teal-100 ring-1 ring-teal-500/30 shadow-xs'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Monitor size={13} className={themeMode === 'system' ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'} />
+                  <span>System</span>
+                </button>
               </div>
             </div>
 

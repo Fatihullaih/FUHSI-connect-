@@ -73,55 +73,6 @@ const POST_TEMPLATES = [
   },
 ];
 
-export const generateMorePosts = (count: number = 5, startOffset: number = 0): Post[] => {
-  const newPosts: Post[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const templateIndex = (startOffset + i) % POST_TEMPLATES.length;
-    const authorIndex = (startOffset + i) % SAMPLE_AUTHORS.length;
-
-    const tpl = POST_TEMPLATES[templateIndex];
-    const author = SAMPLE_AUTHORS[authorIndex];
-
-    const minutesAgo = (startOffset + i + 1) * 12 + Math.floor(Math.random() * 5);
-    let timeStr = '30s ago';
-    if (minutesAgo < 1) {
-      timeStr = `${Math.floor(Math.random() * 45) + 10}s ago`;
-    } else if (minutesAgo < 60) {
-      timeStr = `${minutesAgo}m ago`;
-    } else if (minutesAgo < 1440) {
-      const hours = Math.floor(minutesAgo / 60);
-      timeStr = `${hours}h ago`;
-    } else if (minutesAgo < 5760) {
-      const days = Math.floor(minutesAgo / 1440);
-      timeStr = `${days}d ago`;
-    } else {
-      timeStr = `(22/07/2026)`;
-    }
-
-    newPosts.push({
-      id: `generated_post_${startOffset + i}_${Date.now()}`,
-      authorNickname: author.nickname,
-      authorBadgeType: author.badgeType as any,
-      authorBadgeTitle: author.badgeTitle,
-      authorAvatarKey: author.avatarKey,
-      department: tpl.department,
-      category: tpl.category as any,
-      content: tpl.content,
-      timestamp: timeStr,
-      likesCount: Math.floor(Math.random() * 65) + 5,
-      commentsCount: Math.floor(Math.random() * 18),
-      isLikedByMe: false,
-      isBookmarkedByMe: false,
-      isGhostMode: false,
-      pollQuestion: tpl.pollQuestion,
-      pollOptA: tpl.pollOptA,
-      pollOptB: tpl.pollOptB,
-      pollVotesA: tpl.pollQuestion ? Math.floor(Math.random() * 40) + 10 : 0,
-      pollVotesB: tpl.pollQuestion ? Math.floor(Math.random() * 30) + 5 : 0,
-      isFlagged: false,
-    });
-  }
-
-  return newPosts;
+export const generateMorePosts = (_count: number = 5, _startOffset: number = 0): Post[] => {
+  return [];
 };

@@ -3,6 +3,7 @@ import { MarketplaceItem, UserProfile, DirectMessage, ChatConversation } from '.
 import { 
   ShoppingBag, 
   ShieldCheck, 
+  Shield,
   Tag, 
   MapPin, 
   Eye, 
@@ -20,9 +21,12 @@ import {
   CheckCircle2,
   ShieldAlert,
   UserCheck,
-  Lock
+  Lock,
+  Upload,
+  Trash2
 } from 'lucide-react';
 import { checkIsUserVerified } from '../utils/verificationUtils';
+import { compressImageFile } from '../utils/imageUtils';
 import { VerificationModal } from '../components/VerificationModal';
 
 interface CampusHubScreenProps {
@@ -43,6 +47,7 @@ interface CampusHubScreenProps {
   onMarkAsSold: (itemId: string, ratingStars: number, ratingTag: string) => void;
   onApplyVerificationWithFee: () => void;
   onAuthorClick?: (post: any) => void;
+  onOpenAdminConsole?: () => void;
 }
 
 export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
@@ -67,13 +72,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   const [sellerPhone, setSellerPhone] = useState(userProfile?.emergencyHomePhone || '08031234567');
   const [meetupPoint, setMeetupPoint] = useState('Main Library Entrance');
   
-  // 4-6 Photos State
-  const [photo1, setPhoto1] = useState('https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80');
-  const [photo2, setPhoto2] = useState('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80');
-  const [photo3, setPhoto3] = useState('https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=600&q=80');
-  const [photo4, setPhoto4] = useState('https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80');
-  const [photo5, setPhoto5] = useState('');
-  const [photo6, setPhoto6] = useState('');
+  // Listing device photos state
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   
   const [sellSuccessMsg, setSellSuccessMsg] = useState(false);
   const [formError, setFormError] = useState('');
@@ -171,19 +171,26 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   const adminFee = Math.round(priceVal * 0.1);
   const netPayout = priceVal - adminFee;
 
-  // Auto fill sample 4-photo sets
-  const handleLoadSamplePhotos = (presetCategory: string) => {
-    if (presetCategory === 'Medical Equipment') {
-      setPhoto1('https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80');
-      setPhoto2('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80');
-      setPhoto3('https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=600&q=80');
-      setPhoto4('https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80');
-    } else {
-      setPhoto1('https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80');
-      setPhoto2('https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=600&q=80');
-      setPhoto3('https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80');
-      setPhoto4('https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=600&q=80');
+  const handlePhotosFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const files = Array.from(e.target.files);
+    const remainingSlots = 6 - uploadedPhotos.length;
+    if (remainingSlots <= 0) return;
+
+    const filesToProcess = files.slice(0, remainingSlots);
+    for (const file of filesToProcess) {
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        setUploadedPhotos((prev) => [...prev, compressed]);
+      } catch (err) {
+        console.error('Photo compression error:', err);
+      }
     }
+    e.target.value = '';
+  };
+
+  const handleRemoveUploadedPhoto = (index: number) => {
+    setUploadedPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSellSubmit = (e: React.FormEvent) => {
@@ -199,11 +206,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       return;
     }
 
-    // Collect provided photo URLs
-    const photos = [photo1, photo2, photo3, photo4, photo5, photo6].filter((p) => p.trim().length > 0);
-
-    if (photos.length < 4) {
-      setFormError(`At least 4 clear photos are required to post an item (currently provided: ${photos.length}). Please fill Photo 1 through Photo 4.`);
+    if (uploadedPhotos.length === 0) {
+      setFormError('Please upload at least 1 clear photo of your item directly from your device.');
       return;
     }
 
@@ -215,7 +219,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       description,
       sellerPhone,
       meetupPoint,
-      imageUrls: photos,
+      imageUrls: uploadedPhotos,
     });
 
     setSellSuccessMsg(true);
@@ -353,6 +357,22 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       </div>
 
+      {/* Admin Redirect Banner */}
+      {userProfile?.isAdmin && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between text-xs text-amber-900 font-bold gap-2 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>Administrator Notice: Admin Trade Desk is located inside Admin Control for secure management.</span>
+          </div>
+          <button
+            onClick={() => onOpenAdminConsole?.()}
+            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] shadow-xs cursor-pointer shrink-0 transition-colors"
+          >
+            Open Admin Trade Desk →
+          </button>
+        </div>
+      )}
+
       {/* Primary Tabs */}
       <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold gap-1 overflow-x-auto no-scrollbar">
         <button
@@ -374,8 +394,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               : 'text-slate-600 hover:text-slate-900 font-medium'
           }`}
         >
-          <span>{userProfile?.isAdmin ? '🛡️' : '📩'}</span>
-          <span>{userProfile?.isAdmin ? 'Admin Trade Desk' : 'My Trade Requests & Listings'}</span>
+          <span>📩</span>
+          <span>My Trade Requests & Listings</span>
           {conversations.some((c) => c.unreadCount > 0) && (
             <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
           )}
@@ -402,7 +422,6 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               onClick={() => {
                 if (isVerifiedUser) {
                   setShowSellModal(true);
-                  handleLoadSamplePhotos('Medical Equipment');
                 } else {
                   setShowMarketplaceLockModal(true);
                 }
@@ -587,7 +606,6 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               <button
                 onClick={() => {
                   setShowSellModal(true);
-                  handleLoadSamplePhotos('Medical Equipment');
                 }}
                 className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs transition-colors shrink-0"
               >
@@ -844,7 +862,6 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                       value={category}
                       onChange={(e) => {
                         setCategory(e.target.value);
-                        handleLoadSamplePhotos(e.target.value);
                       }}
                       className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium"
                     >
@@ -911,74 +928,58 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   />
                 </div>
 
-                {/* 4 to 6 Clear Photos Section */}
-                <div className="space-y-2 pt-1 border-t border-slate-100">
+                {/* Device Photos Upload Section */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
                   <div className="flex justify-between items-center">
-                    <label className="block text-xs font-extrabold text-slate-900">
-                      📷 4–6 Clear Photo URLs (Required)
+                    <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <Camera size={15} className="text-teal-600" />
+                      <span>Item Photos (1–6 Device Photos)</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadSamplePhotos(category)}
-                      className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md hover:bg-teal-100"
-                    >
-                      Load Sample 4-Photo Pack
-                    </button>
+                    <span className="text-[10px] font-extrabold text-slate-500">
+                      {uploadedPhotos.length} / 6 selected
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-bold block">Photo 1 (Front View) *</span>
+                  {uploadedPhotos.length < 6 && (
+                    <label className="flex items-center justify-center gap-2 p-3 bg-teal-50 border-2 border-dashed border-teal-300 rounded-xl cursor-pointer hover:bg-teal-100 transition-colors">
+                      <Upload size={16} className="text-teal-700" />
+                      <span className="text-xs font-bold text-teal-800">
+                        Select Item Photos from Device
+                      </span>
                       <input
-                        type="url"
-                        value={photo1}
-                        onChange={(e) => setPhoto1(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full text-xs rounded-lg border border-slate-200 p-2 text-slate-800"
-                        required
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handlePhotosFileUpload}
+                        className="hidden"
                       />
+                    </label>
+                  )}
+
+                  {uploadedPhotos.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {uploadedPhotos.map((photo, idx) => (
+                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-square">
+                          <img src={photo} alt={`Item preview ${idx + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveUploadedPhoto(idx)}
+                            className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full shadow-xs hover:bg-rose-700 transition-colors cursor-pointer"
+                            title="Remove photo"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-bold block">Photo 2 (Side/Back View) *</span>
-                      <input
-                        type="url"
-                        value={photo2}
-                        onChange={(e) => setPhoto2(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full text-xs rounded-lg border border-slate-200 p-2 text-slate-800"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-bold block">Photo 3 (Label / Serial View) *</span>
-                      <input
-                        type="url"
-                        value={photo3}
-                        onChange={(e) => setPhoto3(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full text-xs rounded-lg border border-slate-200 p-2 text-slate-800"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-bold block">Photo 4 (Accessories View) *</span>
-                      <input
-                        type="url"
-                        value={photo4}
-                        onChange={(e) => setPhoto4(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full text-xs rounded-lg border border-slate-200 p-2 text-slate-800"
-                        required
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-colors"
+                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
                 >
-                  Submit 4-Photo Item to Admin Review
+                  Submit Item to Admin Review
                 </button>
               </form>
             )}

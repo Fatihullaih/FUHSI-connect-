@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
 import { pushServerDbSync } from '../utils/apiSync';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail } from 'lucide-react';
+import { deleteUserFromFirestore } from '../lib/firestoreSync';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
+import { AdminTradeDesk } from '../components/AdminTradeDesk';
 import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
 
 interface ModerationScreenProps {
@@ -11,6 +13,7 @@ interface ModerationScreenProps {
   flaggedPosts?: Post[];
   reports?: Report[];
   verificationRequests?: VerificationRequest[];
+  approvedMarketplaceItems?: MarketplaceItem[];
   pendingMarketplaceItems?: MarketplaceItem[];
   onToggleAntiDoxxing?: (enabled: boolean) => void;
   onToggleProfanityShield?: (enabled: boolean) => void;
@@ -32,6 +35,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   flaggedPosts = [],
   reports = [],
   verificationRequests = [],
+  approvedMarketplaceItems = [],
   pendingMarketplaceItems = [],
   onToggleAntiDoxxing = () => {},
   onToggleProfanityShield = () => {},
@@ -47,6 +51,20 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   onAdminRejectMarketplaceItem = () => {},
   onSendPriceAdvisory = () => {},
 }) => {
+  // Authorization Security Guard
+  if (!userProfile?.isAdmin) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-6 bg-white rounded-2xl border border-rose-200 shadow-xl text-center space-y-4">
+        <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <ShieldAlert size={28} />
+        </div>
+        <h2 className="text-lg font-extrabold text-slate-900">Access Restricted</h2>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          The <strong>Admin Console</strong> and <strong>Admin Trade Desk</strong> are strictly reserved for authenticated administrators. Normal student accounts do not have permission to view or manage trade desk records.
+        </p>
+      </div>
+    );
+  }
   // Verification candidates state with persistence
   const [verifCandidates, setVerifCandidates] = useState(() => {
     try {
@@ -250,6 +268,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       const updatedList = storedList.filter((u) => u.id !== userId && u.nickname.toLowerCase() !== nick.toLowerCase());
       saveStoredUsers(updatedList);
       setAllUsersList(updatedList);
+      deleteUserFromFirestore(userId, nick);
 
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {
@@ -355,11 +374,27 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
           <div>
             <h1 className="font-extrabold text-base">FUHSI Safety & Moderation Council</h1>
             <p className="text-xs text-indigo-200">
-              Marketplace Trade Middleman Desk, Anti-Doxxing Safeguards & Identity Vault
+              Admin Trade Desk, Student Verification Vault & Content Moderation Console
             </p>
           </div>
         </div>
       </div>
+
+      {/* ADMIN TRADE DESK MODULE */}
+      <AdminTradeDesk
+        userProfile={userProfile}
+        approvedMarketplaceItems={approvedMarketplaceItems}
+        pendingMarketplaceItems={pendingMarketplaceItems}
+        reports={reports}
+        onAdminApproveMarketplaceItem={onAdminApproveMarketplaceItem}
+        onAdminRejectMarketplaceItem={onAdminRejectMarketplaceItem}
+        onResolveReport={(repId) => {
+          const report = reports.find((r) => r.id === repId);
+          if (report) {
+            onDismissReport(repId, report.postId);
+          }
+        }}
+      />
 
       {/* Safety Toggles Section */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">

@@ -31,44 +31,28 @@ function initAndLoadServerDb() {
     }
 
     if (!fs.existsSync(DB_FILE)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify(DEFAULT_SERVER_DB, null, 2), 'utf-8');
       activeDb = { ...DEFAULT_SERVER_DB };
+      persistServerDb();
       console.log('[DB Init] Created initial data/db.json on server disk.');
     } else {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      
-      // Filter out legacy demo users and demo posts if present
-      const cleanUsers = (parsed.users || []).filter((u: any) => 
-        u && u.id !== 'user_1' && u.id !== 'usr_pending_demo_1' && u.id !== 'usr_pending_demo_2' && u.nickname !== '@IlaMedHero'
-      );
-      const cleanPosts = (parsed.posts || []).filter((p: any) => 
-        p && !['post_1', 'post_2', 'post_3', 'post_4', 'post_sp1', 'post_101', 'post_102'].includes(p.id)
-      );
-      const cleanComments = (parsed.comments || []).filter((c: any) =>
-        c && !['c_1', 'c_2'].includes(c.id) && !['post_1', 'post_2', 'post_3', 'post_4', 'post_sp1'].includes(c.postId)
-      );
-      const cleanMarketplace = (parsed.marketplaceItems || []).filter((m: any) =>
-        m && !['item_1', 'item_2', 'item_4'].includes(m.id)
-      );
-      const cleanPendingMarketplace = (parsed.pendingMarketplaceItems || []).filter((m: any) =>
-        m && !['item_3'].includes(m.id)
-      );
 
       activeDb = {
         ...DEFAULT_SERVER_DB,
         ...parsed,
-        users: mergeUsers(DEFAULT_SERVER_DB.users, cleanUsers),
-        posts: cleanPosts,
-        comments: cleanComments,
-        marketplaceItems: cleanMarketplace,
-        pendingMarketplaceItems: cleanPendingMarketplace,
-        verificationRequests: (parsed.verificationRequests || []).filter((vr: any) => vr && vr.id !== 'vr_1'),
-        reports: (parsed.reports || []).filter((r: any) => r && r.id !== 'rep_1'),
-        verifCandidates: (parsed.verifCandidates || []).filter((vc: any) => vc && !['cand_1', 'cand_2', 'cand_3'].includes(vc.id)),
+        users: mergeUsers(DEFAULT_SERVER_DB.users, parsed.users || []),
+        posts: parsed.posts || [],
+        comments: parsed.comments || [],
+        marketplaceItems: parsed.marketplaceItems || [],
+        pendingMarketplaceItems: parsed.pendingMarketplaceItems || [],
+        verificationRequests: parsed.verificationRequests || [],
+        reports: parsed.reports || [],
+        verifCandidates: parsed.verifCandidates || [],
+        sentEmails: parsed.sentEmails || [],
       };
       persistServerDb();
-      console.log('[DB Init] Loaded central database from data/db.json on server disk with smart merge.');
+      console.log('[DB Init] Loaded central database from data/db.json on server disk.');
     }
   } catch (err) {
     console.error('[DB Error] Failed to initialize server DB file:', err);

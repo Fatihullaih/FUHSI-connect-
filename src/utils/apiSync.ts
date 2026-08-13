@@ -17,11 +17,18 @@ export interface ServerDbState {
 export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserProfile[] {
   const map = new Map<string, UserProfile>();
 
-  const getKey = (u: UserProfile) => {
-    if (u.id) return u.id;
-    if (u.nickname) return u.nickname.toLowerCase();
-    if (u.studentEmail) return u.studentEmail.toLowerCase();
-    return Math.random().toString();
+  const getKey = (u: UserProfile): string => {
+    if (!u) return '';
+    if (u.studentEmail && u.studentEmail.trim() && !u.studentEmail.includes('admin@fuhsi.edu.ng')) {
+      return `email:${u.studentEmail.trim().toLowerCase()}`;
+    }
+    if (u.nickname && u.nickname.trim()) {
+      return `nick:${u.nickname.trim().toLowerCase().replace(/^@/, '')}`;
+    }
+    if (u.id && u.id.trim()) {
+      return `id:${u.id.trim()}`;
+    }
+    return '';
   };
 
   const processUser = (u: UserProfile) => {

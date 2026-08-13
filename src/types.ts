@@ -28,6 +28,7 @@ export interface UserProfile {
   reputationScore?: number;
   reputationPoints?: number;
   isVerified?: boolean;
+  verificationStatus?: 'pending' | 'approved' | 'rejected' | string;
   isApproved?: boolean;
   isDeclined?: boolean;
   declineReason?: string;
@@ -58,6 +59,7 @@ export interface Comment {
   parentId?: string;
   replyToNickname?: string;
   likesCount?: number;
+  likes?: number;
   isLikedByMe?: boolean;
 }
 
@@ -89,11 +91,13 @@ export interface Post {
   videoUri?: string;
   timestamp: string;
   likesCount?: number;
+  likes?: number;
   upvotes?: number;
   downvotes?: number;
   commentsCount?: number;
   commentCount?: number;
   shareCount?: number;
+  bookmarks?: number;
   isLikedByMe?: boolean;
   isBookmarkedByMe?: boolean;
   isBookmarked?: boolean;
@@ -102,6 +106,11 @@ export interface Post {
   isSponsored?: boolean;
   sponsorName?: string;
   sponsorActionUrl?: string;
+  nickname?: string;
+  customNickname?: string;
+  isVerified?: boolean;
+  createdAt?: string;
+  timeAgo?: string;
   pollQuestion?: string;
   pollOptions?: PollOption[];
   pollVotesByUser?: Record<string, string>;

@@ -36,6 +36,7 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   onToggleLike,
   onToggleBookmark,
   onDeletePost,
+  onEditPost,
   onDeleteComment,
   onVotePoll,
   onAuthorClick,

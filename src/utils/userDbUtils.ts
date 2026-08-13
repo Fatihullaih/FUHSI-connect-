@@ -1,6 +1,6 @@
 import { UserProfile } from '../types';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
-import { pushServerDbSync } from './apiSync';
+import { pushServerDbSync, mergeUsers } from './apiSync';
 import { saveUserToFirestore, saveUsersBatchToFirestore } from '../lib/firestoreSync';
 
 export const USER_DB_KEY = 'fuhsi_users_db';
@@ -36,7 +36,16 @@ export function getStoredUsers(): UserProfile[] {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Automatically merge/deduplicate on read to clean duplicate records
+        const cleaned = mergeUsers(parsed, []);
+        if (cleaned.length !== parsed.length) {
+          try {
+            localStorage.setItem(USER_DB_KEY, JSON.stringify(cleaned));
+          } catch (e) {
+            console.error('Error auto-cleaning user database:', e);
+          }
+        }
+        return cleaned;
       }
     }
   } catch (err) {
@@ -56,17 +65,18 @@ export function getStoredUsers(): UserProfile[] {
  * Save user list to database and sync across devices via Firestore and server API
  */
 export function saveStoredUsers(users: UserProfile[]): void {
+  const cleaned = mergeUsers(users, []);
   try {
-    localStorage.setItem(USER_DB_KEY, JSON.stringify(users));
+    localStorage.setItem(USER_DB_KEY, JSON.stringify(cleaned));
   } catch (e) {
     console.error('Error saving user database:', e);
   }
   // Sync to Firestore cloud database
-  saveUsersBatchToFirestore(users).catch((err) => {
+  saveUsersBatchToFirestore(cleaned).catch((err) => {
     console.error('Error batch saving users to Firestore:', err);
   });
   // Sync to central server database asynchronously
-  pushServerDbSync({ users, replaceUsers: true } as any).catch((err) => {
+  pushServerDbSync({ users: cleaned, replaceUsers: true } as any).catch((err) => {
     console.error('Error syncing users to server:', err);
   });
 }
@@ -85,11 +95,15 @@ export function getApprovedMembersCount(): number {
  */
 export function upsertUser(user: UserProfile): UserProfile[] {
   const users = getStoredUsers();
-  const index = users.findIndex(
-    (u) =>
-      u.id === user.id ||
-      (u.nickname && u.nickname.toLowerCase() === user.nickname.toLowerCase())
-  );
+  const normNick = (user.nickname || '').trim().toLowerCase().replace(/^@/, '');
+  const normEmail = (user.studentEmail || '').trim().toLowerCase();
+
+  const index = users.findIndex((u) => {
+    if (u.id && user.id && u.id === user.id) return true;
+    if (normNick && (u.nickname || '').trim().toLowerCase().replace(/^@/, '') === normNick) return true;
+    if (normEmail && normEmail !== 'admin@fuhsi.edu.ng' && (u.studentEmail || '').trim().toLowerCase() === normEmail) return true;
+    return false;
+  });
 
   let updatedUser = user;
   if (index >= 0) {

@@ -36,12 +36,20 @@ export function subscribeUsers(onUpdate: (users: UserProfile[]) => void) {
 }
 
 /**
+ * Clean objects for Firestore (Firestore throws error if field value is undefined)
+ */
+function sanitizeForFirestore<T>(data: T): T {
+  if (!data) return data;
+  return JSON.parse(JSON.stringify(data));
+}
+
+/**
  * Save single user to Firestore
  */
 export async function saveUserToFirestore(user: UserProfile): Promise<void> {
   if (!user || (!user.id && !user.nickname)) return;
   const docId = user.id || user.nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const cleanUser = { ...user, id: user.id || docId };
+  const cleanUser = sanitizeForFirestore({ ...user, id: user.id || docId });
   try {
     await setDoc(doc(db, USERS_COL, docId), cleanUser, { merge: true });
   } catch (err) {
@@ -58,12 +66,29 @@ export async function saveUsersBatchToFirestore(users: UserProfile[]): Promise<v
     const batch = writeBatch(db);
     users.forEach((user) => {
       const docId = user.id || user.nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
-      const cleanUser = { ...user, id: user.id || docId };
+      const cleanUser = sanitizeForFirestore({ ...user, id: user.id || docId });
       batch.set(doc(db, USERS_COL, docId), cleanUser, { merge: true });
     });
     await batch.commit();
   } catch (err) {
     console.error('Error saving batch users to Firestore:', err);
+  }
+}
+
+/**
+ * Delete single user from Firestore
+ */
+export async function deleteUserFromFirestore(userId: string, nickname?: string): Promise<void> {
+  try {
+    if (userId) {
+      await deleteDoc(doc(db, USERS_COL, userId));
+    }
+    if (nickname) {
+      const docId = nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      await deleteDoc(doc(db, USERS_COL, docId));
+    }
+  } catch (err) {
+    console.error('Error deleting user from Firestore:', err);
   }
 }
 
@@ -90,7 +115,7 @@ export function subscribePosts(onUpdate: (posts: Post[]) => void) {
 export async function savePostToFirestore(post: Post): Promise<void> {
   if (!post || !post.id) return;
   try {
-    await setDoc(doc(db, POSTS_COL, post.id), post, { merge: true });
+    await setDoc(doc(db, POSTS_COL, post.id), sanitizeForFirestore(post), { merge: true });
   } catch (err) {
     console.error('Error saving post to Firestore:', err);
   }
@@ -129,7 +154,7 @@ export function subscribeComments(onUpdate: (comments: Comment[]) => void) {
 export async function saveCommentToFirestore(comment: Comment): Promise<void> {
   if (!comment || !comment.id) return;
   try {
-    await setDoc(doc(db, COMMENTS_COL, comment.id), comment, { merge: true });
+    await setDoc(doc(db, COMMENTS_COL, comment.id), sanitizeForFirestore(comment), { merge: true });
   } catch (err) {
     console.error('Error saving comment to Firestore:', err);
   }
@@ -151,7 +176,7 @@ export function subscribeMarketplaceApproved(onUpdate: (items: MarketplaceItem[]
 export async function saveMarketplaceApprovedToFirestore(item: MarketplaceItem): Promise<void> {
   if (!item || !item.id) return;
   try {
-    await setDoc(doc(db, MARKETPLACE_APPROVED_COL, item.id), item, { merge: true });
+    await setDoc(doc(db, MARKETPLACE_APPROVED_COL, item.id), sanitizeForFirestore(item), { merge: true });
   } catch (err) {
     console.error('Error saving marketplace item to Firestore:', err);
   }
@@ -173,7 +198,7 @@ export function subscribeVerificationRequests(onUpdate: (reqs: VerificationReque
 export async function saveVerificationRequestToFirestore(req: VerificationRequest): Promise<void> {
   if (!req || !req.id) return;
   try {
-    await setDoc(doc(db, VERIFICATIONS_COL, req.id), req, { merge: true });
+    await setDoc(doc(db, VERIFICATIONS_COL, req.id), sanitizeForFirestore(req), { merge: true });
   } catch (err) {
     console.error('Error saving verification request to Firestore:', err);
   }
@@ -199,5 +224,42 @@ export async function seedFirestoreInitialDataIfNeeded(initialUsers: UserProfile
     }
   } catch (err) {
     console.error('Error seeding initial Firestore data:', err);
+  }
+}
+
+/**
+ * Purge all non-admin users and all posts/content from Firestore
+ */
+export async function purgeAllExceptAdminFromFirestore(): Promise<void> {
+  try {
+    const usersSnap = await getDocs(collection(db, USERS_COL));
+    usersSnap.forEach((docSnap) => {
+      const data = docSnap.data() as UserProfile;
+      if (!data.isAdmin && data.nickname !== '@modula') {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const postsSnap = await getDocs(collection(db, POSTS_COL));
+    postsSnap.forEach((docSnap) => deleteDoc(docSnap.ref).catch((err) => console.error(err)));
+
+    const commentsSnap = await getDocs(collection(db, COMMENTS_COL));
+    commentsSnap.forEach((docSnap) => deleteDoc(docSnap.ref).catch((err) => console.error(err)));
+
+    const mpApprovedSnap = await getDocs(collection(db, MARKETPLACE_APPROVED_COL));
+    mpApprovedSnap.forEach((docSnap) => deleteDoc(docSnap.ref).catch((err) => console.error(err)));
+
+    const mpPendingSnap = await getDocs(collection(db, MARKETPLACE_PENDING_COL));
+    mpPendingSnap.forEach((docSnap) => deleteDoc(docSnap.ref).catch((err) => console.error(err)));
+
+    const verifsSnap = await getDocs(collection(db, VERIFICATIONS_COL));
+    verifsSnap.forEach((docSnap) => deleteDoc(docSnap.ref).catch((err) => console.error(err)));
+
+    const reportsSnap = await getDocs(collection(db, REPORTS_COL));
+    reportsSnap.forEach((docSnap) => deleteDoc(docSnap.ref).catch((err) => console.error(err)));
+
+    console.log('Successfully purged all non-admin data and posts from Firestore.');
+  } catch (err) {
+    console.error('Error purging Firestore database:', err);
   }
 }

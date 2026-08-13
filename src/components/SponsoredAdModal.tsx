@@ -146,12 +146,12 @@ export const SponsoredAdModal: React.FC<SponsoredAdModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">WhatsApp / Phone Contact Link:</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">WhatsApp / Contact Phone Number:</label>
                 <input
-                  type="text"
+                  type="tel"
                   value={whatsappLink}
                   onChange={(e) => setWhatsappLink(e.target.value)}
-                  placeholder="e.g. https://wa.me/2348030000000 or 08031234567"
+                  placeholder="e.g. 08031234567"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-hidden focus:border-purple-600"
                 />
               </div>

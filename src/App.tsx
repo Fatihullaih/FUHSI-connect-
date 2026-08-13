@@ -34,7 +34,9 @@ import {
   saveMarketplaceApprovedToFirestore,
   saveVerificationRequestToFirestore,
   seedFirestoreInitialDataIfNeeded,
+  purgeAllExceptAdminFromFirestore,
 } from './lib/firestoreSync';
+import { initTheme, getStoredTheme, setStoredTheme, ThemeMode } from './utils/themeUtils';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -51,7 +53,7 @@ import { AuthModal } from './components/AuthModal';
 import { VerificationBadge } from './components/VerificationBadge';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
-import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users } from 'lucide-react';
+import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Navigation State
@@ -71,6 +73,30 @@ export const App: React.FC = () => {
     const timer = setInterval(updateCount, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Initialize Theme Preference (Light / Dark Mode / System) from LocalStorage
+  const [activeThemeMode, setActiveThemeMode] = useState<ThemeMode>(() => getStoredTheme());
+
+  useEffect(() => {
+    const cleanup = initTheme();
+    const handleThemeEvent = (e: any) => {
+      if (e.detail) {
+        setActiveThemeMode(e.detail);
+      }
+    };
+    window.addEventListener('fuhsi-theme-changed', handleThemeEvent);
+    return () => {
+      cleanup();
+      window.removeEventListener('fuhsi-theme-changed', handleThemeEvent);
+    };
+  }, []);
+
+  const toggleQuickTheme = () => {
+    const isDarkNow = document.documentElement.classList.contains('dark');
+    const nextTheme: ThemeMode = isDarkNow ? 'light' : 'dark';
+    setActiveThemeMode(nextTheme);
+    setStoredTheme(nextTheme);
+  };
 
   // App Core State with Persistent LocalStorage Initialization
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
@@ -155,45 +181,6 @@ export const App: React.FC = () => {
       localStorage.setItem('fuhsi_user_bookmarks_db', JSON.stringify(userBookmarksMap));
     } catch (e) { console.error(e); }
   }, [userBookmarksMap]);
-
-  // One-time cleanup effect to wipe legacy demo data from localStorage if present
-  useEffect(() => {
-    try {
-      // 1. Clean users: remove user_1, usr_pending_demo_1, usr_pending_demo_2, @IlaMedHero
-      const storedUsers = localStorage.getItem('fuhsi_users_db');
-      if (storedUsers) {
-        const parsed: UserProfile[] = JSON.parse(storedUsers);
-        const filtered = parsed.filter(u => u && u.id !== 'user_1' && u.id !== 'usr_pending_demo_1' && u.id !== 'usr_pending_demo_2' && u.nickname !== '@IlaMedHero');
-        if (filtered.length !== parsed.length) {
-          saveStoredUsers(filtered.length > 0 ? filtered : getStoredUsers());
-        }
-      }
-
-      // 2. Clean posts: remove legacy demo posts
-      const storedPosts = localStorage.getItem('fuhsi_posts_db');
-      if (storedPosts) {
-        const parsed: Post[] = JSON.parse(storedPosts);
-        const filtered = parsed.filter(p => p && !['post_1', 'post_2', 'post_3', 'post_4', 'post_sp1', 'post_101', 'post_102'].includes(p.id));
-        if (filtered.length !== parsed.length) {
-          localStorage.setItem('fuhsi_posts_db', JSON.stringify(filtered));
-          setPosts(filtered);
-          pushServerDbSync({ posts: filtered, replacePosts: true } as any);
-        }
-      }
-
-      // 3. Clean active user if it was a demo user
-      const activeUserJson = localStorage.getItem('fuhsi_active_user');
-      if (activeUserJson) {
-        const parsed = JSON.parse(activeUserJson);
-        if (parsed && (parsed.id === 'user_1' || parsed.nickname === '@IlaMedHero')) {
-          localStorage.removeItem('fuhsi_active_user');
-          setIsLoggedIn(false);
-        }
-      }
-    } catch (err) {
-      console.error('Error during demo cleanup:', err);
-    }
-  }, []);
 
   useEffect(() => {
     try {
@@ -1333,6 +1320,19 @@ export const App: React.FC = () => {
 
           {/* Header Right Actions */}
           <div className="flex items-center gap-2">
+            {/* Dark/Light Mode Quick Toggle Button */}
+            <button
+              onClick={toggleQuickTheme}
+              className="p-1.5 sm:p-2 rounded-full bg-teal-800/80 hover:bg-teal-700/90 border border-teal-600/50 text-amber-300 transition-all shadow-xs flex items-center justify-center cursor-pointer active:scale-95"
+              title="Toggle Low-Light Campus Mode (Dark/Light Theme)"
+            >
+              {typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? (
+                <Sun size={16} className="text-amber-300 animate-spin-slow" />
+              ) : (
+                <Moon size={16} className="text-sky-200" />
+              )}
+            </button>
+
             {/* Live Total Registered Members Indicator Badge (Non-clickable community size indicator) */}
             <div
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-900/80 border border-teal-600/50 text-teal-100 text-xs font-black select-none pointer-events-none cursor-default"
@@ -1410,6 +1410,7 @@ export const App: React.FC = () => {
             onRecordDmBuyIntent={handleRecordDmBuyIntent}
             onMarkAsSold={handleMarkAsSold}
             onAuthorClick={openAuthorProfile}
+            onOpenAdminConsole={() => handleNavChange(5)}
             onApplyVerificationWithFee={() =>
               handleSubmitVerificationRequest(
                 'Verification Review Fee Paid (₦1,500)',
@@ -1437,15 +1438,17 @@ export const App: React.FC = () => {
         )}
 
         {navIndex === 5 && (
-          <ModerationScreen
-            userProfile={userProfile}
-            flaggedPosts={posts.filter((p) => p.isQuarantined)}
-            reports={reports}
-            pendingMarketplaceItems={pendingMarketplaceItems}
-            verificationRequests={verificationRequests}
-            onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
-            onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
-            onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
+          userProfile?.isAdmin ? (
+            <ModerationScreen
+              userProfile={userProfile}
+              flaggedPosts={posts.filter((p) => p.isQuarantined)}
+              reports={reports}
+              approvedMarketplaceItems={marketplaceItems}
+              pendingMarketplaceItems={pendingMarketplaceItems}
+              verificationRequests={verificationRequests}
+              onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
+              onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
+              onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
             onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = '') => {
               setVerificationRequests((prev) => prev.map((v) => {
                 if (v.id === reqId) {
@@ -1594,7 +1597,24 @@ export const App: React.FC = () => {
               }
             }}
           />
-        )}
+        ) : (
+          <div className="max-w-md mx-auto my-12 p-6 bg-white rounded-2xl border border-rose-200 shadow-xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto font-bold text-2xl">
+              🛡️
+            </div>
+            <h2 className="text-lg font-extrabold text-slate-900">Access Denied — Admin Authorization Required</h2>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              The <strong>Admin Control Console</strong> and <strong>Admin Trade Desk</strong> are strictly reserved for authorized FUHSI administrators. Normal student accounts do not have permission to view or manage trade desk records.
+            </p>
+            <button
+              onClick={() => setNavIndex(0)}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-extrabold text-xs hover:bg-slate-800 transition-colors cursor-pointer shadow-md"
+            >
+              Return to Public Campus Feed
+            </button>
+          </div>
+        )
+      )}
       </main>
 
       {/* Profile Modal / Drawer (Triggered by Top-Left Profile Picture Avatar) */}

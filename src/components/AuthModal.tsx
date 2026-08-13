@@ -193,10 +193,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       };
 
       try {
-        const stored = localStorage.getItem('fuhsi_users_db');
-        const list: UserProfile[] = stored ? JSON.parse(stored) : existingUsers;
-        list.push(newAdminProfile);
-        localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+        upsertUser(newAdminProfile);
       } catch (err) {
         console.error('Error saving admin:', err);
       }
@@ -332,7 +329,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Create new user profile directly pending internal Admin approval
+    // Create new user profile with active student status
     const newUserProfile: UserProfile = {
       id: `usr_${Date.now()}`,
       nickname: cleanNickname,
@@ -344,11 +341,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       level,
       bio: `Student in ${department} (${level}) at FUHSI Ila-Orangun.`,
       avatarKey,
-      badgeType: 'NONE',
-      badgeTitle: 'Pending Approval',
+      badgeType: 'GREEN',
+      badgeTitle: 'FUHSI Student',
       reputationScore: 20,
       isVerified: false,
-      isApproved: false, // Must be approved via Admin Portal
+      isApproved: true,
       isDeclined: false,
       isAdmin: false,
       strikes: 0,
@@ -364,11 +361,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       console.error('Error storing user profile:', err);
     }
 
-    setPendingUserNotice(newUserProfile);
-    setLoginIdentifier(cleanNickname);
-    setLoginPassword('');
+    localStorage.setItem('fuhsi_active_user', JSON.stringify(newUserProfile));
+    onLoginSuccess(newUserProfile);
     setErrorMessage('');
-    setMode('LOGIN');
+    onClose();
   };
 
   const handleLogin = async (e: React.FormEvent) => {
