@@ -156,45 +156,84 @@ export const App: React.FC = () => {
     } catch (e) { console.error(e); }
   }, [userBookmarksMap]);
 
+  // One-time cleanup effect to wipe legacy demo data from localStorage if present
+  useEffect(() => {
+    try {
+      // 1. Clean users: remove user_1, usr_pending_demo_1, usr_pending_demo_2, @IlaMedHero
+      const storedUsers = localStorage.getItem('fuhsi_users_db');
+      if (storedUsers) {
+        const parsed: UserProfile[] = JSON.parse(storedUsers);
+        const filtered = parsed.filter(u => u && u.id !== 'user_1' && u.id !== 'usr_pending_demo_1' && u.id !== 'usr_pending_demo_2' && u.nickname !== '@IlaMedHero');
+        if (filtered.length !== parsed.length) {
+          saveStoredUsers(filtered.length > 0 ? filtered : getStoredUsers());
+        }
+      }
+
+      // 2. Clean posts: remove legacy demo posts
+      const storedPosts = localStorage.getItem('fuhsi_posts_db');
+      if (storedPosts) {
+        const parsed: Post[] = JSON.parse(storedPosts);
+        const filtered = parsed.filter(p => p && !['post_1', 'post_2', 'post_3', 'post_4', 'post_sp1', 'post_101', 'post_102'].includes(p.id));
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem('fuhsi_posts_db', JSON.stringify(filtered));
+          setPosts(filtered);
+          pushServerDbSync({ posts: filtered, replacePosts: true } as any);
+        }
+      }
+
+      // 3. Clean active user if it was a demo user
+      const activeUserJson = localStorage.getItem('fuhsi_active_user');
+      if (activeUserJson) {
+        const parsed = JSON.parse(activeUserJson);
+        if (parsed && (parsed.id === 'user_1' || parsed.nickname === '@IlaMedHero')) {
+          localStorage.removeItem('fuhsi_active_user');
+          setIsLoggedIn(false);
+        }
+      }
+    } catch (err) {
+      console.error('Error during demo cleanup:', err);
+    }
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_posts_db', JSON.stringify(posts));
-      pushServerDbSync({ posts });
+      pushServerDbSync({ posts, replacePosts: true } as any);
     } catch (e) { console.error(e); }
   }, [posts]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_comments_db', JSON.stringify(comments));
-      pushServerDbSync({ comments });
+      pushServerDbSync({ comments, replaceComments: true } as any);
     } catch (e) { console.error(e); }
   }, [comments]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(marketplaceItems));
-      pushServerDbSync({ marketplaceItems });
+      pushServerDbSync({ marketplaceItems, replaceMarketplaceItems: true } as any);
     } catch (e) { console.error(e); }
   }, [marketplaceItems]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(pendingMarketplaceItems));
-      pushServerDbSync({ pendingMarketplaceItems });
+      pushServerDbSync({ pendingMarketplaceItems, replacePendingMarketplaceItems: true } as any);
     } catch (e) { console.error(e); }
   }, [pendingMarketplaceItems]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_verifications_db', JSON.stringify(verificationRequests));
-      pushServerDbSync({ verificationRequests });
+      pushServerDbSync({ verificationRequests, replaceVerificationRequests: true } as any);
     } catch (e) { console.error(e); }
   }, [verificationRequests]);
 
   useEffect(() => {
     try {
       localStorage.setItem('fuhsi_reports_db', JSON.stringify(reports));
-      pushServerDbSync({ reports });
+      pushServerDbSync({ reports, replaceReports: true } as any);
     } catch (e) { console.error(e); }
   }, [reports]);
 

@@ -497,29 +497,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     }
 
-    // Default sample student (@IlaMedHero) fallback if not found in db
-    if (!matchedUser && (searchKey === '@ilamedhero' || searchKey === 'ilamedhero')) {
-      if (loginPassword.trim() === 'password123' || loginPassword.trim() === 'password') {
-        matchedUser = {
-          id: 'user_1',
-          nickname: '@IlaMedHero',
-          realName: 'Adeyemo Oluwaseun Joseph',
-          matricNumber: '2023/1042',
-          studentEmail: 'adeyemo.o@fuhsi.edu.ng',
-          emergencyHomePhone: '08031234567',
-          department: 'Medicine and Surgery',
-          level: '300L',
-          bio: 'FUHSI Student | Learning & Saving Lives 🩺 | Class Rep',
-          avatarKey: 'stethoscope',
-          badgeType: 'BLUE',
-          badgeTitle: 'Class Rep & Tech Lead',
-          reputationScore: 2450,
-          isVerified: false,
-          isApproved: true,
-        };
-      }
-    }
-
     if (matchedUser) {
       // Validate password strictly against stored account password
       const expectedPassword = matchedUser.savedPassword || matchedUser.password || 'password123';

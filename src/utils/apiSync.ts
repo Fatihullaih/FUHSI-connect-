@@ -31,16 +31,26 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
     if (!existing) {
       map.set(key, { ...u });
     } else {
+      const isDeclined = Boolean(u.isDeclined || existing.isDeclined);
+      let isApproved = false;
+      if (isDeclined) {
+        isApproved = false;
+      } else if (u.isDeclined === false) {
+        isApproved = u.isApproved !== undefined ? Boolean(u.isApproved) : Boolean(existing.isApproved);
+      } else {
+        isApproved = Boolean(u.isApproved || existing.isApproved);
+      }
+
       const merged: UserProfile = {
         ...existing,
         ...u,
-        isApproved: Boolean(existing.isApproved || u.isApproved),
-        isVerified: Boolean(existing.isVerified || u.isVerified),
-        isDeclined: Boolean(existing.isDeclined && u.isDeclined),
+        isApproved,
+        isDeclined,
+        isVerified: Boolean(u.isVerified !== undefined ? u.isVerified : existing.isVerified),
         isAdmin: Boolean(existing.isAdmin || u.isAdmin),
         reputationScore: Math.max(existing.reputationScore || 0, u.reputationScore || 0),
-        badgeType: u.badgeType && u.badgeType !== 'GREEN' ? u.badgeType : existing.badgeType || u.badgeType || 'GREEN',
-        badgeTitle: u.badgeTitle && u.badgeTitle !== 'FUHSI Student' ? u.badgeTitle : existing.badgeTitle || u.badgeTitle || 'FUHSI Student',
+        badgeType: u.badgeType ? u.badgeType : existing.badgeType || 'GREEN',
+        badgeTitle: u.badgeTitle ? u.badgeTitle : existing.badgeTitle || 'FUHSI Student',
         studentEmail: u.studentEmail || existing.studentEmail,
         savedPassword: (u as any).savedPassword || (existing as any).savedPassword || (u as any).password || (existing as any).password,
       };

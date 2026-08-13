@@ -272,30 +272,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [advisoryMsg, setAdvisoryMsg] = useState('');
 
   // Admin Marketplace Middleman Trade Desk State
-  const [adminTradeRequests, setAdminTradeRequests] = useState([
-    {
-      id: 'req_1',
-      buyerNickname: '@MedBoss',
-      itemTitle: '3M Littmann Classic III Stethoscope',
-      sellerNickname: '@IlaMedHero',
-      price: 38000,
-      meetupPoint: 'Main Library Entrance',
-      timestamp: '10 mins ago',
-      status: 'PENDING_SELLER_CHECK' as 'PENDING_SELLER_CHECK' | 'SELLER_CONTACTED' | 'CONFIRMED_AVAILABLE' | 'UNAVAILABLE' | 'PENALIZED',
-      adminNote: 'Buyer pledge logged. Awaiting seller confirmation.'
-    },
-    {
-      id: 'req_2',
-      buyerNickname: '@NurseQueen_Ila',
-      itemTitle: 'Guyton and Hall Medical Physiology Textbook',
-      sellerNickname: '@BookWorm_Ila',
-      price: 16000,
-      meetupPoint: 'Matriculation Pavilion',
-      timestamp: '25 mins ago',
-      status: 'CONFIRMED_AVAILABLE' as 'PENDING_SELLER_CHECK' | 'SELLER_CONTACTED' | 'CONFIRMED_AVAILABLE' | 'UNAVAILABLE' | 'PENALIZED',
-      adminNote: 'Seller confirmed available. Both parties notified for safe meet-up.'
-    }
-  ]);
+  const [adminTradeRequests, setAdminTradeRequests] = useState<any[]>([]);
 
   const handleLookup = (e?: React.FormEvent, searchOverride?: string) => {
     if (e) e.preventDefault();

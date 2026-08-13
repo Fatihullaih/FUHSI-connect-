@@ -20,48 +20,10 @@ export const DEFAULT_USERS_LIST: UserProfile[] = [
     badgeType: 'GOLD',
     badgeTitle: 'Official Admin',
     reputationScore: 9999,
-    isVerified: false,
+    isVerified: true,
     isApproved: true,
     isDeclined: false,
     isAdmin: true,
-  },
-  {
-    ...INITIAL_USER_PROFILE,
-    isApproved: true,
-    isDeclined: false,
-    isAdmin: false,
-  },
-  {
-    id: 'usr_pending_demo_1',
-    nickname: '@FreshMedStudent',
-    realName: 'Adegoke Emmanuel Temitope',
-    matricNumber: '25/MBS/088',
-    studentEmail: 'adegoke.e@fuhsi.edu.ng',
-    emergencyHomePhone: '08023456789',
-    department: 'Medicine and Surgery',
-    level: '100L',
-    bio: 'Fresh 100L MBBS Student seeking account approval.',
-    badgeTitle: 'Pending Approval',
-    isApproved: false,
-    isDeclined: false,
-    isVerified: false,
-    isAdmin: false,
-  },
-  {
-    id: 'usr_pending_demo_2',
-    nickname: '@NurseGrace_Ila',
-    realName: 'Olanrewaju Grace Omowumi',
-    matricNumber: '24/NSC/412',
-    studentEmail: 'olanrewaju.g@fuhsi.edu.ng',
-    emergencyHomePhone: '08134567890',
-    department: 'Nursing Science',
-    level: '200L',
-    bio: '200L Nursing student registered on FUHSI Connect.',
-    badgeTitle: 'Pending Approval',
-    isApproved: false,
-    isDeclined: false,
-    isVerified: false,
-    isAdmin: false,
   },
 ];
 
@@ -104,7 +66,7 @@ export function saveStoredUsers(users: UserProfile[]): void {
     console.error('Error batch saving users to Firestore:', err);
   });
   // Sync to central server database asynchronously
-  pushServerDbSync({ users }).catch((err) => {
+  pushServerDbSync({ users, replaceUsers: true } as any).catch((err) => {
     console.error('Error syncing users to server:', err);
   });
 }

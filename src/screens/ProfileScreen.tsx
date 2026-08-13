@@ -89,13 +89,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [showPointsBreakdown, setShowPointsBreakdown] = useState(false);
 
   // Edit Form state (owner personal details)
-  const [nickname, setNickname] = useState(userProfile?.nickname || '@IlaMedHero');
-  const [realName, setRealName] = useState(userProfile?.realNameHidden || userProfile?.realName || 'Adeyemo Oluwaseun Joseph');
+  const [nickname, setNickname] = useState(userProfile?.nickname || '@Student');
+  const [realName, setRealName] = useState(userProfile?.realNameHidden || userProfile?.realName || '');
   const [studentEmail, setStudentEmail] = useState(userProfile?.studentEmail || '');
   const [department, setDepartment] = useState(userProfile?.department || 'Medicine and Surgery (MBBS)');
   const [level, setLevel] = useState(userProfile?.level || '300L');
-  const [bio, setBio] = useState(userProfile?.bio || 'FUHSI Student | Learning & Saving Lives');
-  const [emergencyPhone, setEmergencyPhone] = useState(userProfile?.emergencyHomePhone || '08031234567');
+  const [bio, setBio] = useState(userProfile?.bio || 'FUHSI Student');
+  const [emergencyPhone, setEmergencyPhone] = useState(userProfile?.emergencyHomePhone || '');
   const [selectedAvatarKey, setSelectedAvatarKey] = useState(userProfile?.avatarKey || 'caduceus');
   const [avatarUrl, setAvatarUrl] = useState<string>(userProfile?.avatarUrl || '');
   const [customUrlInput, setCustomUrlInput] = useState<string>('');
@@ -106,7 +106,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Sync form state when userProfile changes
   useEffect(() => {
     if (userProfile) {
-      setNickname(userProfile.nickname || '@IlaMedHero');
+      setNickname(userProfile.nickname || '@Student');
       setRealName(userProfile.realNameHidden || userProfile.realName || '');
       setStudentEmail(userProfile.studentEmail || '');
       setDepartment(userProfile.department || 'Medicine and Surgery (MBBS)');
@@ -319,7 +319,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                {userProfile?.nickname || '@IlaMedHero'}
+                {userProfile?.nickname || '@Student'}
               </h1>
               <VerificationBadge
                 isVerified={Boolean(userProfile?.isVerified || userProfile?.verificationStatus === 'approved')}
@@ -742,7 +742,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       {/* FULL-SIZE PROFILE PICTURE LIGHTBOX MODAL */}
       {showPictureModal && (
         <ProfilePictureModal
-          nickname={userProfile?.nickname || '@IlaMedHero'}
+          nickname={userProfile?.nickname || '@Student'}
           avatarUrl={avatarUrl}
           avatarKey={selectedAvatarKey}
           isOwner={true}

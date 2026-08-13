@@ -37,18 +37,37 @@ function initAndLoadServerDb() {
     } else {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
+      
+      // Filter out legacy demo users and demo posts if present
+      const cleanUsers = (parsed.users || []).filter((u: any) => 
+        u && u.id !== 'user_1' && u.id !== 'usr_pending_demo_1' && u.id !== 'usr_pending_demo_2' && u.nickname !== '@IlaMedHero'
+      );
+      const cleanPosts = (parsed.posts || []).filter((p: any) => 
+        p && !['post_1', 'post_2', 'post_3', 'post_4', 'post_sp1', 'post_101', 'post_102'].includes(p.id)
+      );
+      const cleanComments = (parsed.comments || []).filter((c: any) =>
+        c && !['c_1', 'c_2'].includes(c.id) && !['post_1', 'post_2', 'post_3', 'post_4', 'post_sp1'].includes(c.postId)
+      );
+      const cleanMarketplace = (parsed.marketplaceItems || []).filter((m: any) =>
+        m && !['item_1', 'item_2', 'item_4'].includes(m.id)
+      );
+      const cleanPendingMarketplace = (parsed.pendingMarketplaceItems || []).filter((m: any) =>
+        m && !['item_3'].includes(m.id)
+      );
+
       activeDb = {
         ...DEFAULT_SERVER_DB,
         ...parsed,
-        users: mergeUsers(DEFAULT_SERVER_DB.users, parsed.users || []),
-        posts: mergePosts(DEFAULT_SERVER_DB.posts, parsed.posts || []),
-        comments: mergeComments(DEFAULT_SERVER_DB.comments, parsed.comments || []),
-        marketplaceItems: mergeMarketplaceItems(DEFAULT_SERVER_DB.marketplaceItems, parsed.marketplaceItems || []),
-        pendingMarketplaceItems: mergeMarketplaceItems(DEFAULT_SERVER_DB.pendingMarketplaceItems, parsed.pendingMarketplaceItems || []),
-        verificationRequests: mergeVerificationRequests(DEFAULT_SERVER_DB.verificationRequests, parsed.verificationRequests || []),
-        reports: mergeReports(DEFAULT_SERVER_DB.reports, parsed.reports || []),
-        verifCandidates: mergeVerifCandidates(DEFAULT_SERVER_DB.verifCandidates, parsed.verifCandidates || []),
+        users: mergeUsers(DEFAULT_SERVER_DB.users, cleanUsers),
+        posts: cleanPosts,
+        comments: cleanComments,
+        marketplaceItems: cleanMarketplace,
+        pendingMarketplaceItems: cleanPendingMarketplace,
+        verificationRequests: (parsed.verificationRequests || []).filter((vr: any) => vr && vr.id !== 'vr_1'),
+        reports: (parsed.reports || []).filter((r: any) => r && r.id !== 'rep_1'),
+        verifCandidates: (parsed.verifCandidates || []).filter((vc: any) => vc && !['cand_1', 'cand_2', 'cand_3'].includes(vc.id)),
       };
+      persistServerDb();
       console.log('[DB Init] Loaded central database from data/db.json on server disk with smart merge.');
     }
   } catch (err) {
@@ -84,35 +103,67 @@ app.post('/api/db/sync', (req, res) => {
       let changed = false;
 
       if (Array.isArray(updates.users)) {
-        activeDb.users = mergeUsers(activeDb.users, updates.users);
+        if (updates.replaceUsers) {
+          activeDb.users = updates.users;
+        } else {
+          activeDb.users = mergeUsers(activeDb.users, updates.users);
+        }
         changed = true;
       }
       if (Array.isArray(updates.posts)) {
-        activeDb.posts = mergePosts(activeDb.posts, updates.posts);
+        if (updates.replacePosts) {
+          activeDb.posts = updates.posts;
+        } else {
+          activeDb.posts = mergePosts(activeDb.posts, updates.posts);
+        }
         changed = true;
       }
       if (Array.isArray(updates.comments)) {
-        activeDb.comments = mergeComments(activeDb.comments, updates.comments);
+        if (updates.replaceComments) {
+          activeDb.comments = updates.comments;
+        } else {
+          activeDb.comments = mergeComments(activeDb.comments, updates.comments);
+        }
         changed = true;
       }
       if (Array.isArray(updates.marketplaceItems)) {
-        activeDb.marketplaceItems = mergeMarketplaceItems(activeDb.marketplaceItems, updates.marketplaceItems);
+        if (updates.replaceMarketplaceItems) {
+          activeDb.marketplaceItems = updates.marketplaceItems;
+        } else {
+          activeDb.marketplaceItems = mergeMarketplaceItems(activeDb.marketplaceItems, updates.marketplaceItems);
+        }
         changed = true;
       }
       if (Array.isArray(updates.pendingMarketplaceItems)) {
-        activeDb.pendingMarketplaceItems = mergeMarketplaceItems(activeDb.pendingMarketplaceItems, updates.pendingMarketplaceItems);
+        if (updates.replacePendingMarketplaceItems) {
+          activeDb.pendingMarketplaceItems = updates.pendingMarketplaceItems;
+        } else {
+          activeDb.pendingMarketplaceItems = mergeMarketplaceItems(activeDb.pendingMarketplaceItems, updates.pendingMarketplaceItems);
+        }
         changed = true;
       }
       if (Array.isArray(updates.verificationRequests)) {
-        activeDb.verificationRequests = mergeVerificationRequests(activeDb.verificationRequests, updates.verificationRequests);
+        if (updates.replaceVerificationRequests) {
+          activeDb.verificationRequests = updates.verificationRequests;
+        } else {
+          activeDb.verificationRequests = mergeVerificationRequests(activeDb.verificationRequests, updates.verificationRequests);
+        }
         changed = true;
       }
       if (Array.isArray(updates.reports)) {
-        activeDb.reports = mergeReports(activeDb.reports, updates.reports);
+        if (updates.replaceReports) {
+          activeDb.reports = updates.reports;
+        } else {
+          activeDb.reports = mergeReports(activeDb.reports, updates.reports);
+        }
         changed = true;
       }
       if (Array.isArray(updates.verifCandidates)) {
-        activeDb.verifCandidates = mergeVerifCandidates(activeDb.verifCandidates, updates.verifCandidates);
+        if (updates.replaceVerifCandidates) {
+          activeDb.verifCandidates = updates.verifCandidates;
+        } else {
+          activeDb.verifCandidates = mergeVerifCandidates(activeDb.verifCandidates, updates.verifCandidates);
+        }
         changed = true;
       }
       if (typeof updates.verificationFee === 'number') {

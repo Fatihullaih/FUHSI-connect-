@@ -31,12 +31,12 @@ interface LeaderboardScreenProps {
 }
 
 const DEFAULT_DEPARTMENTS: DepartmentRanking[] = [
-  { name: 'Medicine & Surgery', code: 'MED', totalPoints: 12450, activeStudents: 340, topContributor: '@IlaMedHero' },
-  { name: 'Nursing Science', code: 'NRS', totalPoints: 9820, activeStudents: 280, topContributor: '@NurseQueen_Ila' },
-  { name: 'Medical Lab Science', code: 'MLS', totalPoints: 7640, activeStudents: 190, topContributor: '@LabPro_MLS' },
-  { name: 'Physiology', code: 'PHY', totalPoints: 5430, activeStudents: 150, topContributor: '@PhysoChamp' },
-  { name: 'Anatomy', code: 'ANA', totalPoints: 4890, activeStudents: 120, topContributor: '@PreClinicalPro' },
-  { name: 'Biochemistry', code: 'BCH', totalPoints: 4120, activeStudents: 110, topContributor: '@BioChemWhiz' },
+  { name: 'Medicine & Surgery', code: 'MED', totalPoints: 12450, activeStudents: 340, topContributor: '-' },
+  { name: 'Nursing Science', code: 'NRS', totalPoints: 9820, activeStudents: 280, topContributor: '-' },
+  { name: 'Medical Lab Science', code: 'MLS', totalPoints: 7640, activeStudents: 190, topContributor: '-' },
+  { name: 'Physiology', code: 'PHY', totalPoints: 5430, activeStudents: 150, topContributor: '-' },
+  { name: 'Anatomy', code: 'ANA', totalPoints: 4890, activeStudents: 120, topContributor: '-' },
+  { name: 'Biochemistry', code: 'BCH', totalPoints: 4120, activeStudents: 110, topContributor: '-' },
 ];
 
 export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
