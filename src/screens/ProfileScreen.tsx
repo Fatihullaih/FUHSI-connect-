@@ -54,7 +54,16 @@ interface ProfileScreenProps {
     emergencyPhone: string,
     avatarUrl?: string
   ) => string | null;
-  onSubmitVerification?: (data: { matricNumber: string; department: string; level: string; proofDetails: string }) => void;
+  onSubmitVerification?: (data: {
+    accountType?: 'Student' | 'Executive' | 'Organization';
+    positionTitle?: string;
+    matricNumber?: string;
+    department?: string;
+    level?: string;
+    proofDetails?: string;
+    paymentRef?: string;
+    amountPaid?: number;
+  }) => void;
   onOpenAuthModal?: () => void;
   onLikeClick?: (post: Post) => void;
   onBookmarkClick?: (post: Post) => void;

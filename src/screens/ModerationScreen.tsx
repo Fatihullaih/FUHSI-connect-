@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType } from '../types';
+import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType, DirectMessage } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
 import { pushServerDbSync } from '../utils/apiSync';
 import { deleteUserFromFirestore } from '../lib/firestoreSync';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert } from 'lucide-react';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AdminTradeDesk } from '../components/AdminTradeDesk';
 import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
+import { sendDirectMessage, normalizeNickname } from '../utils/messagingUtils';
 
 interface ModerationScreenProps {
   userProfile?: UserProfile | null;
@@ -25,6 +26,7 @@ interface ModerationScreenProps {
   onUpdateVerificationRequestStatus?: (id: string, status: 'APPROVED' | 'REJECTED') => void;
   onApproveVerification?: (id: string, badgeType?: BadgeType, badgeTitle?: string) => void;
   onRejectVerification?: (id: string) => void;
+  onResolveReport?: (reportId: string) => void;
   onAdminApproveMarketplaceItem?: (id: string, approvedPrice: number, note: string) => void;
   onAdminRejectMarketplaceItem?: (id: string, note: string) => void;
   onSendPriceAdvisory?: (id: string, suggestedPrice: number, message: string) => void;
@@ -47,6 +49,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   onUpdateVerificationRequestStatus = () => {},
   onApproveVerification = () => {},
   onRejectVerification = () => {},
+  onResolveReport = () => {},
   onAdminApproveMarketplaceItem = () => {},
   onAdminRejectMarketplaceItem = () => {},
   onSendPriceAdvisory = () => {},
@@ -128,6 +131,48 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   // Pending Student Registrations Approval State
   const [allUsersList, setAllUsersList] = useState<UserProfile[]>([]);
   const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'APPROVED' | 'DECLINED' | 'ALL'>('PENDING');
+
+  // Direct Admin User Query / Message State
+  const [queryModalUser, setQueryModalUser] = useState<{ nickname: string; realName?: string; email?: string } | null>(null);
+  const [querySubject, setQuerySubject] = useState('');
+  const [queryMessage, setQueryMessage] = useState('');
+  const [queryToast, setQueryToast] = useState<string | null>(null);
+
+  const handleOpenQueryModal = (nick: string, realName?: string, email?: string) => {
+    setQueryModalUser({ nickname: nick, realName, email });
+    setQuerySubject(`Official Admin Inquiry - FUHSI Moderation`);
+    setQueryMessage('');
+  };
+
+  const handleSendAdminQuery = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!queryModalUser || !queryMessage.trim()) return;
+
+    const targetNick = queryModalUser.nickname;
+    const cleanNick = normalizeNickname(targetNick);
+    const convId = `conv_${cleanNick}_admin`;
+
+    const fullMessageText = `🛡️ [${querySubject || 'ADMIN INQUIRY'}]\n\n${queryMessage.trim()}\n\n— FUHSI Safety & Moderation Council`;
+
+    const newMsg: DirectMessage = {
+      id: `dm_admin_query_${Date.now()}`,
+      conversationId: convId,
+      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Moderation',
+      receiverNickname: targetNick,
+      text: fullMessageText,
+      timestamp: 'Just now',
+    };
+
+    sendDirectMessage(newMsg);
+
+    setQueryToast(`✓ Message & notification successfully dispatched to ${targetNick}!`);
+    setQueryModalUser(null);
+    setQueryMessage('');
+
+    setTimeout(() => {
+      setQueryToast(null);
+    }, 4500);
+  };
 
   const refreshUsersList = () => {
     const list = getStoredUsers();
@@ -365,6 +410,14 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   return (
     <div className="max-w-3xl mx-auto pb-24 px-4 pt-4 space-y-4">
+      {/* Toast Alert */}
+      {queryToast && (
+        <div className="p-3 bg-emerald-600 text-white font-extrabold text-xs rounded-2xl shadow-lg flex items-center justify-between animate-in fade-in">
+          <span>{queryToast}</span>
+          <button onClick={() => setQueryToast(null)} className="text-white/80 hover:text-white ml-2">✕</button>
+        </div>
+      )}
+
       {/* Moderation Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 shadow-lg border border-indigo-900/50">
         <div className="flex items-center gap-3">
@@ -576,6 +629,15 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                   )}
 
                   <div className="flex gap-2 pt-1 flex-wrap">
+                    <button
+                      onClick={() => handleOpenQueryModal(user.nickname, user.realName, user.studentEmail)}
+                      className="py-1.5 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                      title="Send official inquiry or message to this student"
+                    >
+                      <MessageSquare size={13} />
+                      <span>Message / Query</span>
+                    </button>
+
                     {!user.isApproved || user.isDeclined ? (
                       <button
                         onClick={() => handleApproveRegistration(user.id, user.nickname)}
@@ -659,13 +721,29 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
               <div className="flex gap-2 pt-1 flex-wrap">
                 <button
                   onClick={() => {
+                    const sellerMsg: DirectMessage = {
+                      id: `dm_seller_check_${Date.now()}`,
+                      conversationId: `conv_${normalizeNickname(req.sellerNickname)}_admin`,
+                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
+                      receiverNickname: req.sellerNickname,
+                      text: `Hello ${req.sellerNickname}! A verified student (${req.buyerNickname}) has requested to purchase your "${req.itemTitle}" for ₦${req.price.toLocaleString()}.\n\nIs this item still available for inspection and sale at ${req.meetupPoint}? Please reply directly to confirm!`,
+                      timestamp: 'Just now',
+                      itemId: req.id,
+                      itemTitle: req.itemTitle,
+                      itemPrice: req.price,
+                      meetupPoint: req.meetupPoint,
+                    };
+                    sendDirectMessage(sellerMsg);
+
                     setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
                       ...r,
                       status: 'SELLER_CONTACTED',
-                      adminNote: `Admin sent private prompt to ${req.sellerNickname}: 'A student (${req.buyerNickname}) is ready to buy your ${req.itemTitle} for ₦${req.price.toLocaleString()}. Do you still have it available?'`
+                      adminNote: `Admin sent live direct inquiry to ${req.sellerNickname} to confirm item availability.`
                     } : r));
+                    setQueryToast(`✓ Live inquiry message dispatched to seller ${req.sellerNickname}!`);
+                    setTimeout(() => setQueryToast(null), 4000);
                   }}
-                  className="flex-1 py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
                 >
                   <PhoneCall size={13} />
                   <span>Contact Seller Privately</span>
@@ -673,13 +751,45 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                 <button
                   onClick={() => {
+                    // Send to Buyer
+                    const buyerMsg: DirectMessage = {
+                      id: `dm_meetup_buyer_${Date.now()}`,
+                      conversationId: `conv_${normalizeNickname(req.buyerNickname)}_admin`,
+                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
+                      receiverNickname: req.buyerNickname,
+                      text: `Good news ${req.buyerNickname}! Seller ${req.sellerNickname} has confirmed that "${req.itemTitle}" (₦${req.price.toLocaleString()}) is available!\n\n📍 Scheduled Meet-up Location: ${req.meetupPoint}\n\n🛡️ Safety Guidelines: Inspect the item thoroughly in person before making payment. Do not pay in advance.`,
+                      timestamp: 'Just now',
+                      itemId: req.id,
+                      itemTitle: req.itemTitle,
+                      itemPrice: req.price,
+                      meetupPoint: req.meetupPoint,
+                    };
+                    sendDirectMessage(buyerMsg);
+
+                    // Send to Seller
+                    const sellerMsg: DirectMessage = {
+                      id: `dm_meetup_seller_${Date.now()}`,
+                      conversationId: `conv_${normalizeNickname(req.sellerNickname)}_admin`,
+                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
+                      receiverNickname: req.sellerNickname,
+                      text: `Hi ${req.sellerNickname}, meet-up scheduled with buyer ${req.buyerNickname} for "${req.itemTitle}"!\n\n📍 Meet-up Point: ${req.meetupPoint}\nAmount: ₦${req.price.toLocaleString()}.\n\nPlease ensure you bring the item in clean condition.`,
+                      timestamp: 'Just now',
+                      itemId: req.id,
+                      itemTitle: req.itemTitle,
+                      itemPrice: req.price,
+                      meetupPoint: req.meetupPoint,
+                    };
+                    sendDirectMessage(sellerMsg);
+
                     setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
                       ...r,
                       status: 'CONFIRMED_AVAILABLE',
-                      adminNote: `Seller ${req.sellerNickname} confirmed item is available! Both buyer and seller notified for safe campus exchange at ${req.meetupPoint}.`
+                      adminNote: `Seller ${req.sellerNickname} confirmed item is available! Both buyer (${req.buyerNickname}) and seller notified for safe campus exchange at ${req.meetupPoint}.`
                     } : r));
+                    setQueryToast(`✓ Meet-up scheduled! Live notices dispatched to ${req.buyerNickname} & ${req.sellerNickname}.`);
+                    setTimeout(() => setQueryToast(null), 4500);
                   }}
-                  className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
                 >
                   <CheckCircle2 size={13} />
                   <span>Confirm & Schedule Meet-up</span>
@@ -687,13 +797,27 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                 <button
                   onClick={() => {
+                    const buyerMsg: DirectMessage = {
+                      id: `dm_unavail_buyer_${Date.now()}`,
+                      conversationId: `conv_${normalizeNickname(req.buyerNickname)}_admin`,
+                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
+                      receiverNickname: req.buyerNickname,
+                      text: `Hello ${req.buyerNickname}, we checked with seller ${req.sellerNickname} and unfortunately "${req.itemTitle}" is no longer available (sold or reserved). Please explore other listings in the Campus Hub!`,
+                      timestamp: 'Just now',
+                      itemId: req.id,
+                      itemTitle: req.itemTitle,
+                    };
+                    sendDirectMessage(buyerMsg);
+
                     setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
                       ...r,
                       status: 'UNAVAILABLE',
                       adminNote: `Seller informed Admin item was sold elsewhere. Buyer ${req.buyerNickname} notified.`
                     } : r));
+                    setQueryToast(`✓ Item marked unavailable. Notice sent to ${req.buyerNickname}.`);
+                    setTimeout(() => setQueryToast(null), 4000);
                   }}
-                  className="py-1.5 px-3 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors"
+                  className="py-1.5 px-3 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors cursor-pointer"
                 >
                   Mark Unavailable
                 </button>
@@ -813,6 +937,16 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                 <span className="text-slate-500 block text-[10px] uppercase font-bold">DEPARTMENT & LEVEL</span>
                 <span className="font-bold text-slate-800">{lookupResult.department || 'FUHSI'} ({lookupResult.level || '100L'})</span>
               </div>
+            </div>
+
+            <div className="pt-1 flex justify-end">
+              <button
+                onClick={() => handleOpenQueryModal(lookupResult.nickname, lookupResult.realName, lookupResult.studentEmail)}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <MessageSquare size={13} />
+                <span>Send Official Query / Message to {lookupResult.nickname}</span>
+              </button>
             </div>
           </div>
         )}
@@ -1172,6 +1306,81 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                 Send Price Advisory Note
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SEND OFFICIAL ADMIN QUERY / MESSAGE */}
+      {queryModalUser && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
+                  <Shield className="w-4 h-4 text-teal-700" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Issue Official Admin Inquiry / Message</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">To: {queryModalUser.nickname} {queryModalUser.realName ? `(${queryModalUser.realName})` : ''}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setQueryModalUser(null)} 
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendAdminQuery} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Subject Line</label>
+                <input
+                  type="text"
+                  value={querySubject}
+                  onChange={(e) => setQuerySubject(e.target.value)}
+                  placeholder="e.g. Identity Verification Clarification / Conduct Notice"
+                  className="w-full text-xs rounded-xl border border-slate-300 p-2.5 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Inquiry / Message Body</label>
+                <textarea
+                  value={queryMessage}
+                  onChange={(e) => setQueryMessage(e.target.value)}
+                  placeholder="Type the formal message or inquiry to the student. They will receive an instant notification in their inbox and can reply directly..."
+                  rows={5}
+                  className="w-full text-xs rounded-xl border border-slate-300 p-3 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  This message is sent with official FUHSI Security & Moderation authority. The student will be alerted with high priority.
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setQueryModalUser(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!queryMessage.trim()}
+                  className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send size={13} />
+                  <span>Dispatch Query to Student</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

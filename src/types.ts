@@ -50,6 +50,8 @@ export interface Comment {
   authorAvatarKey?: string;
   authorAvatarId?: string;
   authorAvatarUrl?: string;
+  isVerified?: boolean;
+  authorIsVerified?: boolean;
   content: string;
   imageUrl?: string;
   imageUrls?: string[];
@@ -84,7 +86,9 @@ export interface Post {
   targetDepartment?: string;
   isDepartmentPriority?: boolean;
   category?: PostCategory;
+  categoryTag?: string;
   content: string;
+  text?: string;
   imageUrl?: string;
   imageUrls?: string[];
   imageResName?: string;
@@ -121,6 +125,7 @@ export interface Post {
   userVotedOpt?: 'A' | 'B' | string;
   isFlagged?: boolean;
   flagReason?: string;
+  isQuarantined?: boolean;
   status?: PostStatus;
 }
 
@@ -196,6 +201,11 @@ export interface ChatConversation {
 export interface VerificationRequest {
   id: string;
   applicantNickname: string;
+  applicantFullName?: string;
+  applicantEmail?: string;
+  applicantPhone?: string;
+  department?: string;
+  level?: string;
   category: string;
   accountType?: 'Student' | 'Executive' | 'Organization';
   positionTitle?: string;
@@ -318,6 +328,14 @@ export interface WeeklyRankingItem {
   changeTag?: string;
 }
 
+export interface WeeklyTrendingPost {
+  rank: number;
+  nickname: string;
+  category: string;
+  snippet: string;
+  engagement: string;
+}
+
 export interface CampusEvent {
   id: string;
   title: string;
@@ -333,12 +351,16 @@ export interface CampusEvent {
 
 export interface CampusNotification {
   id: string;
-  type: 'VERIFICATION' | 'LIKE' | 'COMMENT' | 'ADMIN' | 'MARKET' | 'TARGETED_DEPT' | 'TARGETED_FACULTY';
+  type: 'VERIFICATION' | 'LIKE' | 'COMMENT' | 'ADMIN' | 'MARKET' | 'TARGETED_DEPT' | 'TARGETED_FACULTY' | 'DIRECT_MESSAGE' | 'ADMIN_TRADE_DESK';
   title: string;
   message: string;
   timestamp: string;
   isRead: boolean;
   targetDepartment?: string;
   postId?: string;
+  senderNickname?: string;
+  conversationId?: string;
+  actionType?: 'REPLY_ADMIN' | 'OPEN_TRADE_CHAT' | 'VIEW_MARKET' | string;
+  itemId?: string;
 }
 

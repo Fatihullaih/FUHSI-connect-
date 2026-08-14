@@ -5,10 +5,12 @@ import {
   deleteDoc,
   onSnapshot,
   getDocs,
-  writeBatch
+  writeBatch,
+  query,
+  where
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report } from '../types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage } from '../types';
 
 // Collection references
 const USERS_COL = 'users';
@@ -19,6 +21,7 @@ const MARKETPLACE_PENDING_COL = 'marketplace_pending';
 const VERIFICATIONS_COL = 'verification_requests';
 const REPORTS_COL = 'reports';
 const VERIF_CANDIDATES_COL = 'verif_candidates';
+const DIRECT_MESSAGES_COL = 'direct_messages';
 
 /**
  * Subscribe to all users in Firestore in real-time
@@ -164,13 +167,19 @@ export async function saveCommentToFirestore(comment: Comment): Promise<void> {
  * Subscribe to Marketplace Approved Items
  */
 export function subscribeMarketplaceApproved(onUpdate: (items: MarketplaceItem[]) => void) {
-  return onSnapshot(collection(db, MARKETPLACE_APPROVED_COL), (snapshot) => {
-    const list: MarketplaceItem[] = [];
-    snapshot.forEach((docSnap) => {
-      list.push(docSnap.data() as MarketplaceItem);
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    collection(db, MARKETPLACE_APPROVED_COL),
+    (snapshot) => {
+      const list: MarketplaceItem[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as MarketplaceItem);
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('Firestore marketplace subscription fallback/warning:', err?.message || err);
+    }
+  );
 }
 
 export async function saveMarketplaceApprovedToFirestore(item: MarketplaceItem): Promise<void> {
@@ -186,13 +195,19 @@ export async function saveMarketplaceApprovedToFirestore(item: MarketplaceItem):
  * Subscribe to Verification Requests
  */
 export function subscribeVerificationRequests(onUpdate: (reqs: VerificationRequest[]) => void) {
-  return onSnapshot(collection(db, VERIFICATIONS_COL), (snapshot) => {
-    const list: VerificationRequest[] = [];
-    snapshot.forEach((docSnap) => {
-      list.push(docSnap.data() as VerificationRequest);
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    collection(db, VERIFICATIONS_COL),
+    (snapshot) => {
+      const list: VerificationRequest[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as VerificationRequest);
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('Firestore verifications subscription fallback/warning:', err?.message || err);
+    }
+  );
 }
 
 export async function saveVerificationRequestToFirestore(req: VerificationRequest): Promise<void> {
@@ -263,3 +278,81 @@ export async function purgeAllExceptAdminFromFirestore(): Promise<void> {
     console.error('Error purging Firestore database:', err);
   }
 }
+
+/**
+ * Subscribe to Direct Messages filtered by conversation ID in Firestore
+ */
+export function subscribeDirectMessagesByConversation(
+  conversationId: string,
+  onUpdate: (messages: DirectMessage[]) => void,
+  onError?: (err: any) => void
+) {
+  if (!conversationId) {
+    onUpdate([]);
+    return () => {};
+  }
+
+  try {
+    const q = query(
+      collection(db, DIRECT_MESSAGES_COL),
+      where('conversationId', '==', conversationId)
+    );
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const list: DirectMessage[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as DirectMessage);
+        });
+        // Sort chronologically
+        list.sort((a, b) => {
+          const timeA = a.id?.includes('dm_') ? Number(a.id.replace(/\D/g, '')) || 0 : 0;
+          const timeB = b.id?.includes('dm_') ? Number(b.id.replace(/\D/g, '')) || 0 : 0;
+          return timeA - timeB;
+        });
+        onUpdate(list);
+      },
+      (err) => {
+        console.error(`Firestore error subscribing to direct messages for ${conversationId}:`, err);
+        if (onError) onError(err);
+      }
+    );
+  } catch (err) {
+    console.error('Failed to create direct messages subscription:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
+/**
+ * Save single direct message to Firestore
+ */
+export async function saveDirectMessageToFirestore(msg: DirectMessage): Promise<void> {
+  if (!msg || !msg.id) return;
+  try {
+    await setDoc(doc(db, DIRECT_MESSAGES_COL, msg.id), sanitizeForFirestore(msg), { merge: true });
+  } catch (err) {
+    console.error('Error saving direct message to Firestore:', err);
+  }
+}
+
+/**
+ * Subscribe to all direct messages
+ */
+export function subscribeAllDirectMessages(onUpdate: (messages: DirectMessage[]) => void) {
+  return onSnapshot(
+    collection(db, DIRECT_MESSAGES_COL),
+    (snapshot) => {
+      const list: DirectMessage[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as DirectMessage);
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.error('Firestore all direct messages subscription error:', err);
+    }
+  );
+}
+

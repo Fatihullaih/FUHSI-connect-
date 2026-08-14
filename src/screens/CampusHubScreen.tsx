@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MarketplaceItem, UserProfile, DirectMessage, ChatConversation } from '../types';
 import { 
   ShoppingBag, 
@@ -28,6 +28,7 @@ import {
 import { checkIsUserVerified } from '../utils/verificationUtils';
 import { compressImageFile } from '../utils/imageUtils';
 import { VerificationModal } from '../components/VerificationModal';
+import { getStoredDirectMessages, sendDirectMessage, CONVERSATIONS_KEY, normalizeNickname } from '../utils/messagingUtils';
 
 interface CampusHubScreenProps {
   userProfile: UserProfile | null;
@@ -59,6 +60,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   onMarkAsSold,
   onApplyVerificationWithFee,
   onAuthorClick,
+  onOpenAdminConsole,
 }) => {
   const [activeTab, setActiveTab] = useState<'marketplace' | 'chats'>('marketplace');
 
@@ -89,31 +91,64 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   const isVerifiedUser = checkIsUserVerified(userProfile?.nickname, userProfile);
 
   // Admin Middleman Trade Desk Conversations State
-  const [conversations, setConversations] = useState<ChatConversation[]>([
-    {
-      id: 'conv_admin_desk',
-      otherUserNickname: '🛡️ FUHSI Admin Trade Desk',
-      lastMessage: 'Admin Middleman Active: All purchase requests are routed here to verify availability with seller.',
-      lastTimestamp: 'Live Desk',
-      itemId: 'item_1',
-      itemTitle: '3M Littmann Classic III Stethoscope',
-      itemPrice: 38000,
-      meetupPoint: 'Main Library Entrance',
-      unreadCount: 0
+  const [conversations, setConversations] = useState<ChatConversation[]>(() => {
+    try {
+      const stored = localStorage.getItem(CONVERSATIONS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
     }
-  ]);
+    return [
+      {
+        id: 'conv_admin_desk',
+        otherUserNickname: '🛡️ FUHSI Admin Trade Desk',
+        lastMessage: 'Admin Middleman Active: All purchase requests are routed here to verify availability with seller.',
+        lastTimestamp: 'Live Desk',
+        itemId: 'item_1',
+        itemTitle: '3M Littmann Classic III Stethoscope',
+        itemPrice: 38000,
+        meetupPoint: 'Main Library Entrance',
+        unreadCount: 0
+      }
+    ];
+  });
+
   const [activeConvId, setActiveConvId] = useState<string | null>('conv_admin_desk');
-  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([
-    {
-      id: 'dm_admin_1',
-      conversationId: 'conv_admin_desk',
-      senderNickname: '🛡️ FUHSI Admin Trade Desk',
-      receiverNickname: userProfile?.nickname || '@FUHSI_Student',
-      text: 'Welcome to the FUHSI Admin Marketplace Middleman Desk!\n\nInstead of direct seller DMs (which risk harassment and fake buyers), Admin acts as the trusted middleman.\n\nWhen you request to buy an item, we contact the seller privately to confirm availability. Once verified, we schedule a safe campus meet-up where you inspect the item and pay the seller directly!',
-      timestamp: 'Live Desk',
-      isPledgeConfirmed: true
-    }
-  ]);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>(() => {
+    const msgs = getStoredDirectMessages();
+    if (msgs.length > 0) return msgs;
+    return [
+      {
+        id: 'dm_admin_1',
+        conversationId: 'conv_admin_desk',
+        senderNickname: '🛡️ FUHSI Admin Trade Desk',
+        receiverNickname: userProfile?.nickname || '@FUHSI_Student',
+        text: 'Welcome to the FUHSI Admin Marketplace Middleman Desk!\n\nInstead of direct seller DMs (which risk harassment and fake buyers), Admin acts as the trusted middleman.\n\nWhen you request to buy an item, we contact the seller privately to confirm availability. Once verified, we schedule a safe campus meet-up where you inspect the item and pay the seller directly!',
+        timestamp: 'Live Desk',
+        isPledgeConfirmed: true
+      }
+    ];
+  });
+
+  // Listen for direct messages and conversations updates
+  useEffect(() => {
+    const handleDmUpdated = () => {
+      const msgs = getStoredDirectMessages();
+      setDirectMessages(msgs);
+      try {
+        const stored = localStorage.getItem(CONVERSATIONS_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) setConversations(parsed);
+        }
+      } catch (e) {}
+    };
+    window.addEventListener('fuhsi_direct_message_updated', handleDmUpdated);
+    return () => window.removeEventListener('fuhsi_direct_message_updated', handleDmUpdated);
+  }, []);
   const [chatInputText, setChatInputText] = useState('');
 
   // Sold Rating Modal State
@@ -277,18 +312,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       meetupPoint: buyModalItem.meetupPoint
     };
 
-    setDirectMessages((prev) => [...prev, newBuyerMsg, newAdminMsg]);
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === convId
-          ? {
-              ...c,
-              lastMessage: `Buy request logged for ${buyModalItem.title} (₦${buyModalItem.adminApprovedPrice.toLocaleString()})`,
-              lastTimestamp: 'Just now'
-            }
-          : c
-      )
-    );
+    sendDirectMessage(newBuyerMsg);
+    sendDirectMessage(newAdminMsg);
 
     setActiveConvId(convId);
     setBuyIntentSuccess(true);
@@ -317,14 +342,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       timestamp: 'Just now',
     };
 
-    setDirectMessages((prev) => [...prev, newMsg]);
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === activeConvId
-          ? { ...c, lastMessage: chatInputText.trim(), lastTimestamp: 'Just now' }
-          : c
-      )
-    );
+    sendDirectMessage(newMsg);
     setChatInputText('');
   };
 
@@ -356,22 +374,6 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Admin Redirect Banner */}
-      {userProfile?.isAdmin && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between text-xs text-amber-900 font-bold gap-2 shadow-2xs">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-amber-700 shrink-0" />
-            <span>Administrator Notice: Admin Trade Desk is located inside Admin Control for secure management.</span>
-          </div>
-          <button
-            onClick={() => onOpenAdminConsole?.()}
-            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] shadow-xs cursor-pointer shrink-0 transition-colors"
-          >
-            Open Admin Trade Desk →
-          </button>
-        </div>
-      )}
 
       {/* Primary Tabs */}
       <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold gap-1 overflow-x-auto no-scrollbar">

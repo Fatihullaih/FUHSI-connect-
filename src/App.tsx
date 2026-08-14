@@ -734,21 +734,12 @@ export const App: React.FC = () => {
   }, []);
 
   // Anti-doxxing helper function: checks phone numbers, email, links, or matric numbers
-  const checkDoxxingThreats = (text: string): string | null => {
+  const checkDoxxingThreats = (text: string): boolean => {
     const phoneRegex = /(\+?234|0)[789][01]\d{8}/;
     const urlRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|www\.[^\s]+)/i;
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 
-    if (phoneRegex.test(text)) {
-      return 'Phone number detected in post text. Numbers will be redacted to protect student privacy.';
-    }
-    if (urlRegex.test(text)) {
-      return 'External web link detected. Links are sanitized to prevent spam & external scams.';
-    }
-    if (emailRegex.test(text)) {
-      return 'Email address detected. External contacts are sanitized.';
-    }
-    return null;
+    return phoneRegex.test(text) || urlRegex.test(text) || emailRegex.test(text);
   };
 
   // Redact sensitive patterns from text
@@ -772,10 +763,11 @@ export const App: React.FC = () => {
       prev.map((p) => {
         if (p.id === post.id) {
           const isLiked = !p.isLikedByMe;
+          const currentLikes = p.likesCount || 0;
           const updated = {
             ...p,
             isLikedByMe: isLiked,
-            likesCount: isLiked ? p.likesCount + 1 : p.likesCount - 1,
+            likesCount: isLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
           };
           savePostToFirestore(updated).catch((err) => console.error(err));
           return updated;
@@ -820,11 +812,7 @@ export const App: React.FC = () => {
   const handleDeletePost = (postId: string) => {
     deletePostFromFirestore(postId).catch((err) => console.error(err));
     setPosts((prev) => prev.filter((p) => p.id !== postId));
-    setComments((prev) => {
-      const next = { ...prev };
-      delete next[postId];
-      return next;
-    });
+    setComments((prev) => prev.filter((c) => c.postId !== postId));
     if (selectedPost && selectedPost.id === postId) {
       setSelectedPost(null);
     }
@@ -847,13 +835,7 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteComment = (commentId: string) => {
-    setComments((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((postId) => {
-        next[postId] = next[postId].filter((c) => c.id !== commentId && c.parentId !== commentId);
-      });
-      return next;
-    });
+    setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
     setPosts((prev) =>
       prev.map((p) => {
         if (selectedPost && p.id === selectedPost.id) {
@@ -940,6 +922,7 @@ export const App: React.FC = () => {
     targetDepartment?: string;
     category?: string;
     imageUrl?: string;
+    imageUrls?: string[];
     imageResName?: string;
     videoUri?: string;
     pollQuestion?: string;
@@ -1425,6 +1408,9 @@ export const App: React.FC = () => {
             userProfile={userProfile}
             allPosts={posts}
             onSelectPost={openPostDetail}
+            onOpenTradeChat={(_convId) => {
+              handleNavChange(2);
+            }}
           />
         )}
 
@@ -1448,7 +1434,7 @@ export const App: React.FC = () => {
               verificationRequests={verificationRequests}
               onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
               onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
-              onResolveReport={(repId) => setReports((prev) => prev.filter((r) => r.id !== repId))}
+              onResolveReport={(repId: string) => setReports((prev) => prev.filter((r) => r.id !== repId))}
             onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = '') => {
               setVerificationRequests((prev) => prev.map((v) => {
                 if (v.id === reqId) {
@@ -1584,7 +1570,7 @@ export const App: React.FC = () => {
             onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
             onUpdateBadge={(badgeType, badgeTitle) => {
               if (userProfile) {
-                const updated = { ...userProfile, isVerified: true, verificationStatus: 'approved' as const, badgeType: 'VERIFIED' as const, badgeTitle: 'Verified' };
+                const updated = { ...userProfile, isVerified: true, verificationStatus: 'approved' as const, badgeType: badgeType || 'GREEN', badgeTitle: badgeTitle || 'Verified' };
                 setUserProfile(updated);
                 localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
               }
@@ -1726,8 +1712,11 @@ export const App: React.FC = () => {
               authorBadgeTitle: author.badgeTitle || '',
               authorPoints: 0,
               timeAgo: '',
+              category: 'General',
               categoryTag: 'General',
+              content: '',
               text: '',
+              timestamp: new Date().toISOString(),
               likesCount: 0,
               commentsCount: 0,
               isQuarantined: false,

@@ -59,6 +59,35 @@
       },
       "required": ["id", "postId", "content"]
     },
+    "marketplace_approved": {
+      "title": "marketplace_approved",
+      "description": "Approved Marketplace campus trade listings",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "sellerName": { "type": "string" },
+        "sellerNickname": { "type": "string" },
+        "sellerPhone": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "price"]
+    },
+    "marketplace_pending": {
+      "title": "marketplace_pending",
+      "description": "Pending marketplace item submissions awaiting trade desk approval",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "sellerName": { "type": "string" },
+        "sellerNickname": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
     "marketplace_items": {
       "title": "marketplace_items",
       "description": "Marketplace campus items",
@@ -75,6 +104,30 @@
       },
       "required": ["id", "title", "price"]
     },
+    "reports": {
+      "title": "reports",
+      "description": "Moderation reports submitted by students",
+      "properties": {
+        "id": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "reason": { "type": "string" },
+        "reporterNickname": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "targetId", "reason"]
+    },
+    "verif_candidates": {
+      "title": "verif_candidates",
+      "description": "Verification candidates pending admin approval",
+      "properties": {
+        "id": { "type": "string" },
+        "userNickname": { "type": "string" },
+        "badgeType": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "userNickname"]
+    },
     "verification_requests": {
       "title": "verification_requests",
       "description": "Student badge verification requests",
@@ -87,6 +140,23 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "userNickname", "status"]
+    },
+    "direct_messages": {
+      "title": "direct_messages",
+      "description": "Real-time direct chat messages and admin inquiries filtered by conversationId",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "senderNickname": { "type": "string" },
+        "receiverNickname": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemTitle": { "type": "string" },
+        "itemPrice": { "type": "number" },
+        "meetupPoint": { "type": "string" }
+      },
+      "required": ["id", "conversationId", "senderNickname", "receiverNickname", "text"]
     }
   }
 }

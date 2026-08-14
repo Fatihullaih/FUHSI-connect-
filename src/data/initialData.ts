@@ -1,4 +1,4 @@
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, LeaderboardUser } from '../types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, LeaderboardUser, WeeklyRankingItem, WeeklyTrendingPost, CommunityFundSummary } from '../types';
 
 export const INITIAL_USER_PROFILE: UserProfile = {
   id: 'usr_admin_modula',
@@ -116,13 +116,17 @@ export const INITIAL_ACHIEVEMENTS = [
 
 export const INITIAL_VERIFICATION_CANDIDATES: any[] = [];
 
-export const WEEKLY_CAMPUS_RANKINGS = {
+export const WEEKLY_CAMPUS_RANKINGS: {
+  topEngaging: WeeklyRankingItem[];
+  topHelpful: WeeklyRankingItem[];
+  topTrendingPosts: WeeklyTrendingPost[];
+} = {
   topEngaging: [],
   topHelpful: [],
   topTrendingPosts: []
 };
 
-export const INITIAL_COMMUNITY_FUND = {
+export const INITIAL_COMMUNITY_FUND: CommunityFundSummary = {
   totalFundRaised: 348500,
   currentMonthBalance: 125000,
   activeDonorsCount: 86,

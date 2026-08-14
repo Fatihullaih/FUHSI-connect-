@@ -25,7 +25,7 @@ interface FeedScreenProps {
   onCommentClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
   onEditPost?: (postId: string, newContent: string) => void;
-  onVotePoll?: (post: Post, option: 'A' | 'B') => void;
+  onVotePoll?: (post: Post, option: string) => void;
   onReportPost?: (post: Post, reason: string) => void;
   onAuthorClick?: (post: Post) => void;
   onCreatePostClick?: () => void;
@@ -317,7 +317,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
           if (onCreatePostClick) {
             onCreatePostClick();
           } else if (onCreatePost) {
-            onCreatePost('', 'GENERAL');
+            onCreatePost('', 'General');
           }
         }}
         className="fixed bottom-20 right-4 sm:right-8 z-40 bg-teal-700 hover:bg-teal-800 active:scale-95 text-white rounded-full p-4 sm:px-5 sm:py-3.5 shadow-2xl flex items-center gap-2 transition-all hover:scale-105 border border-teal-500/40 group"

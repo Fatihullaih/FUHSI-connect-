@@ -166,7 +166,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="text-xs font-bold text-slate-800 leading-tight">
                   {user.privacyMode === 'Anonymous' ? 'Anonymous Student' : user.nickname}
                 </div>
-                <div className="mt-0.5">{getPrivacyBadge(user.privacyMode)}</div>
+                <div className="mt-0.5">{getPrivacyBadge(user.privacyMode || 'Public')}</div>
               </div>
             </button>
           </div>

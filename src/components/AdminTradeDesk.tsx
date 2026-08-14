@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MarketplaceItem, UserProfile, Report } from '../types';
+import { MarketplaceItem, UserProfile, Report, DirectMessage } from '../types';
 import { 
   MarketplaceTransaction, 
   TransactionStatus, 
@@ -8,6 +8,8 @@ import {
   upsertTransaction, 
   updateTransactionStatus 
 } from '../utils/tradeDeskUtils';
+import { sendDirectMessage, normalizeNickname } from '../utils/messagingUtils';
+import { ChatInterface } from './ChatInterface';
 import { 
   ShieldCheck, 
   Tag, 
@@ -80,6 +82,11 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
   const [recipientNick, setRecipientNick] = useState('');
   const [messageText, setMessageText] = useState('');
   const [messageToast, setMessageToast] = useState<string | null>(null);
+  const [activeAdminLiveChatModal, setActiveAdminLiveChatModal] = useState<{
+    conversationId: string;
+    recipientNickname: string;
+    contextItem?: any;
+  } | null>(null);
 
   // Price Advisory Modal State
   const [advisoryItem, setAdvisoryItem] = useState<MarketplaceItem | null>(null);
@@ -128,28 +135,22 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
     e.preventDefault();
     if (!recipientNick.trim() || !messageText.trim()) return;
 
-    const cleanNick = recipientNick.trim().toLowerCase().replace(/^@/, '');
-    const notifKey = `fuhsi_user_notifications_${cleanNick}`;
+    const targetNickname = recipientNick.startsWith('@') ? recipientNick.trim() : `@${recipientNick.trim()}`;
+    const cleanNick = normalizeNickname(targetNickname);
+    const convId = `conv_${cleanNick}_admin`;
 
-    const adminNotif = {
-      id: `admin_msg_${Date.now()}`,
-      type: 'ADMIN_TRADE_DESK',
-      title: '🛡️ Official Message from FUHSI Admin Trade Desk',
-      message: messageText.trim(),
+    const adminMsg: DirectMessage = {
+      id: `dm_admin_${Date.now()}`,
+      conversationId: convId,
+      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
+      receiverNickname: targetNickname,
+      text: messageText.trim(),
       timestamp: 'Just now',
-      isRead: false,
-      senderNickname: '🛡️ FUHSI Admin Trade Desk',
     };
 
-    try {
-      const existingStr = localStorage.getItem(notifKey);
-      const existing = existingStr ? JSON.parse(existingStr) : [];
-      localStorage.setItem(notifKey, JSON.stringify([adminNotif, ...existing]));
-    } catch (err) {
-      console.error(err);
-    }
+    sendDirectMessage(adminMsg);
 
-    setMessageToast(`✓ Message dispatched to @${cleanNick} inbox & trade notifications!`);
+    setMessageToast(`✓ Message dispatched to ${targetNickname}! They have been notified and can reply directly.`);
     setMessageText('');
     setTimeout(() => setMessageToast(null), 4000);
   };
@@ -775,6 +776,17 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ADMIN LIVE CHAT MODAL */}
+      {activeAdminLiveChatModal && (
+        <ChatInterface
+          conversationId={activeAdminLiveChatModal.conversationId}
+          currentUser={userProfile}
+          recipientNickname={activeAdminLiveChatModal.recipientNickname}
+          contextItem={activeAdminLiveChatModal.contextItem}
+          onClose={() => setActiveAdminLiveChatModal(null)}
+        />
       )}
     </div>
   );

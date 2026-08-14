@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Post, Comment, BadgeType } from '../types';
+import { Post, Comment, BadgeType, UserProfile } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
 import { PostCard } from './PostCard';

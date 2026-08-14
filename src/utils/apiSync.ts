@@ -12,6 +12,7 @@ export interface ServerDbState {
   notifications: Record<string, any[]>;
   verifCandidates: any[];
   sentEmails: any[];
+  tradeDeskTransactions?: any[];
 }
 
 export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserProfile[] {
@@ -80,14 +81,15 @@ export function mergePosts(a: Post[] = [], b: Post[] = []): Post[] {
     if (!existing) {
       map.set(p.id, { ...p });
     } else {
-      const allLikes = Array.from(new Set([...(existing.likes || []), ...(p.likes || [])]));
-      const allBookmarks = Array.from(new Set([...(existing.bookmarks || []), ...(p.bookmarks || [])]));
+      const likesCount = Math.max(existing.likesCount || existing.likes || 0, p.likesCount || p.likes || 0);
+      const bookmarks = Math.max(existing.bookmarks || 0, p.bookmarks || 0);
       const commentsCount = Math.max(existing.commentsCount || 0, p.commentsCount || 0);
       map.set(p.id, {
         ...existing,
         ...p,
-        likes: allLikes,
-        bookmarks: allBookmarks,
+        likes: likesCount,
+        likesCount,
+        bookmarks,
         commentsCount,
       });
     }
@@ -113,8 +115,8 @@ export function mergeComments(a: Comment[] = [], b: Comment[] = []): Comment[] {
     if (!existing) {
       map.set(c.id, { ...c });
     } else {
-      const allLikes = Array.from(new Set([...(existing.likes || []), ...(c.likes || [])]));
-      map.set(c.id, { ...existing, ...c, likes: allLikes });
+      const likesCount = Math.max(existing.likesCount || existing.likes || 0, c.likesCount || c.likes || 0);
+      map.set(c.id, { ...existing, ...c, likes: likesCount, likesCount });
     }
   };
   a.forEach(processComment);

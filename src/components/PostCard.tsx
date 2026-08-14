@@ -39,7 +39,7 @@ interface PostCardProps {
   onCommentClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
   onEditPost?: (postId: string, newContent: string) => void;
-  onVotePoll?: (post: Post, option: 'A' | 'B') => void;
+  onVotePoll?: (post: Post, option: string) => void;
   onReportPost?: (post: Post, reason: string) => void;
   onAuthorClick?: (post: Post) => void;
   // Alternative legacy props
