@@ -7,7 +7,7 @@ import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, Messag
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AdminTradeDesk } from '../components/AdminTradeDesk';
 import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
-import { sendDirectMessage, normalizeNickname } from '../utils/messagingUtils';
+import { sendDirectMessage, normalizeNickname, formatMessageTime } from '../utils/messagingUtils';
 
 interface ModerationScreenProps {
   userProfile?: UserProfile | null;
@@ -160,7 +160,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Moderation',
       receiverNickname: targetNick,
       text: fullMessageText,
-      timestamp: 'Just now',
+      timestamp: formatMessageTime(),
     };
 
     sendDirectMessage(newMsg);
@@ -727,7 +727,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                       senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
                       receiverNickname: req.sellerNickname,
                       text: `Hello ${req.sellerNickname}! A verified student (${req.buyerNickname}) has requested to purchase your "${req.itemTitle}" for ₦${req.price.toLocaleString()}.\n\nIs this item still available for inspection and sale at ${req.meetupPoint}? Please reply directly to confirm!`,
-                      timestamp: 'Just now',
+                      timestamp: formatMessageTime(),
                       itemId: req.id,
                       itemTitle: req.itemTitle,
                       itemPrice: req.price,
@@ -758,7 +758,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                       senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
                       receiverNickname: req.buyerNickname,
                       text: `Good news ${req.buyerNickname}! Seller ${req.sellerNickname} has confirmed that "${req.itemTitle}" (₦${req.price.toLocaleString()}) is available!\n\n📍 Scheduled Meet-up Location: ${req.meetupPoint}\n\n🛡️ Safety Guidelines: Inspect the item thoroughly in person before making payment. Do not pay in advance.`,
-                      timestamp: 'Just now',
+                      timestamp: formatMessageTime(),
                       itemId: req.id,
                       itemTitle: req.itemTitle,
                       itemPrice: req.price,
@@ -773,7 +773,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                       senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
                       receiverNickname: req.sellerNickname,
                       text: `Hi ${req.sellerNickname}, meet-up scheduled with buyer ${req.buyerNickname} for "${req.itemTitle}"!\n\n📍 Meet-up Point: ${req.meetupPoint}\nAmount: ₦${req.price.toLocaleString()}.\n\nPlease ensure you bring the item in clean condition.`,
-                      timestamp: 'Just now',
+                      timestamp: formatMessageTime(),
                       itemId: req.id,
                       itemTitle: req.itemTitle,
                       itemPrice: req.price,
@@ -803,7 +803,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                       senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
                       receiverNickname: req.buyerNickname,
                       text: `Hello ${req.buyerNickname}, we checked with seller ${req.sellerNickname} and unfortunately "${req.itemTitle}" is no longer available (sold or reserved). Please explore other listings in the Campus Hub!`,
-                      timestamp: 'Just now',
+                      timestamp: formatMessageTime(),
                       itemId: req.id,
                       itemTitle: req.itemTitle,
                     };

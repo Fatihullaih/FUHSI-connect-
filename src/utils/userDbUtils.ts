@@ -2,6 +2,7 @@ import { UserProfile } from '../types';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { pushServerDbSync, mergeUsers } from './apiSync';
 import { saveUserToFirestore, saveUsersBatchToFirestore } from '../lib/firestoreSync';
+import { isDemoUser } from './postGenerator';
 
 export const USER_DB_KEY = 'fuhsi_users_db';
 
@@ -36,14 +37,13 @@ export function getStoredUsers(): UserProfile[] {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Automatically merge/deduplicate on read to clean duplicate records
-        const cleaned = mergeUsers(parsed, []);
-        if (cleaned.length !== parsed.length) {
-          try {
-            localStorage.setItem(USER_DB_KEY, JSON.stringify(cleaned));
-          } catch (e) {
-            console.error('Error auto-cleaning user database:', e);
-          }
+        // Automatically filter out any demo/mock accounts and deduplicate
+        const realUsers = parsed.filter((u) => !isDemoUser(u));
+        const cleaned = mergeUsers(realUsers.length > 0 ? realUsers : DEFAULT_USERS_LIST, []);
+        try {
+          localStorage.setItem(USER_DB_KEY, JSON.stringify(cleaned));
+        } catch (e) {
+          console.error('Error auto-cleaning user database:', e);
         }
         return cleaned;
       }
@@ -65,7 +65,8 @@ export function getStoredUsers(): UserProfile[] {
  * Save user list to database and sync across devices via Firestore and server API
  */
 export function saveStoredUsers(users: UserProfile[]): void {
-  const cleaned = mergeUsers(users, []);
+  const realOnly = users.filter((u) => !isDemoUser(u));
+  const cleaned = mergeUsers(realOnly.length > 0 ? realOnly : DEFAULT_USERS_LIST, []);
   try {
     localStorage.setItem(USER_DB_KEY, JSON.stringify(cleaned));
   } catch (e) {
@@ -80,6 +81,7 @@ export function saveStoredUsers(users: UserProfile[]): void {
     console.error('Error syncing users to server:', err);
   });
 }
+
 
 /**
  * Calculate the total count of approved, active community members

@@ -2,7 +2,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { UserProfile, Post, CampusNotification, DirectMessage } from '../types';
 import { Bell, ShieldCheck, Sparkles, MessageSquare, Heart, Award, Info, CheckCheck, Trash2, Megaphone, Check, Building2, Landmark, Layers, Send, ShieldAlert, CornerDownRight, Shield } from 'lucide-react';
 import { isUserMatchingAudience, isFacultyTarget } from '../utils/audienceUtils';
-import { sendDirectMessage, getStoredDirectMessages, normalizeNickname } from '../utils/messagingUtils';
+import { 
+  sendDirectMessage, 
+  getStoredDirectMessages, 
+  normalizeNickname, 
+  formatMessageTime,
+  getReadNotificationIds,
+  setReadNotificationId,
+  setAllNotificationIdsRead,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  getUserNotifications
+} from '../utils/messagingUtils';
 import { ChatInterface } from '../components/ChatInterface';
 
 interface NotificationScreenProps {
@@ -19,8 +30,17 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
   onOpenTradeChat 
 }) => {
   const [filter, setFilter] = useState<'ALL' | 'TARGETED' | 'UNREAD' | 'ADMIN' | 'MESSAGES'>('ALL');
-  const [readNotifIds, setReadNotifIds] = useState<Record<string, boolean>>({});
+  const [readNotifIds, setReadNotifIds] = useState<Record<string, boolean>>(() => {
+    return userProfile?.nickname ? getReadNotificationIds(userProfile.nickname) : {};
+  });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Sync readNotifIds if userProfile changes
+  useEffect(() => {
+    if (userProfile?.nickname) {
+      setReadNotifIds(getReadNotificationIds(userProfile.nickname));
+    }
+  }, [userProfile?.nickname]);
 
   // Reply Modal State
   const [replyingTo, setReplyingTo] = useState<CampusNotification | null>(null);
@@ -40,10 +60,12 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
     const targetConvId = n.conversationId || `conv_${cleanNick}_admin`;
     const recipient = n.senderNickname || '🛡️ FUHSI Admin Trade Desk';
 
-    setReadNotifIds((prev) => ({
-      ...prev,
-      [n.id]: true,
-    }));
+    setReadNotifIds((prev) => {
+      const updated = { ...prev, [n.id]: true };
+      setReadNotificationId(userProfile.nickname, n.id, true);
+      return updated;
+    });
+    markNotificationAsRead(userProfile.nickname, n.id);
 
     setActiveChatSession({
       conversationId: targetConvId,
@@ -57,76 +79,30 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
   useEffect(() => {
     const handleUpdate = () => {
       setRefreshTrigger((prev) => prev + 1);
+      if (userProfile?.nickname) {
+        setReadNotifIds(getReadNotificationIds(userProfile.nickname));
+      }
     };
     window.addEventListener('fuhsi_direct_message_updated', handleUpdate);
     window.addEventListener('fuhsi_notification_received', handleUpdate);
+    window.addEventListener('fuhsi_notification_read_updated', handleUpdate);
     return () => {
       window.removeEventListener('fuhsi_direct_message_updated', handleUpdate);
       window.removeEventListener('fuhsi_notification_received', handleUpdate);
+      window.removeEventListener('fuhsi_notification_read_updated', handleUpdate);
     };
-  }, []);
+  }, [userProfile?.nickname]);
 
   // Custom user notifications (e.g. account approval message, admin inquiries, direct messages)
   const customUserNotifications: CampusNotification[] = useMemo(() => {
     if (!userProfile?.nickname) return [];
-    const cleanNick = userProfile.nickname.toLowerCase().replace(/^@/, '');
-    const notifKey = `fuhsi_user_notifications_${cleanNick}`;
-    try {
-      const stored = localStorage.getItem(notifKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
+    return getUserNotifications(userProfile.nickname);
   }, [userProfile?.nickname, refreshTrigger]);
 
-  // Base system notifications
+  // Base system notifications (only actual user notifications)
   const baseNotifications: CampusNotification[] = useMemo(() => [
     ...customUserNotifications,
-    {
-      id: 'notif_1',
-      type: 'VERIFICATION',
-      title: 'Badge Status Update',
-      message: `Your student profile (${userProfile.department} - ${userProfile.level}) is active on FUHSI-Connect. Complete activities to earn reputation points and badges.`,
-      timestamp: '10m ago',
-      isRead: false,
-    },
-    {
-      id: 'notif_2',
-      type: 'ADMIN',
-      title: 'SUG & Safety Advisory',
-      message: 'Anti-doxxing & privacy shield is active campus-wide. Personal phone numbers and external contact links in public feed posts are automatically redacted.',
-      timestamp: '1h ago',
-      isRead: false,
-    },
-    {
-      id: 'notif_3',
-      type: 'LIKE',
-      title: 'Post Interaction',
-      message: '@MedScholar and 4 other students liked your recent post on clinical posting updates.',
-      timestamp: '3h ago',
-      isRead: true,
-    },
-    {
-      id: 'notif_4',
-      type: 'MARKET',
-      title: 'Campus Hub Inquiry',
-      message: 'A student inquired about Littmann Stethoscope listing on Campus Hub & Trade Desk.',
-      timestamp: '5h ago',
-      isRead: true,
-    },
-    {
-      id: 'notif_5',
-      type: 'COMMENT',
-      title: 'Discussion Reply',
-      message: '@NursePrecious replied: "Thank you for sharing the CBT past questions link!"',
-      timestamp: '1d ago',
-      isRead: true,
-    },
-  ], [userProfile.department, userProfile.level]);
+  ], [customUserNotifications]);
 
   // Dynamically compute targeted notifications for posts directed at the user's registered department/faculty
   const targetedNotifications: CampusNotification[] = useMemo(() => {
@@ -157,32 +133,53 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
   // Combine base notifications and targeted notifications
   const allCombinedNotifications: CampusNotification[] = useMemo(() => {
     const combined = [...targetedNotifications, ...baseNotifications];
-    return combined.map((n) => ({
-      ...n,
-      isRead: readNotifIds[n.id] !== undefined ? readNotifIds[n.id] : n.isRead,
-    }));
+    return combined.map((n) => {
+      const isMarkedReadInState = readNotifIds[n.id];
+      const effectiveIsRead = isMarkedReadInState !== undefined ? isMarkedReadInState : Boolean(n.isRead);
+      return {
+        ...n,
+        isRead: effectiveIsRead,
+      };
+    });
   }, [targetedNotifications, baseNotifications, readNotifIds]);
-
-  // Check if there is any active admin inquiry or direct contact
-  const latestAdminContact = useMemo(() => {
-    return allCombinedNotifications.find(
-      (n) => (n.type === 'ADMIN' || n.type === 'ADMIN_TRADE_DESK' || (n.senderNickname && n.senderNickname.includes('Admin')))
-    );
-  }, [allCombinedNotifications]);
 
   const handleMarkAllRead = () => {
     const updated: Record<string, boolean> = {};
-    allCombinedNotifications.forEach((n) => {
-      updated[n.id] = true;
+    const allIds = allCombinedNotifications.map((n) => n.id);
+    allIds.forEach((id) => {
+      updated[id] = true;
     });
     setReadNotifIds(updated);
+    setAllNotificationIdsRead(userProfile.nickname, allIds);
+    markAllNotificationsAsRead(userProfile.nickname);
   };
 
   const handleToggleRead = (n: CampusNotification) => {
-    setReadNotifIds((prev) => ({
-      ...prev,
-      [n.id]: !n.isRead,
-    }));
+    const currentStatus = Boolean(readNotifIds[n.id] !== undefined ? readNotifIds[n.id] : n.isRead);
+    const nextStatus = !currentStatus;
+
+    setReadNotifIds((prev) => {
+      const updated = { ...prev, [n.id]: nextStatus };
+      setReadNotificationId(userProfile.nickname, n.id, nextStatus);
+      return updated;
+    });
+
+    if (nextStatus) {
+      markNotificationAsRead(userProfile.nickname, n.id);
+    } else {
+      const clean = normalizeNickname(userProfile.nickname);
+      const key = `fuhsi_user_notifications_${clean}`;
+      try {
+        const stored = getUserNotifications(userProfile.nickname);
+        const updatedList = stored.map((item) => item.id === n.id ? { ...item, isRead: false } : item);
+        localStorage.setItem(key, JSON.stringify(updatedList));
+      } catch (e) {
+        console.error(e);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fuhsi_notification_read_updated', { detail: { nickname: userProfile.nickname, notifId: n.id } }));
+      }
+    }
 
     if (n.postId && onSelectPost) {
       const matchingPost = allPosts.find((p) => p.id === n.postId);
@@ -213,20 +210,23 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
       senderNickname: userProfile.nickname,
       receiverNickname: targetRecipient,
       text: replyText.trim(),
-      timestamp: 'Just now',
+      timestamp: formatMessageTime(),
     };
 
     sendDirectMessage(newReplyMsg);
 
     setReplyToast(`✓ Your reply has been sent to ${targetRecipient}!`);
     setReplyText('');
-    setReplyingTo(null);
-
+    
     // Auto mark as read
-    setReadNotifIds((prev) => ({
-      ...prev,
-      [replyingTo.id]: true,
-    }));
+    setReadNotifIds((prev) => {
+      const updated = { ...prev, [replyingTo.id]: true };
+      setReadNotificationId(userProfile.nickname, replyingTo.id, true);
+      return updated;
+    });
+    markNotificationAsRead(userProfile.nickname, replyingTo.id);
+
+    setReplyingTo(null);
 
     setTimeout(() => {
       setReplyToast(null);
@@ -247,29 +247,6 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
         </div>
       )}
 
-      {/* Active Sync Status Banner */}
-      <div className="bg-teal-900 text-white p-3.5 rounded-2xl shadow-xs border border-teal-800 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-teal-800/80 rounded-xl text-teal-300 border border-teal-700 shrink-0">
-            <Building2 size={18} />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black text-white">Auto-Synced Department Alerts</span>
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            </div>
-            <p className="text-[11px] text-teal-200 font-medium">
-              Registered Profile: <strong className="text-white font-extrabold">{userProfile.department}</strong> ({userProfile.level})
-            </p>
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <span className="text-xs font-black text-teal-200 bg-teal-800/90 px-2.5 py-1 rounded-lg border border-teal-700">
-            {targetedCount} Targeted
-          </span>
-        </div>
-      </div>
-
       {/* Header */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
@@ -285,7 +262,7 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
             <div>
               <h1 className="text-base font-black text-slate-900 tracking-tight">Campus Notifications</h1>
               <p className="text-xs text-slate-500 font-medium">
-                {unreadCount > 0 ? `${unreadCount} unread alerts requiring attention` : 'All caught up! No unread notifications'}
+                {unreadCount > 0 ? `${unreadCount} unread alert${unreadCount === 1 ? '' : 's'} requiring attention` : 'All caught up! No unread notifications'}
               </p>
             </div>
           </div>
@@ -298,44 +275,11 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
                 title="Mark all as read"
               >
                 <CheckCheck size={16} />
-                <span className="hidden sm:inline">Mark read</span>
+                <span className="hidden sm:inline">Mark all read</span>
               </button>
             )}
           </div>
         </div>
-
-        {/* Live Admin Contact Alert Banner */}
-        {latestAdminContact && (
-          <div className="bg-amber-50/90 border border-amber-300/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in shadow-2xs">
-            <div className="flex items-start gap-2.5 min-w-0">
-              <div className="p-2 bg-amber-200/80 rounded-xl text-amber-900 shrink-0 mt-0.5">
-                <Shield size={16} />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-black text-amber-950 uppercase tracking-wide">
-                    Direct Admin Contact
-                  </span>
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                </div>
-                <p className="text-xs text-amber-900 font-semibold truncate mt-0.5">
-                  {latestAdminContact.title}
-                </p>
-                <p className="text-[11px] text-amber-800 line-clamp-1">
-                  {latestAdminContact.message}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleOpenChatForNotification(latestAdminContact)}
-              className="px-3.5 py-2 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <MessageSquare size={13} />
-              <span>Open Live Admin Chat</span>
-            </button>
-          </div>
-        )}
 
         {/* Filter Tabs */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs font-bold">
@@ -399,6 +343,8 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-xs">
           {filtered.map((n) => {
             const isDirectMsgOrAdmin = n.type === 'DIRECT_MESSAGE' || n.type === 'ADMIN_TRADE_DESK' || Boolean(n.senderNickname);
+            const displayTime = formatMessageTime(n.timestamp);
+
             return (
               <div
                 key={n.id}
@@ -455,7 +401,7 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
                     <h3 className={`text-xs ${!n.isRead ? 'font-black text-slate-900' : 'font-bold text-slate-800'}`}>
                       {n.title}
                     </h3>
-                    <span className="text-[10px] text-slate-400 font-semibold shrink-0">{n.timestamp}</span>
+                    <span className="text-[10px] text-slate-400 font-semibold shrink-0">{displayTime}</span>
                   </div>
                   
                   {n.senderNickname && (

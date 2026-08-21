@@ -1,78 +1,60 @@
-import { Post } from '../types';
+import { Post, UserProfile } from '../types';
 
-const SAMPLE_AUTHORS = [
-  { nickname: '@MedicCadet_Ila', dept: 'Medicine & Surgery', level: '300L', avatarKey: 'caduceus', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@NurseTutor_Faith', dept: 'Nursing Science', level: '400L', avatarKey: 'stethoscope', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@BioChemEnthusiast', dept: 'Biochemistry', level: '200L', avatarKey: 'pill', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@MLS_LabLead', dept: 'Medical Lab Science', level: '400L', avatarKey: 'microscope', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@SUG_WelfareExec', dept: 'Student Union Body', level: 'Executive', avatarKey: 'caduceus', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@PhysioGenius', dept: 'Physiology', level: '300L', avatarKey: 'stethoscope', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@PharmD_Scholar', dept: 'Pharmacy', level: '200L', avatarKey: 'pill', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@AnatomyPro_Ila', dept: 'Anatomy', level: '200L', avatarKey: 'caduceus', badgeType: 'NONE', badgeTitle: '' },
-  { nickname: '@PublicHealth_Hero', dept: 'Public Health', level: '300L', avatarKey: 'stethoscope', badgeType: 'NONE', badgeTitle: '' },
-];
+export const DEMO_NICKNAMES = new Set([
+  'mediccadet_ila',
+  'nursetutor_faith',
+  'biochementhusiast',
+  'mls_lablead',
+  'sug_welfareexec',
+  'physiogenius',
+  'pharmd_scholar',
+  'anatomypro_ila',
+  'publichealth_hero',
+  'medicpioneer_24',
+  'nursechisom',
+  'dribrahim',
+  'tunde',
+  'medscholar',
+  'nurseprecious',
+  'anatomywizard',
+  'pharmacadet',
+  'statmaster_fuhsi',
+  'fuhsileader',
+  'nurse_grace',
+  'pathology_guru',
+  'gadget_plug_campus',
+  'medstudent_2026',
+  'doctor_in_making',
+  'nursing_student_a',
+  'freshman_fuhsi'
+]);
 
-const CATEGORIES = ['General', 'Academic', 'Events', 'Confessions', 'Marketplace', 'LostAndFound'];
+export function isDemoNickname(nick?: string): boolean {
+  if (!nick) return false;
+  const clean = nick.trim().toLowerCase().replace(/^@/, '');
+  return DEMO_NICKNAMES.has(clean) || clean.startsWith('demo_') || clean.startsWith('sample_') || clean.startsWith('mock_');
+}
 
-const POST_TEMPLATES = [
-  {
-    content: "Reminder for 300L MB;BS students: Clinical posting roster for Osogbo & Ila General Hospitals will be pasted by 9:00 AM at the Dean's Office bulletin board. Please arrive early with your white coats!",
-    category: 'Academic',
-    department: 'Medicine & Surgery',
-  },
-  {
-    content: "Quick study question for Biochemistry 202: Who can summarize the key rate-limiting step of Glycolysis vs Gluconeogenesis? Let's discuss in the comments before tomorrow's test! 💡",
-    category: 'Academic',
-    department: 'Biochemistry',
-    pollQuestion: 'Which enzyme regulates the main committed step of Glycolysis?',
-    pollOptA: 'Phosphofructokinase-1 (PFK-1)',
-    pollOptB: 'Pyruvate Dehydrogenase',
-  },
-  {
-    content: "Lost Item: Found an iPad with a black leather cover at the E-Library ground floor around 4 PM today. Contact the Library Admin counter with proof of lock screen passcode to claim it.",
-    category: 'LostAndFound',
-    department: 'All Campus',
-  },
-  {
-    content: "📢 Campus Electricity Update: Maintenance team has finished transformer repairs for the Male & Female hostels. Normal power supply has been fully restored. Thanks for your patience!",
-    category: 'General',
-    department: 'All Campus',
-  },
-  {
-    content: "For Sale: Brand new 3M Littmann Stethoscope (Black Edition) and Diagnostic Penlight. Unopened package from medical supply store. Price is ₦36,000 negotiable. DM if interested!",
-    category: 'Marketplace',
-    department: 'Medicine & Surgery',
-  },
-  {
-    content: "Nurses Week Celebration 2026: Inter-Departmental Sports & Quiz Competition kicks off on Thursday by 3 PM at the Campus Pavilion. Come support Faculty of Nursing Science! 🏆🩺",
-    category: 'Events',
-    department: 'Nursing Science',
-  },
-  {
-    content: "CA Exam Prep Tip: Don't just read textbook definitions — focus on clinical scenario questions for Physiology and Pathology. Practice past questions with study groups for best results!",
-    category: 'Academic',
-    department: 'Physiology',
-  },
-  {
-    content: "The new E-Learning Portal update is now live! You can download PDF lecture slides for 100L-400L directly without login errors. Kudos to FUHSI IT Services!",
-    category: 'General',
-    department: 'All Campus',
-    pollQuestion: 'Have you been able to log into the updated FUHSI portal?',
-    pollOptA: 'Yes, working smoothly',
-    pollOptB: 'Experiencing minor issues',
-  },
-  {
-    content: "Anatomy Practical Spotting Test prep: Make sure you can identify all branches of the Axillary Artery and brachial plexus cords on the cadaver models before Friday!",
-    category: 'Academic',
-    department: 'Anatomy',
-  },
-  {
-    content: "Shoutout to the Medical Laboratory Science team for organising the free Blood Group & Genotype screening session at the Student Center today! 👏🔬",
-    category: 'Events',
-    department: 'Medical Lab Science',
-  },
-];
+export function isDemoUser(u: Partial<UserProfile>): boolean {
+  if (!u) return false;
+  if (u.isAdmin || u.nickname === '@modula' || u.id === 'usr_admin_modula') return false;
+  if (isDemoNickname(u.nickname)) return true;
+  if (u.id && (u.id.startsWith('demo_') || u.id.startsWith('sample_') || u.id.startsWith('mock_') || u.id.startsWith('user_001') || u.id.startsWith('post_author_'))) {
+    // If it's a generated author from a demo post or demo user, flag as demo
+    const cleanNick = (u.nickname || '').trim().toLowerCase().replace(/^@/, '');
+    if (DEMO_NICKNAMES.has(cleanNick)) return true;
+  }
+  return false;
+}
+
+export function isDemoPost(p: Partial<Post>): boolean {
+  if (!p) return false;
+  if (isDemoNickname(p.authorNickname || p.nickname || p.customNickname)) return true;
+  if (p.id && (p.id.startsWith('sample_') || p.id.startsWith('demo_') || p.id.startsWith('mock_') || p.id.startsWith('post_seed_') || p.id.startsWith('gen_'))) return true;
+  return false;
+}
 
 export const generateMorePosts = (_count: number = 5, _startOffset: number = 0): Post[] => {
   return [];
 };
+

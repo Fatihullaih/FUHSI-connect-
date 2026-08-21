@@ -24,7 +24,87 @@ export const INITIAL_POSTS: Post[] = [];
 
 export const INITIAL_COMMENTS: Comment[] = [];
 
-export const INITIAL_MARKETPLACE_ITEMS: MarketplaceItem[] = [];
+export const INITIAL_MARKETPLACE_ITEMS: MarketplaceItem[] = [
+  {
+    id: 'item_techno_k15k',
+    title: 'TECHNO K15K',
+    category: 'Phones',
+    sellerNickname: 'Samuel Obafemi',
+    sellerPhone: '08012345678',
+    askingPrice: 65000,
+    adminApprovedPrice: 65000,
+    conditionTag: '128GB and 4GB RAM',
+    description: '128GB and 4GB RAM. Pristine working condition with original charger. Clean battery health and dual SIM.',
+    meetupPoint: '📍 Ayeka, Ondo State',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80'
+    ],
+    viewCount: 24,
+    status: 'APPROVED',
+    buyerDmIntentsCount: 2,
+    isFeatured: true,
+  },
+  {
+    id: 'item_stethoscope_sold',
+    title: '3M Littmann Classic III Stethoscope',
+    category: 'Medical Equipment',
+    sellerNickname: 'Dr_Chidi',
+    sellerPhone: '08023456789',
+    askingPrice: 48000,
+    adminApprovedPrice: 48000,
+    conditionTag: 'Mint Condition / Medical Grade',
+    description: 'Original Littmann Classic III in Navy Blue tube with stainless steel chestpiece. Used gently for 1 clinical rotation.',
+    meetupPoint: '📍 Medical Faculty Reception',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=600&auto=format&fit=crop&q=80'
+    ],
+    viewCount: 68,
+    status: 'SOLD',
+    soldAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+    sellerRatingStars: 5,
+    sellerRatingTag: 'Honest Seller ⭐⭐⭐⭐⭐',
+    buyerDmIntentsCount: 5,
+  },
+  {
+    id: 'item_laptop_hp',
+    title: 'HP Pavilion 15 (Core i5, 512GB SSD)',
+    category: 'Electronics',
+    sellerNickname: 'Tech_Senior',
+    sellerPhone: '08034567890',
+    askingPrice: 210000,
+    adminApprovedPrice: 210000,
+    conditionTag: '8GB RAM • 512GB NVMe • Backlit Keyboard',
+    description: 'Very fast laptop suitable for medical imaging software, virtual lab simulation, and coding. 5 hours battery backup.',
+    meetupPoint: '📍 FUHSI Main Gate / Library',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=600&auto=format&fit=crop&q=80'
+    ],
+    viewCount: 42,
+    status: 'APPROVED',
+    buyerDmIntentsCount: 3,
+  },
+  {
+    id: 'item_anatomy_sold_today',
+    title: "Gray's Anatomy for Students (4th Edition)",
+    category: 'Textbooks',
+    sellerNickname: 'Nurse_Folake',
+    sellerPhone: '08045678901',
+    askingPrice: 18000,
+    adminApprovedPrice: 18000,
+    conditionTag: 'Hardcover • Crisp Pages',
+    description: 'Essential clinical anatomy book with high-res diagram plates and clinical case summaries.',
+    meetupPoint: '📍 Central Cafeteria Complex',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80'
+    ],
+    viewCount: 35,
+    status: 'SOLD',
+    soldAt: new Date().toISOString(), // Sold today
+    sellerRatingStars: 5,
+    sellerRatingTag: 'Great Condition',
+    buyerDmIntentsCount: 4,
+  }
+];
 
 export const INITIAL_PENDING_MARKETPLACE_ITEMS: MarketplaceItem[] = [];
 

@@ -7,7 +7,8 @@ import {
 import { 
   getStoredDirectMessages, 
   sendDirectMessage, 
-  normalizeNickname 
+  normalizeNickname,
+  formatMessageTime 
 } from '../utils/messagingUtils';
 import { 
   Send, 
@@ -156,7 +157,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       senderNickname: isAdminUser ? `${myNickname} (Admin)` : myNickname,
       receiverNickname: recipientNickname,
       text: textToSend,
-      timestamp: 'Just now',
+      timestamp: formatMessageTime(),
       itemId: contextItem?.id,
       itemTitle: contextItem?.title,
       itemPrice: contextItem?.price,
@@ -214,7 +215,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <span>{isMe ? 'You' : msg.senderNickname}</span>
             </span>
           )}
-          <span className="text-[10px] text-slate-400 font-medium">{msg.timestamp}</span>
+          <span className="text-[10px] text-slate-400 font-medium">{formatMessageTime(msg.timestamp)}</span>
         </div>
 
         <div

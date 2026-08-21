@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DepartmentRanking, UserProfile, Post } from '../types';
-import { TOP_LEADERBOARD_USERS, INITIAL_USER_PROFILE, WEEKLY_CAMPUS_RANKINGS } from '../data/initialData';
+import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AvatarIcon } from '../components/AvatarIcon';
+import { isDemoUser, isDemoNickname, isDemoPost } from '../utils/postGenerator';
 import { 
   Trophy, 
   Award, 
@@ -18,7 +19,8 @@ import {
   MessageSquare,
   FileText,
   Flame,
-  Star
+  Star,
+  Users
 } from 'lucide-react';
 
 interface LeaderboardScreenProps {
@@ -43,6 +45,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   userProfile,
   user,
   departmentRankings = DEFAULT_DEPARTMENTS,
+  activePosts = [],
   onSubmitVerificationRequest,
   onAuthorClick,
 }) => {
@@ -81,9 +84,88 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const [verifSubmitted, setVerifSubmitted] = useState(false);
 
   const currentUser = userProfile || user || INITIAL_USER_PROFILE;
-  const currentRep = currentUser?.reputationScore ?? currentUser?.reputationPoints ?? 2450;
+  const currentRep = currentUser?.reputationScore ?? currentUser?.reputationPoints ?? 100;
   const currentBadgeType = currentUser?.badgeType || 'BLUE';
-  const currentBadgeTitle = currentUser?.badgeTitle || currentUser?.badge || 'Class Rep & Tech Lead';
+  const currentBadgeTitle = currentUser?.badgeTitle || currentUser?.badge || 'Campus Member';
+
+  // Compute real student rankings dynamically
+  const topStudents = useMemo(() => {
+    const usersMap = new Map<string, any>();
+    try {
+      const stored = localStorage.getItem('fuhsi_users_db');
+      if (stored) {
+        const parsed: UserProfile[] = JSON.parse(stored);
+        parsed.forEach((u) => {
+          if (u.nickname && !isDemoUser(u) && !isDemoNickname(u.nickname)) {
+            const clean = u.nickname.toLowerCase().replace(/^@/, '');
+            usersMap.set(clean, {
+              nickname: u.nickname.startsWith('@') ? u.nickname : `@${u.nickname}`,
+              department: u.department || 'FUHSI Student',
+              level: u.level || '100L',
+              avatarKey: u.avatarKey || 'caduceus',
+              reputationScore: u.reputationScore ?? 100,
+              isVerified: Boolean(u.isVerified),
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (currentUser && currentUser.nickname && !isDemoUser(currentUser) && !isDemoNickname(currentUser.nickname)) {
+      const clean = currentUser.nickname.toLowerCase().replace(/^@/, '');
+      usersMap.set(clean, {
+        nickname: currentUser.nickname.startsWith('@') ? currentUser.nickname : `@${currentUser.nickname}`,
+        department: currentUser.department || 'FUHSI Student',
+        level: currentUser.level || '100L',
+        avatarKey: currentUser.avatarKey || 'caduceus',
+        reputationScore: currentRep,
+        isVerified: Boolean(currentUser.isVerified),
+      });
+    }
+
+    const list = Array.from(usersMap.values()).sort((a, b) => b.reputationScore - a.reputationScore);
+    return list.map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+    }));
+  }, [currentUser, currentRep]);
+
+  // Compute weekly campus rankings dynamically from real students and real posts
+  const weeklyRankings = useMemo(() => {
+    const validPosts = (activePosts || []).filter((p) => !isDemoPost(p));
+
+    const topEngaging = topStudents.slice(0, 10).map((student, idx) => ({
+      rank: idx + 1,
+      nickname: student.nickname,
+      department: student.department,
+      level: student.level,
+      metricValue: `${student.reputationScore} pts`,
+      changeTag: idx === 0 ? '🏆 Top Leader' : '⭐ Active Contributor',
+      isVerified: student.isVerified,
+    }));
+
+    const topHelpful = topStudents.slice(0, 10).map((student, idx) => ({
+      rank: idx + 1,
+      nickname: student.nickname,
+      department: student.department,
+      level: student.level,
+      metricValue: `${Math.round(student.reputationScore * 0.8)} helpful pts`,
+      changeTag: '🌟 Academic Helper',
+      isVerified: student.isVerified,
+    }));
+
+    const topTrendingPosts = validPosts.slice(0, 10).map((post, idx) => ({
+      rank: idx + 1,
+      nickname: post.authorNickname || '@FUHSI_Student',
+      category: post.category || post.categoryTag || 'General',
+      snippet: post.content || post.text || 'Campus discussion update',
+      engagement: `${(post.likesCount || 0) + (post.commentsCount || 0)} interactions`,
+    }));
+
+    return { topEngaging, topHelpful, topTrendingPosts };
+  }, [topStudents, activePosts]);
 
   const handleApplyVerif = (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,51 +318,57 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {WEEKLY_CAMPUS_RANKINGS.topEngaging.map((user) => (
-                  <div key={user.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-7 h-7 rounded-lg font-extrabold text-xs flex items-center justify-center ${
-                        user.rank === 1 ? 'bg-amber-400 text-amber-950' :
-                        user.rank === 2 ? 'bg-slate-300 text-slate-800' :
-                        user.rank === 3 ? 'bg-amber-700 text-amber-100' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        #{user.rank}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              if (onAuthorClick) {
-                                onAuthorClick({
-                                  id: `ldr_${user.rank}_${user.nickname}`,
-                                  authorNickname: user.nickname,
-                                  timeAgo: 'Leaderboard',
-                                  categoryTag: user.department,
-                                  text: '',
-                                  likesCount: 0,
-                                  commentsCount: 0,
-                                  createdAt: '',
-                                });
-                              }
-                            }}
-                            className="font-bold text-slate-900 hover:text-amber-700 text-xs sm:text-sm hover:underline cursor-pointer"
-                          >
-                            {user.nickname}
-                          </button>
-                          <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
+              {weeklyRankings.topEngaging.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                  No active student engagement logged yet for this week.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {weeklyRankings.topEngaging.map((user) => (
+                    <div key={user.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-7 h-7 rounded-lg font-extrabold text-xs flex items-center justify-center ${
+                          user.rank === 1 ? 'bg-amber-400 text-amber-950' :
+                          user.rank === 2 ? 'bg-slate-300 text-slate-800' :
+                          user.rank === 3 ? 'bg-amber-700 text-amber-100' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          #{user.rank}
                         </div>
-                        <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                if (onAuthorClick) {
+                                  onAuthorClick({
+                                    id: `ldr_${user.rank}_${user.nickname}`,
+                                    authorNickname: user.nickname,
+                                    timeAgo: 'Leaderboard',
+                                    categoryTag: user.department,
+                                    text: '',
+                                    likesCount: 0,
+                                    commentsCount: 0,
+                                    createdAt: '',
+                                  });
+                                }
+                              }}
+                              className="font-bold text-slate-900 hover:text-amber-700 text-xs sm:text-sm hover:underline cursor-pointer"
+                            >
+                              {user.nickname}
+                            </button>
+                            <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="font-extrabold text-xs text-amber-700 block">{user.metricValue}</span>
+                        <span className="text-[10px] font-bold text-slate-400">{user.changeTag}</span>
                       </div>
                     </div>
-
-                    <div className="text-right">
-                      <span className="font-extrabold text-xs text-amber-700 block">{user.metricValue}</span>
-                      <span className="text-[10px] font-bold text-slate-400">{user.changeTag}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -297,51 +385,57 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {WEEKLY_CAMPUS_RANKINGS.topHelpful.map((user) => (
-                  <div key={user.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-7 h-7 rounded-lg font-extrabold text-xs flex items-center justify-center ${
-                        user.rank === 1 ? 'bg-teal-600 text-white' :
-                        user.rank === 2 ? 'bg-teal-100 text-teal-900' :
-                        user.rank === 3 ? 'bg-teal-50 text-teal-800' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        #{user.rank}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              if (onAuthorClick) {
-                                onAuthorClick({
-                                  id: `ldr_${user.rank}_${user.nickname}`,
-                                  authorNickname: user.nickname,
-                                  timeAgo: 'Leaderboard',
-                                  categoryTag: user.department,
-                                  text: '',
-                                  likesCount: 0,
-                                  commentsCount: 0,
-                                  createdAt: '',
-                                });
-                              }
-                            }}
-                            className="font-bold text-slate-900 hover:text-teal-700 text-xs sm:text-sm hover:underline cursor-pointer"
-                          >
-                            {user.nickname}
-                          </button>
-                          <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
+              {weeklyRankings.topHelpful.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                  No academic contributions recorded yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {weeklyRankings.topHelpful.map((user) => (
+                    <div key={user.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-7 h-7 rounded-lg font-extrabold text-xs flex items-center justify-center ${
+                          user.rank === 1 ? 'bg-teal-600 text-white' :
+                          user.rank === 2 ? 'bg-teal-100 text-teal-900' :
+                          user.rank === 3 ? 'bg-teal-50 text-teal-800' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          #{user.rank}
                         </div>
-                        <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                if (onAuthorClick) {
+                                  onAuthorClick({
+                                    id: `ldr_${user.rank}_${user.nickname}`,
+                                    authorNickname: user.nickname,
+                                    timeAgo: 'Leaderboard',
+                                    categoryTag: user.department,
+                                    text: '',
+                                    likesCount: 0,
+                                    commentsCount: 0,
+                                    createdAt: '',
+                                  });
+                                }
+                              }}
+                              className="font-bold text-slate-900 hover:text-teal-700 text-xs sm:text-sm hover:underline cursor-pointer"
+                            >
+                              {user.nickname}
+                            </button>
+                            <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="font-extrabold text-xs text-teal-800 block">{user.metricValue}</span>
+                        <span className="text-[10px] font-bold text-slate-400">{user.changeTag}</span>
                       </div>
                     </div>
-
-                    <div className="text-right">
-                      <span className="font-extrabold text-xs text-teal-800 block">{user.metricValue}</span>
-                      <span className="text-[10px] font-bold text-slate-400">{user.changeTag}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -358,30 +452,36 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </span>
               </div>
 
-              <div className="space-y-2.5">
-                {WEEKLY_CAMPUS_RANKINGS.topTrendingPosts.map((post) => (
-                  <div key={post.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-lg bg-purple-100 text-purple-900 font-black text-xs flex items-center justify-center shrink-0">
-                        #{post.rank}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-bold text-slate-900 text-xs">{post.nickname}</span>
-                          <span className="text-[9px] font-extrabold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">
-                            {post.category}
-                          </span>
+              {weeklyRankings.topTrendingPosts.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                  No active trending posts on campus feed yet.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {weeklyRankings.topTrendingPosts.map((post) => (
+                    <div key={post.rank} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-lg bg-purple-100 text-purple-900 font-black text-xs flex items-center justify-center shrink-0">
+                          #{post.rank}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-bold text-slate-900 text-xs">{post.nickname}</span>
+                            <span className="text-[9px] font-extrabold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">
+                              {post.category}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 font-medium line-clamp-1">{post.snippet}</p>
                         </div>
-                        <p className="text-xs text-slate-700 font-medium line-clamp-1">{post.snippet}</p>
                       </div>
-                    </div>
 
-                    <span className="text-xs font-bold text-purple-800 shrink-0 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
-                      {post.engagement}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                      <span className="text-xs font-bold text-purple-800 shrink-0 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
+                        {post.engagement}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -391,58 +491,70 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       {activeLeaderTab === 'students' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-3">
-            {TOP_LEADERBOARD_USERS.map((student) => {
-              const isCurrentUser = student.nickname === currentUser?.nickname;
-              return (
-                <div
-                  key={student.nickname}
-                  className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                    isCurrentUser
-                      ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/30'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl font-extrabold text-sm flex items-center justify-center shrink-0 ${
-                      student.rank === 1 ? 'bg-amber-400 text-amber-950' :
-                      student.rank === 2 ? 'bg-slate-300 text-slate-800' :
-                      student.rank === 3 ? 'bg-amber-700 text-amber-100' :
-                      'bg-slate-100 text-slate-600'
-                    }`}>
-                      #{student.rank}
-                    </div>
-
-                    <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200/80 flex items-center justify-center shrink-0">
-                      <AvatarIcon avatarKey={student.avatarKey} size={18} />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold text-slate-900 text-sm sm:text-base">
-                          {student.nickname}
-                        </span>
-                        <VerificationBadge isVerified={checkIsVerified(student.nickname) || Boolean((student as any).isVerified)} showTitle />
-                        {isCurrentUser && (
-                          <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
-                            YOU
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {student.department} • {student.level}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <div className="text-sm sm:text-base font-extrabold text-amber-700 flex items-center gap-1 justify-end">
-                      <Award size={16} />
-                      <span>{student.reputationScore} pts</span>
-                    </div>
-                  </div>
+            {topStudents.length === 0 ? (
+              <div className="py-12 px-6 bg-white rounded-2xl border border-slate-200 text-center space-y-3 shadow-xs">
+                <div className="w-12 h-12 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200">
+                  <Trophy size={24} />
                 </div>
-              );
-            })}
+                <h3 className="font-extrabold text-slate-900 text-base">No Student Rankings Yet</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Registered students earn reputation points by publishing peer-reviewed revision resources and contributing to campus discussions.
+                </p>
+              </div>
+            ) : (
+              topStudents.map((student) => {
+                const isCurrentUser = student.nickname === currentUser?.nickname;
+                return (
+                  <div
+                    key={student.nickname}
+                    className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      isCurrentUser
+                        ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/30'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-xl font-extrabold text-sm flex items-center justify-center shrink-0 ${
+                        student.rank === 1 ? 'bg-amber-400 text-amber-950' :
+                        student.rank === 2 ? 'bg-slate-300 text-slate-800' :
+                        student.rank === 3 ? 'bg-amber-700 text-amber-100' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        #{student.rank}
+                      </div>
+
+                      <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200/80 flex items-center justify-center shrink-0">
+                        <AvatarIcon avatarKey={student.avatarKey} size={18} />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-slate-900 text-sm sm:text-base">
+                            {student.nickname}
+                          </span>
+                          <VerificationBadge isVerified={checkIsVerified(student.nickname) || Boolean((student as any).isVerified)} showTitle />
+                          {isCurrentUser && (
+                            <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
+                              YOU
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                          {student.department} • {student.level}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="text-sm sm:text-base font-extrabold text-amber-700 flex items-center gap-1 justify-end">
+                        <Award size={16} />
+                        <span>{student.reputationScore} pts</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* User Score Summary Sidebar */}

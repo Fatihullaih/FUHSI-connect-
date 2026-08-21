@@ -5,6 +5,7 @@ import { AuthorProfileModal } from '../components/AuthorProfileModal';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { calculateUserPoints } from '../utils/reputationUtils';
+import { isDemoUser, isDemoNickname, isDemoPost } from '../utils/postGenerator';
 import {
   Search,
   Sparkles,
@@ -159,7 +160,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       if (storedUsers) {
         const parsed: UserProfile[] = JSON.parse(storedUsers);
         parsed.forEach((u) => {
-          if (u.nickname) {
+          if (u.nickname && !isDemoUser(u) && !isDemoNickname(u.nickname)) {
             const key = normalize(u.nickname);
             if (!accMap.has(key)) {
               const exactScore = calculateUserPoints(u.nickname, u, posts, []);
@@ -187,7 +188,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     }
 
     // Add active logged in userProfile
-    if (userProfile && userProfile.nickname) {
+    if (userProfile && userProfile.nickname && !isDemoUser(userProfile) && !isDemoNickname(userProfile.nickname)) {
       const key = normalize(userProfile.nickname);
       if (!accMap.has(key)) {
         const exactScore = calculateUserPoints(userProfile.nickname, userProfile, posts, []);
@@ -209,10 +210,11 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       }
     }
 
-    // Add author nicknames from posts
+    // Add author nicknames from posts (excluding demo posts)
     (posts || []).forEach((p) => {
+      if (isDemoPost(p)) return;
       const nick = p.authorNickname || p.nickname || p.customNickname;
-      if (nick) {
+      if (nick && !isDemoNickname(nick)) {
         const key = normalize(nick);
         if (!accMap.has(key)) {
           const exactScore = calculateUserPoints(nick, { nickname: nick }, posts, []);
@@ -261,6 +263,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     if (!query.trim()) return [];
 
     return (posts || [])
+      .filter((p) => !isDemoPost(p))
       .map((p) => {
         const contentScore = getMatchScore(query, p.content || '');
         const nickScore = getMatchScore(query, p.authorNickname || p.nickname || '');
@@ -278,6 +281,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     if (!query.trim()) return [];
 
     return (marketplaceItems || [])
+      .filter((item) => {
+        if (item.status === 'SOLD' && item.soldAt) {
+          const daysAgo = Math.floor((Date.now() - new Date(item.soldAt).getTime()) / (1000 * 60 * 60 * 24));
+          if (daysAgo > 7) return false;
+        }
+        return true;
+      })
       .map((item) => {
         const titleScore = getMatchScore(query, item.title || '');
         const descScore = getMatchScore(query, item.description || '');
@@ -563,11 +573,18 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     className="bg-slate-50 p-3 rounded-xl border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
-                        {item.category}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
+                          {item.category}
+                        </span>
+                        {item.status === 'SOLD' && (
+                          <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-md">
+                            SOLD
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-xs font-extrabold text-slate-900 truncate mt-1">{item.title}</h3>
-                      <p className="text-xs font-black text-teal-800">
+                      <p className={`text-xs font-black ${item.status === 'SOLD' ? 'text-slate-400 line-through' : 'text-teal-800'}`}>
                         ₦{(item.adminApprovedPrice ?? item.askingPrice ?? 0).toLocaleString()}
                       </p>
                       <p className="text-[10px] text-slate-500 font-medium">

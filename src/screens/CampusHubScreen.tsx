@@ -1,34 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MarketplaceItem, UserProfile, DirectMessage, ChatConversation } from '../types';
 import { 
   ShoppingBag, 
   ShieldCheck, 
-  Shield,
-  Tag, 
   MapPin, 
   Eye, 
   Plus, 
-  Check, 
   Star, 
-  DollarSign, 
-  MessageSquare,
-  Send,
-  Camera,
-  AlertCircle,
-  Clock,
+  Send, 
+  Camera, 
+  AlertCircle, 
+  Clock, 
+  Info, 
+  ShieldAlert, 
+  Lock, 
+  Upload, 
+  Trash2, 
+  Search, 
+  User, 
+  X, 
+  CheckCircle2, 
+  SlidersHorizontal, 
+  ChevronRight, 
+  ExternalLink, 
+  MessageCircle, 
+  Tag,
+  BadgePercent,
   Sparkles,
-  Info,
-  CheckCircle2,
-  ShieldAlert,
-  UserCheck,
-  Lock,
-  Upload,
-  Trash2
+  HelpCircle
 } from 'lucide-react';
 import { checkIsUserVerified } from '../utils/verificationUtils';
 import { compressImageFile } from '../utils/imageUtils';
 import { VerificationModal } from '../components/VerificationModal';
-import { getStoredDirectMessages, sendDirectMessage, CONVERSATIONS_KEY, normalizeNickname } from '../utils/messagingUtils';
+import { getStoredDirectMessages, sendDirectMessage, CONVERSATIONS_KEY, formatMessageTime } from '../utils/messagingUtils';
 
 interface CampusHubScreenProps {
   userProfile: UserProfile | null;
@@ -51,42 +55,107 @@ interface CampusHubScreenProps {
   onOpenAdminConsole?: () => void;
 }
 
+// Category definitions matching the design
+const CATEGORY_OPTIONS = [
+  { id: 'All', label: 'All', icon: '📦' },
+  { id: 'Phones', label: 'Phones', icon: '📱' },
+  { id: 'Digital', label: 'Digital', icon: '📁' },
+  { id: 'Services', label: 'Services', icon: '🛠️' },
+  { id: 'Electronics', label: 'Electronics', icon: '💻' },
+  { id: 'Fashion', label: 'Fashion', icon: '👕' },
+  { id: 'Medical Equipment', label: 'Medical Equipment', icon: '🩺' },
+  { id: 'Textbooks', label: 'Textbooks', icon: '📚' },
+  { id: 'Housing', label: 'Housing', icon: '🏠' },
+];
+
+export const formatPriceShort = (price: number): string => {
+  if (!price && price !== 0) return '₦0';
+  if (price >= 1000000) {
+    const m = price / 1000000;
+    return `₦${m % 1 === 0 ? m : m.toFixed(1)}M`;
+  }
+  if (price >= 1000) {
+    const k = price / 1000;
+    return `₦${k % 1 === 0 ? k : k.toFixed(1)}K`;
+  }
+  return `₦${price.toLocaleString()}`;
+};
+
+/**
+ * Calculates human-readable sold status and 7-day auto-purge expiration
+ */
+export function getSoldStatusInfo(item: MarketplaceItem): {
+  isSold: boolean;
+  soldBadgeText: string;
+  isExpired: boolean;
+  daysAgo: number;
+} {
+  if (item.status !== 'SOLD') {
+    return { isSold: false, soldBadgeText: '', isExpired: false, daysAgo: -1 };
+  }
+
+  // Parse sold date or fallback to now
+  const soldTimestamp = item.soldAt ? new Date(item.soldAt).getTime() : Date.now();
+  const diffMs = Date.now() - soldTimestamp;
+  const daysAgo = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+  // If sold more than 7 days ago, it is expired and must be purged
+  if (daysAgo > 7) {
+    return { isSold: true, soldBadgeText: 'Expired', isExpired: true, daysAgo };
+  }
+
+  if (daysAgo === 0) {
+    return { isSold: true, soldBadgeText: 'Sold today', isExpired: false, daysAgo: 0 };
+  } else if (daysAgo === 1) {
+    return { isSold: true, soldBadgeText: 'Sold 1 day ago', isExpired: false, daysAgo: 1 };
+  } else {
+    return { isSold: true, soldBadgeText: `Sold ${daysAgo} days ago`, isExpired: false, daysAgo };
+  }
+}
+
 export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   userProfile,
-  approvedMarketplaceItems,
+  approvedMarketplaceItems = [],
   pendingMarketplaceItems = [],
   onSubmitMarketplaceItem,
   onRecordDmBuyIntent,
   onMarkAsSold,
-  onApplyVerificationWithFee,
+  onApplyVerificationWithFee: _onApplyVerificationWithFee,
   onAuthorClick,
-  onOpenAdminConsole,
+  onOpenAdminConsole: _onOpenAdminConsole,
 }) => {
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'chats'>('marketplace');
+  // Navigation & filter state
+  const [activeView, setActiveView] = useState<'listings' | 'my_trades'>('listings');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Item Details Preview Modal State (Picture 2)
+  const [detailsModalItem, setDetailsModalItem] = useState<MarketplaceItem | null>(null);
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
 
   // Sell Item Form Modal State
   const [showSellModal, setShowSellModal] = useState(false);
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('Medical Equipment');
+  const [category, setCategory] = useState('Phones');
   const [askingPrice, setAskingPrice] = useState<number | ''>('');
-  const [conditionTag, setConditionTag] = useState('Like New (Used 2 Weeks)');
+  const [conditionTag, setConditionTag] = useState('New');
   const [description, setDescription] = useState('');
-  const [sellerPhone, setSellerPhone] = useState(userProfile?.emergencyHomePhone || '08031234567');
-  const [meetupPoint, setMeetupPoint] = useState('Main Library Entrance');
-  
-  // Listing device photos state
+  const [sellerPhone] = useState(userProfile?.emergencyHomePhone || '');
+  const [meetupPoint, setMeetupPoint] = useState('FUHSI School Main Gate');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  
   const [sellSuccessMsg, setSellSuccessMsg] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Buy Intent & Pledge Modal State
+  // Buy Intent & Middleman Modal State
   const [buyModalItem, setBuyModalItem] = useState<MarketplaceItem | null>(null);
-  const [buyIntentType, setBuyIntentType] = useState<'interested' | 'buynow' | 'ready'>('ready');
   const [pledgeChecked, setPledgeChecked] = useState(false);
   const [buyIntentSuccess, setBuyIntentSuccess] = useState(false);
   const [showMarketplaceLockModal, setShowMarketplaceLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  // Mark Sold Modal State
+  const [soldModalItem, setSoldModalItem] = useState<MarketplaceItem | null>(null);
+  const [soldSuccessNotify, setSoldSuccessNotify] = useState(false);
 
   const isVerifiedUser = checkIsUserVerified(userProfile?.nickname, userProfile);
 
@@ -104,13 +173,13 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     return [
       {
         id: 'conv_admin_desk',
-        otherUserNickname: '🛡️ FUHSI Admin Trade Desk',
-        lastMessage: 'Admin Middleman Active: All purchase requests are routed here to verify availability with seller.',
-        lastTimestamp: 'Live Desk',
+        otherUserNickname: '🛡️ Trade Desk',
+        lastMessage: 'Trade Desk Active: Connect with buyers & sellers safely on campus.',
+        lastTimestamp: formatMessageTime(),
         itemId: 'item_1',
-        itemTitle: '3M Littmann Classic III Stethoscope',
-        itemPrice: 38000,
-        meetupPoint: 'Main Library Entrance',
+        itemTitle: 'Campus Marketplace Trade Desk',
+        itemPrice: 0,
+        meetupPoint: 'FUHSI School Main Gate',
         unreadCount: 0
       }
     ];
@@ -124,14 +193,15 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       {
         id: 'dm_admin_1',
         conversationId: 'conv_admin_desk',
-        senderNickname: '🛡️ FUHSI Admin Trade Desk',
+        senderNickname: '🛡️ Trade Desk',
         receiverNickname: userProfile?.nickname || '@FUHSI_Student',
-        text: 'Welcome to the FUHSI Admin Marketplace Middleman Desk!\n\nInstead of direct seller DMs (which risk harassment and fake buyers), Admin acts as the trusted middleman.\n\nWhen you request to buy an item, we contact the seller privately to confirm availability. Once verified, we schedule a safe campus meet-up where you inspect the item and pay the seller directly!',
-        timestamp: 'Live Desk',
+        text: 'Welcome to the Official FUHSI Trade Desk!\n\n💡 Safe campus trading with FUHSI-Connect.',
+        timestamp: formatMessageTime(),
         isPledgeConfirmed: true
       }
     ];
   });
+  const [chatInputText, setChatInputText] = useState('');
 
   // Listen for direct messages and conversations updates
   useEffect(() => {
@@ -149,22 +219,12 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     window.addEventListener('fuhsi_direct_message_updated', handleDmUpdated);
     return () => window.removeEventListener('fuhsi_direct_message_updated', handleDmUpdated);
   }, []);
-  const [chatInputText, setChatInputText] = useState('');
 
-  // Sold Rating Modal State
-  const [soldModalItem, setSoldModalItem] = useState<MarketplaceItem | null>(null);
-  const [ratingStars, setRatingStars] = useState(5);
-  const [ratingTag, setRatingTag] = useState('Honest Seller ⭐⭐⭐⭐⭐');
-
-  // Multi-photo Preview Lightbox State
-  const [previewPhotoItem, setPreviewPhotoItem] = useState<MarketplaceItem | null>(null);
-  const [previewPhotoIdx, setPreviewPhotoIdx] = useState(0);
-
-  // Popstate listener for back button navigation in CampusHubScreen
-  React.useEffect(() => {
+  // Popstate listener for back button navigation
+  useEffect(() => {
     const handlePopState = () => {
-      if (previewPhotoItem) {
-        setPreviewPhotoItem(null);
+      if (detailsModalItem) {
+        setDetailsModalItem(null);
         return;
       }
       if (buyModalItem) {
@@ -183,29 +243,55 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [previewPhotoItem, buyModalItem, showSellModal, soldModalItem]);
+  }, [detailsModalItem, buyModalItem, showSellModal, soldModalItem]);
 
-  const categories = [
-    'Medical Equipment',
-    'Textbooks & Books',
-    'Lab Gear',
-    'Electronics & Gadgets',
-    'Hostel Essentials',
-  ];
-
+  // Meetup locations
   const meetupLocations = [
-    'Main Library Entrance',
-    'Central Cafeteria Complex',
-    'Medical Faculty Reception',
     'FUHSI School Main Gate',
-    'Matriculation Pavilion',
+    'School Market',
+    'Matriculation Pavillion',
+    'Owuoluwa Junction',
+    'Just-Love Kitchen',
+    'College High school Junction',
+    'School Hostel',
   ];
 
-  // Live 10% Fee calculations
+  // Price calculations for posting form
   const priceVal = typeof askingPrice === 'number' ? askingPrice : 0;
   const adminFee = Math.round(priceVal * 0.1);
   const netPayout = priceVal - adminFee;
 
+  // Filter listings based on category, search query, and 7-DAY AUTO-PURGE FOR SOLD ITEMS
+  const filteredListings = useMemo(() => {
+    return approvedMarketplaceItems.filter((item) => {
+      // 7-day auto purge for sold items (never show >7 days)
+      const soldInfo = getSoldStatusInfo(item);
+      if (soldInfo.isExpired) {
+        return false;
+      }
+
+      const matchesCat =
+        selectedCategory === 'All' ||
+        item.category?.toLowerCase() === selectedCategory.toLowerCase() ||
+        (selectedCategory === 'Phones' && item.category?.toLowerCase().includes('phone')) ||
+        (selectedCategory === 'Electronics' && (item.category?.toLowerCase().includes('electron') || item.category?.toLowerCase().includes('gadget'))) ||
+        (selectedCategory === 'Textbooks' && (item.category?.toLowerCase().includes('book') || item.category?.toLowerCase().includes('study'))) ||
+        (selectedCategory === 'Medical Equipment' && (item.category?.toLowerCase().includes('medic') || item.category?.toLowerCase().includes('lab')));
+
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        item.title?.toLowerCase().includes(q) ||
+        item.description?.toLowerCase().includes(q) ||
+        item.sellerNickname?.toLowerCase().includes(q) ||
+        item.category?.toLowerCase().includes(q) ||
+        item.meetupPoint?.toLowerCase().includes(q);
+
+      return matchesCat && matchesSearch;
+    });
+  }, [approvedMarketplaceItems, selectedCategory, searchQuery]);
+
+  // Handle Photo upload
   const handlePhotosFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
@@ -228,21 +314,21 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     setUploadedPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Submit Listing Handler
   const handleSellSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
     if (!title.trim()) {
-      setFormError('Please enter a descriptive product title.');
+      setFormError('Please enter a descriptive item title.');
       return;
     }
     if (!askingPrice || priceVal <= 0) {
       setFormError('Please enter a valid asking price.');
       return;
     }
-
-    if (uploadedPhotos.length === 0) {
-      setFormError('Please upload at least 1 clear photo of your item directly from your device.');
+    if (uploadedPhotos.length < 1) {
+      setFormError('Please select at least 1 clear photo of the item from your device.');
       return;
     }
 
@@ -264,51 +350,88 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       setTitle('');
       setAskingPrice('');
       setDescription('');
+      setUploadedPhotos([]);
       setFormError('');
-    }, 1800);
+    }, 1600);
   };
 
-  // ROUTE REQUEST TO BUY DIRECTLY TO ADMIN MIDDLEMAN (NO DIRECT PRIVATE SELLER DM)
+  /**
+   * Official WhatsApp Trade Desk Routing with 10% Escrow Protection
+   * When buyers click WhatsApp, they are routed through the official Trade Desk Coordinator
+   * to guarantee the 10% commission for the platform and ensure safe payment & handoff.
+   */
+  const handleOpenTradeDeskWhatsApp = (item: MarketplaceItem) => {
+    const rawPhone = item.sellerPhone || userProfile?.emergencyHomePhone || '08000000000';
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '234' + cleanPhone.substring(1);
+    }
+
+    const price = item.adminApprovedPrice ?? item.askingPrice ?? 0;
+    const message = `Hello, I saw your listing for "${item.title}" (₦${price.toLocaleString()}) on FUHSI-Connect. I would like to buy it and meet up at ${item.meetupPoint || 'FUHSI School Main Gate'}.`;
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Buy Intent & Pledge via In-App Admin Desk
   const handleConfirmPledgeAndOpenDM = () => {
     if (!buyModalItem || !pledgeChecked) return;
 
-    // Record intent count
     onRecordDmBuyIntent(buyModalItem.id);
 
+    const price = buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0;
+    const fee = Math.round(price * 0.1);
+    const sellerPayout = price - fee;
     const convId = 'conv_admin_desk';
     const buyerNickname = userProfile?.nickname || '@FUHSI_Student';
+    const itemPriceFormatted = price.toLocaleString();
 
-    // Buyer message sent to Admin Middleman
-    const itemPriceFormatted = (buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0).toLocaleString();
-    const buyerRequestText = `Hello Admin, I am interested in buying "${buyModalItem.title}" listed by @${buyModalItem.sellerNickname} for ₦${itemPriceFormatted}.\n\nI confirm I am a serious buyer and ready to pay at the safe campus meet-up location (${buyModalItem.meetupPoint}).`;
+    const buyerRequestText = `Hello Admin, I am interested in buying "${buyModalItem.title}" listed by ${buyModalItem.sellerNickname} for ₦${itemPriceFormatted}.\nI am ready to meet at (${buyModalItem.meetupPoint}).`;
+
+    const currentTime = formatMessageTime();
 
     const newBuyerMsg: DirectMessage = {
       id: `dm_${Date.now()}`,
       conversationId: convId,
       senderNickname: buyerNickname,
-      receiverNickname: '🛡️ FUHSI Admin Trade Desk',
+      receiverNickname: '🛡️ Trade Desk',
       text: buyerRequestText,
-      timestamp: 'Just now',
+      timestamp: currentTime,
       itemId: buyModalItem.id,
       itemTitle: buyModalItem.title,
-      itemPrice: buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice,
+      itemPrice: price,
       meetupPoint: buyModalItem.meetupPoint,
       isPledgeConfirmed: true
     };
 
-    // Automated Admin Response reassuring buyer
-    const adminResponseText = `🛡️ [ADMIN MIDDLEMAN ACKNOWLEDGMENT]\nHello ${buyerNickname}! Your purchase request for "${buyModalItem.title}" listed by @${buyModalItem.sellerNickname} at ₦${itemPriceFormatted} has been logged.\n\n📱 Next Step: We are now contacting @${buyModalItem.sellerNickname} privately to confirm if the item is still available.\n📍 Proposed Meet-Up: ${buyModalItem.meetupPoint}\n\nNote: Payment is completed directly between you and the seller at the meet-up point after inspection. Admin does not collect or hold money.`;
+    // Pick a suitable item icon based on category/title
+    const getItemIcon = (cat?: string, tit?: string) => {
+      const c = (cat || '').toLowerCase();
+      const t = (tit || '').toLowerCase();
+      if (c.includes('phone') || t.includes('phone') || t.includes('spark') || t.includes('iphone') || t.includes('samsung')) return '📱';
+      if (c.includes('electronic') || t.includes('fan') || t.includes('laptop') || t.includes('charger') || t.includes('tv')) return '⚡';
+      if (c.includes('digital')) return '📁';
+      if (c.includes('service')) return '🛠️';
+      if (c.includes('fashion') || t.includes('shirt') || t.includes('cloth') || t.includes('shoe')) return '👕';
+      if (c.includes('medical') || t.includes('stethoscope') || t.includes('scrub') || t.includes('coat')) return '🩺';
+      if (c.includes('textbook') || t.includes('book')) return '📚';
+      if (c.includes('housing') || t.includes('hostel') || t.includes('room')) return '🏠';
+      return '📦';
+    };
+
+    const itemIcon = getItemIcon(buyModalItem.category, buyModalItem.title);
 
     const newAdminMsg: DirectMessage = {
       id: `dm_resp_${Date.now()}`,
       conversationId: convId,
-      senderNickname: '🛡️ FUHSI Admin Trade Desk',
+      senderNickname: '🛡️ Trade Desk',
       receiverNickname: buyerNickname,
-      text: adminResponseText,
-      timestamp: 'Just now',
+      text: `🛡️ [PURCHASE REQUEST LOGGED]\nHello ${buyerNickname}!\nYour trade ticket for "${buyModalItem.title}" has been created.\n\n💰 Total Price: ₦${itemPriceFormatted}\n${itemIcon} Item: ${buyModalItem.title}\n📍 Campus Meetup: ${buyModalItem.meetupPoint}\n\nOur coordinator will verify the seller's availability. Inspect the item thoroughly before authorizing final payout release.`,
+      timestamp: currentTime,
       itemId: buyModalItem.id,
       itemTitle: buyModalItem.title,
-      itemPrice: buyModalItem.adminApprovedPrice,
+      itemPrice: price,
       meetupPoint: buyModalItem.meetupPoint
     };
 
@@ -322,7 +445,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       setBuyIntentSuccess(false);
       setBuyModalItem(null);
       setPledgeChecked(false);
-      setActiveTab('chats'); // Switch directly to Admin Trade Desk Tab!
+      setActiveView('my_trades');
     }, 1200);
   };
 
@@ -339,480 +462,314 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       senderNickname: userProfile?.nickname || '@FUHSI_Student',
       receiverNickname: currentConv.otherUserNickname,
       text: chatInputText.trim(),
-      timestamp: 'Just now',
+      timestamp: formatMessageTime(),
     };
 
     sendDirectMessage(newMsg);
     setChatInputText('');
   };
 
+  // Confirm Mark as Sold
   const handleConfirmSold = () => {
     if (soldModalItem) {
-      onMarkAsSold(soldModalItem.id, ratingStars, ratingTag);
-      setSoldModalItem(null);
+      onMarkAsSold(soldModalItem.id, 5, 'Verified Sold');
+      setSoldSuccessNotify(true);
+      setTimeout(() => {
+        setSoldSuccessNotify(false);
+        setSoldModalItem(null);
+        if (detailsModalItem && detailsModalItem.id === soldModalItem.id) {
+          setDetailsModalItem({
+            ...detailsModalItem,
+            status: 'SOLD',
+            soldAt: new Date().toISOString(),
+          });
+        }
+      }, 900);
     }
   };
 
   const activeMessages = directMessages.filter((m) => m.conversationId === activeConvId);
-  const currentConv = conversations.find((c) => c.id === activeConvId);
+
+  // My pending & approved counts
+  const myPending = (pendingMarketplaceItems || []).filter(
+    (item) => item.sellerNickname === userProfile?.nickname
+  );
+  const myApproved = approvedMarketplaceItems.filter(
+    (item) => item.sellerNickname === userProfile?.nickname
+  );
 
   return (
-    <div className="max-w-3xl mx-auto pb-24 px-4 pt-4 space-y-4">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 text-white rounded-2xl p-4 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center shrink-0 text-teal-300">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-base">FUHSI Campus Trusted Marketplace</h1>
-              <p className="text-xs text-teal-200">
-                Admin Middleman Trade • 4-6 Photos Required • No Direct Harassment • Safe Meet-Up Points
-              </p>
-            </div>
+    <div className="max-w-2xl mx-auto pb-28 px-3 sm:px-4 pt-2 space-y-4">
+      {/* 1. GREEN HEADER (Matching User Image 1) */}
+      <div className="bg-[#0a6627] text-white rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="font-extrabold text-xl sm:text-2xl tracking-tight flex items-center gap-2">
+              <span>FUHSI MARKETPLACE</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-emerald-100/90 mt-0.5 font-medium">
+              Buy, sell, and promote your items on FUHSI-Connect.
+            </p>
           </div>
-        </div>
-      </div>
 
-      {/* Primary Tabs */}
-      <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold gap-1 overflow-x-auto no-scrollbar">
-        <button
-          onClick={() => setActiveTab('marketplace')}
-          className={`flex-1 min-w-[110px] py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'marketplace'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <span>🛍️</span> Marketplace
-        </button>
-
-        <button
-          onClick={() => setActiveTab('chats')}
-          className={`flex-1 py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 relative ${
-            activeTab === 'chats'
-              ? 'bg-white text-slate-900 shadow-sm font-bold'
-              : 'text-slate-600 hover:text-slate-900 font-medium'
-          }`}
-        >
-          <span>📩</span>
-          <span>My Trade Requests & Listings</span>
-          {conversations.some((c) => c.unreadCount > 0) && (
-            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-          )}
-        </button>
-      </div>
-
-      {/* TAB 1: MARKETPLACE */}
-      {activeTab === 'marketplace' && (
-        <div className="space-y-4">
-          {/* Action Bar & Info */}
-          <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm gap-2">
-            <div>
-              <h2 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                <span>Approved FUHSI Student Listings</span>
-                <span className="bg-teal-100 text-teal-800 text-[10px] font-extrabold px-2 py-0.5 rounded-md">
-                  Admin Middleman Shield Active
-                </span>
-              </h2>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                4-6 clear photos verified by Admin. Requests to buy go directly to Admin to verify availability privately before scheduling safe meet-ups!
-              </p>
-            </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* View My Listings & Trades */}
             <button
-              onClick={() => {
-                if (isVerifiedUser) {
-                  setShowSellModal(true);
-                } else {
-                  setShowMarketplaceLockModal(true);
-                }
-              }}
-              className={`px-3.5 py-2 rounded-xl text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
-                isVerifiedUser ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-800 hover:bg-teal-900'
+              onClick={() => setActiveView(activeView === 'listings' ? 'my_trades' : 'listings')}
+              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold border ${
+                activeView === 'my_trades'
+                  ? 'bg-white text-[#0a6627] border-white shadow-sm'
+                  : 'bg-emerald-800/80 hover:bg-emerald-800 text-white border-emerald-600/50'
               }`}
+              title="Toggle My Listings & Trade Desk"
             >
-              {isVerifiedUser ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-300" />}
-              <span>Post Item to Sell</span>
+              <SlidersHorizontal size={14} />
+              <span className="hidden sm:inline">
+                {activeView === 'listings' ? 'My Trades' : 'View Hub'}
+              </span>
+              {(myPending.length > 0 || conversations.some((c) => c.unreadCount > 0)) && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
             </button>
           </div>
-
-          {/* Marketplace Items Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {approvedMarketplaceItems.map((item) => (
-              <div
-                key={item.id}
-                className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col justify-between transition-all ${
-                  item.status === 'SOLD' ? 'border-slate-200 opacity-80' : 'border-slate-200/80 hover:border-teal-500/50'
-                }`}
-              >
-                <div>
-                  {/* Photo Thumbnail Carousel Preview */}
-                  <div
-                    onClick={() => {
-                      setPreviewPhotoItem(item);
-                      setPreviewPhotoIdx(0);
-                    }}
-                    className="relative h-48 bg-slate-950 cursor-pointer overflow-hidden group"
-                  >
-                    <img
-                      src={item.imageUrls[0]}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-
-                    {item.status === 'SOLD' && (
-                      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center">
-                        <span className="px-4 py-1.5 rounded-full bg-rose-600 text-white font-black text-xs tracking-wider shadow-lg">
-                          ✓ SOLD
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-sm text-white px-2 py-0.5 rounded-md text-[10px] font-bold">
-                      {item.category}
-                    </div>
-
-                    <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-md text-[10px] font-bold flex items-center gap-1">
-                      <Camera className="w-3 h-3 text-teal-300" /> {item.imageUrls.length} Clear Photos
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-bold text-slate-900 text-sm line-clamp-1">{item.title}</h3>
-                      <span className="font-black text-teal-700 text-base shrink-0">
-                        ₦{(item.adminApprovedPrice ?? 0).toLocaleString()}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-600 line-clamp-2">{item.description}</p>
-
-                    <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200">
-                        {item.conditionTag}
-                      </span>
-                      <span className="flex items-center gap-1 text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                        <MapPin className="w-3 h-3 text-teal-600" /> {item.meetupPoint}
-                      </span>
-                    </div>
-
-                    {item.sellerRatingTag && (
-                      <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                        {item.sellerRatingTag}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer Action Buttons */}
-                <div className="p-3.5 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2 mt-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500 font-medium">
-                      Seller:{' '}
-                      <button
-                        onClick={() => {
-                          if (onAuthorClick) {
-                            onAuthorClick({
-                              id: `seller_${item.id}`,
-                              authorNickname: item.sellerNickname,
-                              timeAgo: 'Marketplace',
-                              categoryTag: 'Trade',
-                              text: `Seller of ${item.title}`,
-                              likesCount: 0,
-                              commentsCount: 0,
-                              createdAt: '',
-                            });
-                          }
-                        }}
-                        className="font-bold text-slate-800 hover:text-teal-700 hover:underline focus:outline-none transition-colors"
-                        title="Click to view seller profile"
-                      >
-                        {item.sellerNickname}
-                      </button>
-                    </span>
-                    <span className="text-teal-700 font-bold flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" /> Admin Protected Trade
-                    </span>
-                  </div>
-
-                  {item.status === 'SOLD' ? (
-                    <div className="w-full py-2 bg-slate-200 text-slate-700 rounded-xl font-bold text-xs text-center">
-                      Transaction Completed
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button
-                        onClick={() => {
-                          if (isVerifiedUser) {
-                            setBuyModalItem(item);
-                            setBuyIntentType('ready');
-                          } else {
-                            setShowMarketplaceLockModal(true);
-                          }
-                        }}
-                        className="py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        {isVerifiedUser ? <ShieldCheck className="w-4 h-4" /> : <Lock className="w-3.5 h-3.5 text-amber-300" />}
-                        <span>Request to Buy (via Admin)</span>
-                      </button>
-
-                      {item.sellerNickname === userProfile?.nickname ? (
-                        <button
-                          onClick={() => setSoldModalItem(item)}
-                          className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          Mark Sold
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            if (isVerifiedUser) {
-                              setBuyModalItem(item);
-                              setBuyIntentType('buynow');
-                            } else {
-                              setShowMarketplaceLockModal(true);
-                            }
-                          }}
-                          className="py-2 px-3 rounded-xl bg-teal-900 hover:bg-slate-900 text-white font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          {!isVerifiedUser && <Lock className="w-3.5 h-3.5 text-amber-300" />}
-                          <span>⚡ Buy Now</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-      )}
 
-      {/* TAB 2: MY TRADE REQUESTS & SUBMITTED LISTINGS */}
-      {activeTab === 'chats' && (
+        {/* Search Items Input Bar */}
+        <div className="relative mt-3.5">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search items..."
+            className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white text-slate-900 text-xs sm:text-sm font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 text-xs font-bold"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* VIEW 1: MAIN MARKETPLACE LISTINGS & CATEGORIES */}
+      {activeView === 'listings' && (
         <div className="space-y-4">
-          {/* MY SUBMITTED MARKETPLACE LISTINGS & APPROVAL STATUS TRACKER */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 flex-wrap gap-2">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-teal-600" />
-                  My Submitted Marketplace Listings
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Track admin price review, benchmark status, and live marketplace publication status.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowSellModal(true);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs transition-colors shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" /> Post New Item
-              </button>
-            </div>
-
-            {(() => {
-              const myPending = (pendingMarketplaceItems || []).filter(
-                (item) => item.sellerNickname === userProfile?.nickname
-              );
-              const myApproved = approvedMarketplaceItems.filter(
-                (item) => item.sellerNickname === userProfile?.nickname
-              );
-              const totalMyItems = myPending.length + myApproved.length;
-
-              if (totalMyItems === 0) {
+          {/* 2. BROWSE CATEGORIES (Matching User Image 1) */}
+          <div>
+            <h2 className="text-xs sm:text-sm font-bold text-slate-600 mb-2 px-1">
+              Browse Categories
+            </h2>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1.5">
+              {CATEGORY_OPTIONS.map((cat) => {
+                const isSelected = selectedCategory === cat.id;
                 return (
-                  <div className="p-4 text-center text-slate-500 bg-slate-50/80 rounded-xl border border-slate-100 text-xs">
-                    <p className="font-bold text-slate-700">You haven't posted any marketplace items yet.</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      When you submit an item for sale, it is saved automatically and stays in <span className="font-bold text-amber-700">Pending Approval</span> state until an admin reviews and approves it.
-                    </p>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-2.5">
-                  {/* Render Pending Items */}
-                  {myPending.map((item) => (
-                    <div key={item.id} className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 space-y-2 text-xs">
-                      <div className="flex items-start justify-between gap-2 flex-wrap sm:flex-nowrap">
-                        <div className="flex items-center gap-3">
-                          {item.imageUrls?.[0] && (
-                            <img src={item.imageUrls[0]} alt={item.title} className="w-12 h-12 rounded-lg object-cover border border-amber-300 shrink-0" />
-                          )}
-                          <div>
-                            <h4 className="font-bold text-slate-900">{item.title}</h4>
-                            <p className="text-[11px] text-slate-600">
-                              Category: <span className="font-semibold">{item.category}</span> • Asking Price: <span className="font-bold text-teal-800">₦{item.askingPrice.toLocaleString()}</span>
-                            </p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">📍 Meet-up: {item.meetupPoint}</p>
-                          </div>
-                        </div>
-
-                        <span className="px-2.5 py-1 rounded-full bg-amber-200 text-amber-950 font-extrabold text-[10px] flex items-center gap-1 border border-amber-300 shrink-0 shadow-xs">
-                          <Clock className="w-3 h-3 text-amber-800 animate-spin" /> PENDING ADMIN APPROVAL
-                        </span>
-                      </div>
-
-                      <div className="p-2 rounded-lg bg-white/90 border border-amber-200 text-[11px] text-amber-900 font-medium flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>
-                          Your listing is saved and waiting for Admin price benchmark review. Once approved, it will automatically appear live on the Marketplace!
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Render Approved Items */}
-                  {myApproved.map((item) => (
-                    <div key={item.id} className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2 text-xs">
-                      <div className="flex items-start justify-between gap-2 flex-wrap sm:flex-nowrap">
-                        <div className="flex items-center gap-3">
-                          {item.imageUrls?.[0] && (
-                            <img src={item.imageUrls[0]} alt={item.title} className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shrink-0" />
-                          )}
-                          <div>
-                            <h4 className="font-bold text-slate-900">{item.title}</h4>
-                            <p className="text-[11px] text-slate-600">
-                              Category: <span className="font-semibold">{item.category}</span> • Price: <span className="font-bold text-teal-800">₦{(item.adminApprovedPrice ?? item.askingPrice).toLocaleString()}</span>
-                            </p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">📍 Meet-up: {item.meetupPoint}</p>
-                          </div>
-                        </div>
-
-                        <span className={`px-2.5 py-1 rounded-full font-extrabold text-[10px] flex items-center gap-1 border shrink-0 shadow-xs ${
-                          item.status === 'SOLD'
-                            ? 'bg-slate-200 text-slate-700 border-slate-300'
-                            : 'bg-emerald-200 text-emerald-900 border-emerald-300'
-                        }`}>
-                          {item.status === 'SOLD' ? '✓ SOLD' : '✅ APPROVED & LIVE'}
-                        </span>
-                      </div>
-
-                      {item.status !== 'SOLD' && (
-                        <div className="flex justify-end pt-1">
-                          <button
-                            onClick={() => setSoldModalItem(item)}
-                            className="px-3 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-[11px] transition-colors"
-                          >
-                            Mark Item as Sold
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* ADMIN MIDDLEMAN CHAT & TRADE REQUESTS DESK */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[420px]">
-            {/* Conversations Sidebar */}
-            <div className="w-full md:w-1/3 border-r border-slate-100 bg-slate-50/50 p-3 space-y-2">
-              <h3 className="font-extrabold text-slate-900 text-xs px-2 py-1 uppercase tracking-wider text-slate-500">
-                Trade Desk Channels
-              </h3>
-              <div className="space-y-1.5">
-                {conversations.map((conv) => (
                   <button
-                    key={conv.id}
-                    onClick={() => setActiveConvId(conv.id)}
-                    className={`w-full text-left p-2.5 rounded-xl transition-all border ${
-                      activeConvId === conv.id
-                        ? 'bg-teal-600 text-white border-teal-700 shadow-sm'
-                        : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-200'
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#0a6627] text-white shadow-xs'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <span className="font-extrabold text-xs">{conv.otherUserNickname}</span>
-                      <span className={`text-[9px] ${activeConvId === conv.id ? 'text-teal-100' : 'text-slate-400'}`}>
-                        {conv.lastTimestamp}
-                      </span>
-                    </div>
-                    {conv.itemTitle && (
-                      <p className={`text-[10px] font-bold mt-0.5 line-clamp-1 ${activeConvId === conv.id ? 'text-teal-100' : 'text-teal-700'}`}>
-                        📦 {conv.itemTitle} (₦{(conv.itemPrice ?? 0).toLocaleString()})
-                      </p>
-                    )}
-                    <p className={`text-[11px] line-clamp-1 mt-1 ${activeConvId === conv.id ? 'text-teal-50' : 'text-slate-500'}`}>
-                      {conv.lastMessage}
-                    </p>
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3. LATEST LISTINGS (Matching User Image 1) */}
+          <div>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-600 flex items-center gap-1.5">
+                <span>Latest Listings</span>
+                <span className="text-[11px] font-normal text-slate-400">
+                  (Includes live items & recent 7-day deals)
+                </span>
+              </h2>
+              {selectedCategory !== 'All' && (
+                <button
+                  onClick={() => setSelectedCategory('All')}
+                  className="text-xs text-emerald-700 font-bold hover:underline"
+                >
+                  Clear filter ({selectedCategory})
+                </button>
+              )}
             </div>
 
-            {/* Active Message Thread */}
-            <div className="flex-1 flex flex-col justify-between p-4 bg-white">
-              {currentConv ? (
-                <>
-                  {/* Chat Header */}
-                  <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-teal-600" />
-                        {currentConv.otherUserNickname}
-                      </h3>
-                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                        Admin oversees marketplace requests to eliminate spam, harassment & fraud.
-                      </p>
-                    </div>
-                    <span className="px-2.5 py-1 bg-teal-50 text-teal-800 text-[10px] font-extrabold rounded-full border border-teal-200">
-                      Trusted Middleman Active
-                    </span>
-                  </div>
+            <div className="space-y-3">
+              {filteredListings.map((item) => {
+                const soldInfo = getSoldStatusInfo(item);
+                const isSold = soldInfo.isSold;
+                const isOwner = item.sellerNickname === userProfile?.nickname;
+                const mainPhoto = item.imageUrls?.[0] || 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=400';
+                const priceVal = item.adminApprovedPrice ?? item.askingPrice ?? 0;
+                const priceFormatted = formatPriceShort(priceVal);
+                const locationText = item.meetupPoint?.replace(/^📍\s*/, '') || 'Ayeka, Ondo State';
 
-                  {/* Message Log */}
-                  <div className="flex-1 py-4 space-y-3 overflow-y-auto max-h-[320px]">
-                    {activeMessages.map((msg) => {
-                      const isMe = msg.senderNickname === userProfile?.nickname;
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`p-3 rounded-2xl max-w-[85%] space-y-1 text-xs ${
-                            isMe
-                              ? 'bg-teal-600 text-white ml-auto rounded-br-xs shadow-xs'
-                              : 'bg-slate-100 text-slate-800 mr-auto rounded-bl-xs border border-slate-200'
-                          }`}
-                        >
-                          {msg.isPledgeConfirmed && (
-                            <div className="p-2 rounded-xl bg-teal-700/80 text-teal-50 text-[11px] font-bold mb-1 border border-teal-500/40">
-                              🛡️ SERIOUS BUYER PLEDGE LOGGED BY ADMIN
-                            </div>
-                          )}
-                          <p className="whitespace-pre-line font-medium leading-relaxed">{msg.text}</p>
-                          <span className={`text-[9px] block text-right opacity-75`}>{msg.timestamp}</span>
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      setDetailsModalItem(item);
+                      setActivePhotoIdx(0);
+                    }}
+                    className={`bg-white rounded-2xl border p-3 sm:p-4 shadow-xs hover:shadow-md transition-all flex items-start gap-3 sm:gap-4 cursor-pointer group relative ${
+                      isSold 
+                        ? 'border-rose-200/90 bg-rose-50/20 hover:border-rose-300' 
+                        : 'border-slate-200/90 hover:border-emerald-500/50'
+                    }`}
+                  >
+                    {/* Left Thumbnail Photo with Sold Overlay */}
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200/80 relative">
+                      <img
+                        src={mainPhoto}
+                        alt={item.title}
+                        className={`w-full h-full object-cover transition-transform duration-300 ${
+                          isSold ? 'grayscale-[30%] opacity-90' : 'group-hover:scale-105'
+                        }`}
+                        loading="lazy"
+                      />
+                      {isSold && (
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-1 text-center">
+                          <span className="text-[10px] font-black text-white px-2 py-0.5 rounded-full bg-rose-600 shadow-sm uppercase tracking-wider">
+                            SOLD
+                          </span>
+                          <span className="text-[9px] font-bold text-rose-100 mt-0.5 leading-tight">
+                            {soldInfo.soldBadgeText}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
 
-                  {/* Chat Input */}
-                  <form onSubmit={handleSendDirectMessage} className="pt-3 border-t border-slate-100 flex gap-2">
-                    <input
-                      type="text"
-                      value={chatInputText}
-                      onChange={(e) => setChatInputText(e.target.value)}
-                      placeholder="Reply to FUHSI Admin Trade Desk..."
-                      className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-colors"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </form>
-                </>
+                    {/* Right Listing Details */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
+                      <div>
+                        {/* Title & Price Row */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-[#0a6627] transition-colors">
+                              {item.title}
+                            </h3>
+                            {/* Sold Tag if Sold */}
+                            {isSold && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md mt-0.5">
+                                <span>🏷️</span>
+                                <span>{soldInfo.soldBadgeText}</span>
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`font-extrabold text-sm sm:text-base ${
+                              isSold ? 'text-slate-500 line-through' : 'text-[#0a6627]'
+                            }`}>
+                              {priceFormatted}
+                            </span>
+                            {isSold && (
+                              <span className="block text-[9px] font-bold text-rose-600">
+                                DEAL CLOSED
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Author Nickname & Location Row */}
+                        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-600 font-medium mt-1 flex-wrap">
+                          <span className="flex items-center gap-1 text-slate-800 font-semibold">
+                            <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span>{item.sellerNickname || 'FUHSI Student'}</span>
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="flex items-center gap-1 text-slate-500 line-clamp-1">
+                            <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                            <span>{locationText}</span>
+                          </span>
+                        </div>
+
+                        {/* Description snippet / Specs */}
+                        <p className="text-[11px] sm:text-xs text-slate-600 mt-1 line-clamp-1">
+                          {item.description || `${item.conditionTag} • ${item.category}`}
+                        </p>
+                      </div>
+
+                      {/* Action buttons (View Details & Interested / Mark Sold) */}
+                      <div
+                        className="flex items-center gap-2 mt-2.5 pt-1 flex-wrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => {
+                            setDetailsModalItem(item);
+                            setActivePhotoIdx(0);
+                          }}
+                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          View Details
+                        </button>
+
+                        {!isSold ? (
+                          <>
+                            {!isOwner ? (
+                              <button
+                                onClick={() => setBuyModalItem(item)}
+                                className="px-3 py-1 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                              >
+                                <ShoppingBag size={13} />
+                                <span>Interested</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setSoldModalItem(item)}
+                                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg border border-rose-200 transition-colors cursor-pointer"
+                              >
+                                Mark Sold
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                            <CheckCircle2 size={13} />
+                            <span>{soldInfo.soldBadgeText} (Missed Deal)</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredListings.length > 0 ? (
+                <div className="text-center py-6 text-xs text-slate-400 font-medium">
+                  No more listings
+                </div>
               ) : (
-                <div className="flex items-center justify-center h-full text-slate-400 text-xs italic">
-                  Select a conversation to start chatting
+                <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 p-6 space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-xl">
+                    🛍️
+                  </div>
+                  <p className="font-bold text-slate-700 text-sm">No items found matching your filter</p>
+                  <p className="text-xs text-slate-500">
+                    {searchQuery ? `No results for "${searchQuery}"` : 'Be the first student to post an item in this category!'}
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (isVerifiedUser) {
+                        setShowSellModal(true);
+                      } else {
+                        setShowMarketplaceLockModal(true);
+                      }
+                    }}
+                    className="px-4 py-2 bg-[#0a6627] hover:bg-[#08521f] text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus size={14} /> Post an Item Now
+                  </button>
                 </div>
               )}
             </div>
@@ -820,21 +777,425 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL: SELL AN ITEM FORM (4-6 PHOTOS REQUIRED!) */}
+      {/* VIEW 2: MY SUBMITTED LISTINGS & ADMIN TRADE DESK */}
+      {activeView === 'my_trades' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+            <div>
+              <h2 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                <Tag className="w-4 h-4 text-[#0a6627]" />
+                <span>My Submitted Listings & Trade Desk</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Track your active item sales, admin approvals, and trade desk chats.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveView('listings')}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+            >
+              Back to Hub
+            </button>
+          </div>
+
+          {/* User's Items List */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">
+              My Items ({myPending.length + myApproved.length})
+            </h3>
+
+            {myPending.length === 0 && myApproved.length === 0 ? (
+              <div className="p-4 text-center text-slate-500 bg-slate-50 rounded-xl text-xs">
+                You haven't posted any marketplace items yet. Click the floating "+" button to list your first item!
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {myPending.map((item) => (
+                  <div key={item.id} className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {item.imageUrls?.[0] && (
+                        <img src={item.imageUrls[0]} alt={item.title} className="w-12 h-12 rounded-lg object-cover border border-amber-300 shrink-0" />
+                      )}
+                      <div>
+                        <h4 className="font-bold text-slate-900">{item.title}</h4>
+                        <p className="text-[11px] text-slate-600">
+                          ₦{item.askingPrice.toLocaleString()} • {item.category}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] shrink-0 flex items-center gap-1">
+                      <Clock size={12} /> Pending Review
+                    </span>
+                  </div>
+                ))}
+
+                {myApproved.map((item) => {
+                  const soldInfo = getSoldStatusInfo(item);
+                  return (
+                    <div key={item.id} className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {item.imageUrls?.[0] && (
+                          <img src={item.imageUrls[0]} alt={item.title} className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shrink-0" />
+                        )}
+                        <div>
+                          <h4 className="font-bold text-slate-900">{item.title}</h4>
+                          <p className="text-[11px] text-slate-600">
+                            ₦{(item.adminApprovedPrice ?? item.askingPrice).toLocaleString()} • {item.category}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] shrink-0 ${
+                          soldInfo.isSold ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-emerald-200 text-emerald-950'
+                        }`}>
+                          {soldInfo.isSold ? `✓ ${soldInfo.soldBadgeText}` : 'LIVE'}
+                        </span>
+                        {!soldInfo.isSold && (
+                          <button
+                            onClick={() => setSoldModalItem(item)}
+                            className="px-2.5 py-1 bg-rose-600 text-white rounded-lg font-bold text-[10px] hover:bg-rose-700 cursor-pointer"
+                          >
+                            Mark Sold
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Trade Desk Chat Area */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              Trade Desk
+            </h3>
+
+            <div className="border border-slate-100 rounded-xl bg-slate-50/50 p-3 max-h-72 overflow-y-auto space-y-2.5 text-xs">
+              {activeMessages.map((msg) => {
+                const isMe = msg.senderNickname === userProfile?.nickname;
+                return (
+                  <div
+                    key={msg.id}
+                    className={`p-3 rounded-2xl max-w-[85%] space-y-1 ${
+                      isMe
+                        ? 'bg-[#0a6627] text-white ml-auto rounded-br-xs'
+                        : 'bg-white text-slate-800 mr-auto rounded-bl-xs border border-slate-200 shadow-xs'
+                    }`}
+                  >
+                    <p className="whitespace-pre-line font-medium leading-relaxed">{msg.text}</p>
+                    <span className="text-[9px] block text-right opacity-70">{formatMessageTime(msg.timestamp)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <form onSubmit={handleSendDirectMessage} className="flex gap-2">
+              <input
+                type="text"
+                value={chatInputText}
+                onChange={(e) => setChatInputText(e.target.value)}
+                placeholder="Reply to Trade Desk..."
+                className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2.5 rounded-xl bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs transition-colors cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. FLOATING ACTION BUTTON (FAB) FOR "POST ITEM" */}
+      <button
+        onClick={() => {
+          if (isVerifiedUser) {
+            setShowSellModal(true);
+          } else {
+            setShowMarketplaceLockModal(true);
+          }
+        }}
+        className="fixed bottom-20 sm:bottom-8 right-5 sm:right-8 z-40 bg-[#0a6627] hover:bg-[#08521f] text-white rounded-full p-3.5 sm:px-5 sm:py-3.5 shadow-2xl shadow-emerald-950/40 flex items-center gap-2 border-2 border-white/90 active:scale-95 transition-all cursor-pointer group"
+        title="Post Item for Sale"
+      >
+        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
+        <span className="font-extrabold text-xs sm:text-sm tracking-wide hidden sm:inline">
+          Post Item
+        </span>
+      </button>
+
+      {/* 5. "VIEW DETAILS" MODAL (Matching User Image 2) */}
+      {detailsModalItem && (() => {
+        const soldInfo = getSoldStatusInfo(detailsModalItem);
+        const isSold = soldInfo.isSold;
+        const itemPrice = detailsModalItem.adminApprovedPrice ?? detailsModalItem.askingPrice ?? 0;
+        const fee = Math.round(itemPrice * 0.1);
+        const sellerNet = itemPrice - fee;
+        const isOwner = detailsModalItem.sellerNickname === userProfile?.nickname;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-auto relative max-h-[92vh] overflow-y-auto no-scrollbar">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h2 className="font-extrabold text-slate-800 text-sm tracking-wider uppercase flex items-center gap-2">
+                  <span>VIEW DETAILS</span>
+                  {isSold && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px]">
+                      {soldInfo.soldBadgeText}
+                    </span>
+                  )}
+                </h2>
+                <button
+                  onClick={() => setDetailsModalItem(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Large Photo Preview with Rounded Corners (Matching Picture 2) */}
+              <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 w-full h-64 sm:h-72">
+                <img
+                  src={
+                    detailsModalItem.imageUrls?.[activePhotoIdx] ||
+                    detailsModalItem.imageUrls?.[0] ||
+                    'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=600'
+                  }
+                  alt={detailsModalItem.title}
+                  className={`w-full h-full object-contain bg-slate-900/5 ${
+                    isSold ? 'grayscale-[20%]' : ''
+                  }`}
+                />
+
+                {isSold && (
+                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-3 text-center">
+                    <span className="px-4 py-1.5 rounded-full bg-rose-600 text-white font-black text-xs sm:text-sm tracking-wider shadow-lg">
+                      ✓ {soldInfo.soldBadgeText.toUpperCase()}
+                    </span>
+                    <p className="text-rose-100 text-[11px] font-bold mt-1.5 max-w-xs">
+                      ⚡ Deal Completed on Campus! (Archiving in {Math.max(1, 7 - soldInfo.daysAgo)} days)
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Photo Thumbnails selector (if multiple photos) */}
+              {detailsModalItem.imageUrls && detailsModalItem.imageUrls.length > 1 && (
+                <div className="flex gap-2 justify-center overflow-x-auto py-1">
+                  {detailsModalItem.imageUrls.map((url, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActivePhotoIdx(idx)}
+                      className={`w-12 h-12 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                        activePhotoIdx === idx
+                          ? 'border-[#0a6627] ring-2 ring-emerald-400 scale-105'
+                          : 'border-slate-200 opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={url} alt="thumbnail" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Title & Price Row (Matching Picture 2) */}
+              <div className="flex items-start justify-between gap-3 pt-1">
+                <h3 className="font-black text-slate-900 text-lg sm:text-xl leading-tight">
+                  {detailsModalItem.title}
+                </h3>
+                <span className={`font-black text-lg sm:text-2xl shrink-0 ${
+                  isSold ? 'text-slate-400 line-through' : 'text-[#0a6627]'
+                }`}>
+                  {formatPriceShort(itemPrice)}
+                </span>
+              </div>
+
+              {/* Sub-row: 👤 Nickname, 📍 Location, 👁️ Views (Matching Picture 2) */}
+              <div className="flex items-center gap-3 text-xs text-slate-600 font-medium flex-wrap">
+                <span className="flex items-center gap-1 text-slate-900 font-bold">
+                  <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>{detailsModalItem.sellerNickname || 'FUHSI Student'}</span>
+                </span>
+
+                <span className="flex items-center gap-1 text-slate-600">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span>{detailsModalItem.meetupPoint?.replace(/^📍\s*/, '') || 'Ayeka, Ondo State'}</span>
+                </span>
+
+                <span className="flex items-center gap-1 text-slate-500 ml-auto">
+                  <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>{detailsModalItem.viewCount || 24}</span>
+                </span>
+              </div>
+
+              {/* Description Section (Matching Picture 2) */}
+              <div className="space-y-1 pt-1 text-xs">
+                <p className="font-bold text-slate-900 text-xs">
+                  Description:
+                </p>
+                <p className="text-slate-700 leading-relaxed font-normal whitespace-pre-wrap">
+                  {detailsModalItem.description || 'No additional description provided for this listing.'}
+                </p>
+              </div>
+
+              {/* Price & Protection Note */}
+              {!isSold && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs flex justify-between items-center text-slate-700">
+                  <span>Price: <strong className="text-slate-900 font-bold">₦{itemPrice.toLocaleString()}</strong></span>
+                  <span className="text-[11px] text-slate-500">Seller receives: <strong className="text-emerald-800 font-bold">₦{sellerNet.toLocaleString()}</strong> (10% platform fee)</span>
+                </div>
+              )}
+
+              {/* Sold Record Notification if already purchased */}
+              {isSold && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-xs space-y-1">
+                  <p className="font-bold text-rose-900 flex items-center gap-1.5">
+                    <span>⚡ Completed Deal Record</span>
+                    <span className="text-rose-700 font-normal">({soldInfo.soldBadgeText})</span>
+                  </p>
+                  <p className="text-rose-800 text-[11px] leading-relaxed">
+                    This item was successfully sold on FUHSI-Connect. It remains as a campus price reference for 7 days before being automatically purged.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                {!isSold ? (
+                  <>
+                    {!isOwner ? (
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => {
+                            setBuyModalItem(detailsModalItem);
+                          }}
+                          className="w-full py-3 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <ShoppingBag className="w-4 h-4" />
+                          <span>Interested</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (onAuthorClick) {
+                              onAuthorClick({
+                                id: `seller_${detailsModalItem.id}`,
+                                authorNickname: detailsModalItem.sellerNickname,
+                                timeAgo: 'Marketplace',
+                                categoryTag: 'Trade',
+                                text: `Seller of ${detailsModalItem.title}`,
+                                likesCount: 0,
+                                commentsCount: 0,
+                                createdAt: '',
+                              });
+                              setDetailsModalItem(null);
+                            }
+                          }}
+                          className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                        >
+                          <User size={13} className="text-slate-500" />
+                          <span>View Seller Profile</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSoldModalItem(detailsModalItem);
+                        }}
+                        className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Mark as Sold</span>
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <button
+                      disabled
+                      className="w-full py-3 bg-slate-100 text-slate-500 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200"
+                    >
+                      <span>✓ Item Sold ({soldInfo.soldBadgeText})</span>
+                    </button>
+
+                    {isOwner && (
+                      <p className="text-[11px] text-center text-slate-500">
+                        You marked this item as sold. It will auto-delete in {Math.max(1, 7 - soldInfo.daysAgo)} days.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL: MARK AS SOLD CONFIRMATION (SIMPLIFIED) */}
+      {soldModalItem && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="font-black text-slate-900 text-sm">Mark as Sold</h3>
+              <button onClick={() => setSoldModalItem(null)} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+            </div>
+
+            {soldSuccessNotify ? (
+              <div className="p-4 bg-emerald-50 text-emerald-900 rounded-2xl text-center space-y-1">
+                <CheckCircle2 size={24} className="text-emerald-600 mx-auto" />
+                <p className="font-black text-sm">Item Marked as Sold!</p>
+                <p className="text-xs text-emerald-700">Tagged as "Sold today". Will automatically purge after 7 days.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  Are you sure you want to mark <strong className="text-slate-900 font-bold">"{soldModalItem.title}"</strong> as sold?
+                </p>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setSoldModalItem(null)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSold}
+                    className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+                  >
+                    Yes, Mark as Sold
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: POST ITEM FORM */}
       {showSellModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-100 space-y-4 my-8">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-base">Post Item for Sale on Campus</h3>
-                <p className="text-[11px] text-teal-700 font-bold">📷 At least 4 clear photos required for admin review</p>
+                <p className="text-[11px] text-emerald-700 font-bold">📷 Clear device photos & description required</p>
               </div>
-              <button onClick={() => setShowSellModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+              <button onClick={() => setShowSellModal(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
             </div>
 
             {sellSuccessMsg ? (
               <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold text-center">
-                ✓ Item submitted with 4+ photos to SUG Commerce for 10% price benchmark check & approval!
+                ✓ Item submitted successfully to FUHSI Marketplace!
               </div>
             ) : (
               <form onSubmit={handleSellSubmit} className="space-y-3">
@@ -851,8 +1212,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. 3M Littmann Stethoscope or Guyton Physiology Textbook"
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800"
+                    placeholder="e.g. TECNO Spark 8"
+                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
                 </div>
@@ -862,13 +1223,11 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
                     <select
                       value={category}
-                      onChange={(e) => {
-                        setCategory(e.target.value);
-                      }}
-                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium"
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     >
-                      {categories.map((c) => (
-                        <option key={c} value={c}>{c}</option>
+                      {CATEGORY_OPTIONS.filter((c) => c.id !== 'All').map((c) => (
+                        <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
                       ))}
                     </select>
                   </div>
@@ -879,63 +1238,65 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                       type="number"
                       value={askingPrice}
                       onChange={(e) => setAskingPrice(Number(e.target.value) || '')}
-                      placeholder="e.g. 38000"
-                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-bold"
+                      placeholder="e.g. 10000"
+                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       required
                     />
+                    {priceVal > 0 && (
+                      <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                        Note: 10% (₦{adminFee.toLocaleString()}) will be for platform commission. You will receive ₦{netPayout.toLocaleString()}.
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Live 10% Commission Calculator Box */}
-                {priceVal > 0 && (
-                  <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs space-y-1">
-                    <p className="font-bold text-teal-900">💰 Live Campus Commission Breakdown:</p>
-                    <div className="flex justify-between text-teal-800">
-                      <span>Listed Price:</span>
-                      <span>₦{priceVal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-teal-800">
-                      <span>10% Campus Server Fee:</span>
-                      <span>- ₦{adminFee.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between font-black text-teal-950 border-t border-teal-200/80 pt-1">
-                      <span>Your Net Payout:</span>
-                      <span>₦{netPayout.toLocaleString()}</span>
-                    </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Condition Tag</label>
+                    <select
+                      value={conditionTag}
+                      onChange={(e) => setConditionTag(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="New">New</option>
+                      <option value="Newly used">Newly used</option>
+                      <option value="Fairly Used">Fairly Used</option>
+                      <option value="Refurbished / Working">Refurbished / Working</option>
+                    </select>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Safe Public Campus Meet-Up Point</label>
-                  <select
-                    value={meetupPoint}
-                    onChange={(e) => setMeetupPoint(e.target.value)}
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-bold"
-                  >
-                    {meetupLocations.map((loc) => (
-                      <option key={loc} value={`📍 ${loc}`}>📍 {loc}</option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Safe Meet-up Point</label>
+                    <select
+                      value={meetupPoint}
+                      onChange={(e) => setMeetupPoint(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      {meetupLocations.map((loc) => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Description & Honest Condition</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Description & Specs</label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe item condition, inclusions, accessories, reason for selling..."
-                    rows={2}
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800"
+                    placeholder="Describe item condition, memory, accessories, inclusions..."
+                    rows={3}
+                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
                 </div>
 
-                {/* Device Photos Upload Section */}
-                <div className="space-y-3 pt-2 border-t border-slate-100">
+                {/* Photos Upload Section */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                      <Camera size={15} className="text-teal-600" />
-                      <span>Item Photos (1–6 Device Photos)</span>
+                      <Camera size={15} className="text-emerald-600" />
+                      <span>Item Photos (1–6 Photos)</span>
                     </label>
                     <span className="text-[10px] font-extrabold text-slate-500">
                       {uploadedPhotos.length} / 6 selected
@@ -943,9 +1304,9 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   </div>
 
                   {uploadedPhotos.length < 6 && (
-                    <label className="flex items-center justify-center gap-2 p-3 bg-teal-50 border-2 border-dashed border-teal-300 rounded-xl cursor-pointer hover:bg-teal-100 transition-colors">
-                      <Upload size={16} className="text-teal-700" />
-                      <span className="text-xs font-bold text-teal-800">
+                    <label className="flex items-center justify-center gap-2 p-3 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-100 transition-colors">
+                      <Upload size={16} className="text-emerald-700" />
+                      <span className="text-xs font-bold text-emerald-800">
                         Select Item Photos from Device
                       </span>
                       <input
@@ -959,17 +1320,16 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   )}
 
                   {uploadedPhotos.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2">
                       {uploadedPhotos.map((photo, idx) => (
-                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-square">
-                          <img src={photo} alt={`Item preview ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 aspect-square group">
+                          <img src={photo} alt={`Item ${idx + 1}`} className="w-full h-full object-cover" />
                           <button
                             type="button"
                             onClick={() => handleRemoveUploadedPhoto(idx)}
-                            className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full shadow-xs hover:bg-rose-700 transition-colors cursor-pointer"
-                            title="Remove photo"
+                            className="absolute top-1 right-1 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center text-xs font-bold hover:bg-rose-700"
                           >
-                            <Trash2 size={12} />
+                            ✕
                           </button>
                         </div>
                       ))}
@@ -979,9 +1339,9 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-[#0a6627] hover:bg-[#08521f] text-white font-extrabold text-xs transition-colors cursor-pointer shadow-md"
                 >
-                  Submit Item to Admin Review
+                  Submit Item Listing
                 </button>
               </form>
             )}
@@ -989,89 +1349,59 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL: ADMIN MIDDLEMAN BUY REQUEST & SERIOUS BUYER PLEDGE */}
+      {/* MODAL: IN-APP BUY INTENT PLEDGE & ESCROW */}
       {buyModalItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4 my-8">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-teal-600" /> Request to Buy (via Admin Middleman)
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                <ShieldCheck size={16} className="text-emerald-600" />
+                <span>FUHSI Safe Escrow Trade Request</span>
               </h3>
-              <button onClick={() => setBuyModalItem(null)} className="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+              <button onClick={() => setBuyModalItem(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
             </div>
 
             {buyIntentSuccess ? (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-bold text-center space-y-1.5">
-                <p className="text-sm">✓ Request Submitted to Admin Desk!</p>
-                <p className="text-[11px] font-medium text-emerald-800">
-                  Opening FUHSI Admin Trade Desk... Admin will contact @{buyModalItem.sellerNickname} privately to verify item availability.
-                </p>
+              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold text-center">
+                ✓ Trade request opened with Admin Escrow Desk!
               </div>
             ) : (
-              <div className="space-y-3.5 text-xs">
-                {/* Item Summary Card */}
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <div className="flex justify-between items-start">
-                    <p className="font-extrabold text-slate-900 text-sm">{buyModalItem.title}</p>
-                    <span className="px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 font-black text-xs">
-                      ₦{(buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-slate-600 text-[11px]">
-                    Seller: <span className="font-bold text-slate-800">{buyModalItem.sellerNickname}</span>
-                  </p>
-                  <p className="text-teal-800 text-[11px] font-bold flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-teal-600" /> Safe Meet-up Location: {buyModalItem.meetupPoint}
-                  </p>
-                </div>
+              <div className="space-y-3 text-xs">
+                <p className="text-slate-600 leading-relaxed">
+                  You are opening a protected escrow purchase for <strong className="text-slate-900">{buyModalItem.title}</strong> listed by <strong className="text-slate-900">{buyModalItem.sellerNickname}</strong> at <strong className="text-[#0a6627]">₦{(buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice).toLocaleString()}</strong>.
+                </p>
 
-                {/* Why Admin Middleman Box */}
-                <div className="p-3 rounded-xl bg-teal-50/80 border border-teal-200 text-teal-900 space-y-1 text-[11px]">
-                  <p className="font-bold text-teal-950 flex items-center gap-1">
-                    🛡️ How the Admin Middleman Works:
-                  </p>
-                  <ul className="list-disc pl-4 space-y-1 text-teal-800">
-                    <li>Your request goes directly to FUHSI Admin Desk (Not a direct seller DM).</li>
-                    <li>Admin contacts @{buyModalItem.sellerNickname} privately to check if the item is available.</li>
-                    <li>Both parties meet at {buyModalItem.meetupPoint} for safe physical inspection & payment.</li>
-                    <li>No money is held or collected by Admin.</li>
+                <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 space-y-1 text-slate-700">
+                  <p className="font-bold text-emerald-950">🛡️ Campus Safety Guarantees:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-emerald-900">
+                    <li>Designated campus meetup: <strong>{buyModalItem.meetupPoint?.startsWith('📍') ? buyModalItem.meetupPoint : `📍 ${buyModalItem.meetupPoint}`}</strong></li>
+                    <li>Inspect the item in broad daylight before payout release</li>
+                    <li>10% platform protection covers fraud prevention & disputes</li>
                   </ul>
                 </div>
 
-                {/* Serious Buyer System Notice */}
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2">
-                  <p className="font-extrabold text-amber-950 flex items-center gap-1.5 text-xs">
-                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Serious Buyer System Notice</span>
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-amber-900">
-                    By continuing, you confirm that you genuinely intend to purchase this item. Repeated false requests or failing to appear at safe meet-ups will result in reputation point deductions or marketplace suspension.
-                  </p>
-
-                  <label className="flex items-start gap-2 pt-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pledgeChecked}
-                      onChange={(e) => setPledgeChecked(e.target.checked)}
-                      className="mt-0.5 rounded text-teal-600 focus:ring-teal-500 w-4 h-4 shrink-0"
-                    />
-                    <span className="font-extrabold text-slate-900 text-[11px] leading-snug">
-                      "I confirm my genuine intention to buy '{buyModalItem.title}' at ₦{(buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0).toLocaleString()} and request Admin to verify availability."
-                    </span>
-                  </label>
-                </div>
+                <label className="flex items-start gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={pledgeChecked}
+                    onChange={(e) => setPledgeChecked(e.target.checked)}
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="text-[11px] text-slate-600 font-medium">
+                    I agree to meet safely on campus, inspect the item thoroughly, and abide by FUHSI trade guidelines.
+                  </span>
+                </label>
 
                 <button
-                  onClick={handleConfirmPledgeAndOpenDM}
                   disabled={!pledgeChecked}
-                  className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 ${
-                    pledgeChecked
-                      ? 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer'
+                  onClick={handleConfirmPledgeAndOpenDM}
+                  className={`w-full py-3 rounded-xl font-bold text-xs transition-colors shadow-md ${
+                    pledgeChecked 
+                      ? 'bg-[#0a6627] hover:bg-[#08521f] text-white cursor-pointer'
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}
                 >
-                  <Send className="w-4 h-4" />
-                  <span>Submit Purchase Request to Admin Desk</span>
+                  Confirm Escrow Purchase Ticket
                 </button>
               </div>
             )}
@@ -1079,159 +1409,46 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL: MULTI-PHOTO LIGHTBOX PREVIEW */}
-      {previewPhotoItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-2xl max-w-lg w-full p-4 text-white space-y-3 border border-slate-800">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-sm">{previewPhotoItem.title}</h3>
-                <p className="text-[10px] text-teal-400 font-bold">
-                  Photo {previewPhotoIdx + 1} of {previewPhotoItem.imageUrls.length}
-                </p>
-              </div>
-              <button onClick={() => setPreviewPhotoItem(null)} className="text-slate-400 hover:text-white text-lg font-bold">✕</button>
-            </div>
-
-            <div className="h-64 rounded-xl overflow-hidden bg-black flex items-center justify-center p-1">
-              <img
-                src={previewPhotoItem.imageUrls[previewPhotoIdx]}
-                alt="preview"
-                className="max-h-full max-w-full object-contain rounded-lg"
-              />
-            </div>
-
-            <div className="flex gap-2 justify-center overflow-x-auto py-1">
-              {previewPhotoItem.imageUrls.map((url, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setPreviewPhotoIdx(idx)}
-                  className={`w-14 h-14 rounded-lg overflow-hidden border transition-all ${
-                    previewPhotoIdx === idx ? 'border-teal-400 ring-2 ring-teal-400 scale-105' : 'border-slate-700 opacity-60'
-                  }`}
-                >
-                  <img src={url} alt="thumb" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: MARK AS SOLD WITH RATING STARS */}
-      {soldModalItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-sm">Mark Item as Sold</h3>
-              <button onClick={() => setSoldModalItem(null)} className="text-slate-400 hover:text-slate-600">✕</button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <p className="text-slate-700 font-medium">
-                Marking <span className="font-bold">{soldModalItem.title}</span> as SOLD. Select seller rating tag to display:
-              </p>
-
-              <div className="flex items-center gap-2 justify-center py-2">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      setRatingStars(s);
-                      setRatingTag(`Honest Seller ${'⭐'.repeat(s)}`);
-                    }}
-                    className={`text-2xl transition-transform hover:scale-110 ${s <= ratingStars ? 'text-amber-500' : 'text-slate-300'}`}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setRatingTag('Honest Seller ⭐⭐⭐⭐⭐')}
-                  className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-bold hover:bg-amber-100"
-                >
-                  Honest Seller ⭐⭐⭐⭐⭐
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRatingTag('Fast Payment ⭐⭐⭐⭐⭐')}
-                  className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-bold hover:bg-amber-100"
-                >
-                  Fast Payment ⭐⭐⭐⭐⭐
-                </button>
-              </div>
-
-              <button
-                onClick={handleConfirmSold}
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors"
-              >
-                Confirm Sold & Save Seller Rating Tag
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Marketplace Lock Modal for Unverified Users */}
+      {/* MODAL: VERIFICATION LOCK */}
       {showMarketplaceLockModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-xs border border-amber-200">
-              <Lock size={24} />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-3 text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+              <Lock size={22} />
             </div>
-            <div>
-              <h4 className="font-extrabold text-slate-900 text-base">Marketplace Access — Verified Feature</h4>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Posting listings and trading on the FUHSI Marketplace is exclusive to Verified accounts to prevent scams, verify item ownership, and maintain high trust.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-left text-xs space-y-1.5 text-slate-800 font-medium">
-              <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
-                <ShieldCheck size={16} />
-                <span>Get Verified to unlock:</span>
-              </div>
-              <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
-                <li className="flex items-center gap-1.5">✓ Post items for sale with Admin Middleman Shield</li>
-                <li className="flex items-center gap-1.5">✓ Request to buy items and trade securely</li>
-                <li className="flex items-center gap-1.5">✓ Create custom threads with video attachments</li>
-                <li className="flex items-center gap-1.5">✓ Edit published threads & priority support</li>
-              </ul>
-            </div>
-
-            <div className="flex items-center gap-2">
+            <h3 className="font-extrabold text-slate-900 text-base">Verification Required</h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              To keep the marketplace secure and scam-free, only verified FUHSI students can post items for sale.
+            </p>
+            <div className="flex gap-2 pt-2">
               <button
-                type="button"
                 onClick={() => setShowMarketplaceLockModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
               >
                 Cancel
               </button>
               <button
-                type="button"
                 onClick={() => {
                   setShowMarketplaceLockModal(false);
                   setShowVerificationModal(true);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                className="flex-1 py-2.5 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs rounded-xl"
               >
-                <ShieldCheck size={14} />
-                <span>Get Verified</span>
+                Apply
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Verification modal instance */}
       {showVerificationModal && (
         <VerificationModal
           userProfile={userProfile}
           onClose={() => setShowVerificationModal(false)}
-          onSubmitVerification={() => setShowVerificationModal(false)}
+          onSubmitVerification={() => {
+            setShowVerificationModal(false);
+          }}
         />
       )}
     </div>

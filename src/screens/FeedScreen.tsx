@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Post, Comment, PostCategory, UserProfile } from '../types';
 import { PostCard } from '../components/PostCard';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
-import { generateMorePosts } from '../utils/postGenerator';
+import { generateMorePosts, isDemoPost } from '../utils/postGenerator';
 import { getTimestampMs } from '../utils/dateUtils';
 import { 
   Plus, 
@@ -11,7 +11,8 @@ import {
   SquarePen,
   ArrowUp,
   Sparkles,
-  Users
+  Users,
+  MessageSquarePlus
 } from 'lucide-react';
 
 interface FeedScreenProps {
@@ -174,8 +175,8 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
     };
   }, [observerTarget, isLoadingMore, hasReachedEnd, loadMorePosts]);
 
-  // Combine initial posts and extra loaded posts
-  const allCombinedPosts = [...posts, ...extraPosts];
+  // Combine initial posts and extra loaded posts (excluding any demo posts)
+  const allCombinedPosts = [...posts, ...extraPosts].filter((post) => !isDemoPost(post));
 
   // Filter posts by selected department/category
   let filteredPosts = allCombinedPosts.filter((post) => {
@@ -239,63 +240,94 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
 
       {/* Chronological Feed */}
       <div className="space-y-3">
-        {filteredPosts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            comments={comments[post.id] || []}
-            currentUserNickname={userProfile?.nickname || user?.nickname}
-            userProfile={userProfile || user}
-            onLikeClick={onLikeClick}
-            onBookmarkClick={onBookmarkClick}
-            onCommentClick={onCommentClick}
-            onDeletePost={onDeletePost}
-            onEditPost={onEditPost}
-            onVotePoll={onVotePoll}
-            onReportPost={onReportPost}
-            onAuthorClick={onAuthorClick}
-            onVote={onVote}
-            onBookmark={onBookmark}
-            onAddComment={onAddComment}
-            onFlagPost={onFlagPost}
-          />
-        ))}
-
-        {/* End of Posts & Back to Top Handler */}
-        {!hasReachedEnd ? (
-          <div ref={observerTarget} className="py-6 text-center flex flex-col items-center justify-center space-y-3">
-            {isLoadingMore ? (
-              <div className="flex items-center gap-2 text-xs font-bold text-teal-800 bg-teal-50 px-4 py-2.5 rounded-full border border-teal-200/80 shadow-xs">
-                <Loader2 size={16} className="animate-spin text-teal-700" />
-                <span>Loading older campus posts...</span>
-              </div>
-            ) : (
-              <button
-                onClick={loadMorePosts}
-                className="text-xs font-bold text-slate-500 hover:text-teal-800 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
-              >
-                <RefreshCw size={14} />
-                <span>Load older posts...</span>
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="py-6 px-4 bg-white rounded-2xl border border-slate-200/90 text-center space-y-3 shadow-xs">
-            <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-full flex items-center justify-center mx-auto border border-teal-200">
-              <Sparkles size={20} />
+        {filteredPosts.length === 0 ? (
+          <div className="py-12 px-6 bg-white rounded-2xl border border-slate-200 text-center space-y-4 shadow-xs">
+            <div className="w-14 h-14 bg-teal-50 text-teal-700 rounded-2xl flex items-center justify-center mx-auto border border-teal-200/80">
+              <MessageSquarePlus size={28} />
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-900">You've reached the last post on the feed!</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Click "Back to Top" below to return to the newest updates.</p>
+            <div className="max-w-sm mx-auto space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900">No Campus Posts Yet</h3>
+              <p className="text-xs text-slate-500 font-medium">
+                {currentFilter !== 'All Campus'
+                  ? `No active posts found in "${currentFilter}". Select "All Campus" or create the first post!`
+                  : 'Be the first to share an update, academic question, or announcement with the university community.'}
+              </p>
             </div>
             <button
-              onClick={scrollToTop}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              onClick={() => {
+                if (onCreatePostClick) {
+                  onCreatePostClick();
+                } else if (onCreatePost) {
+                  onCreatePost('', 'General');
+                }
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
-              <ArrowUp size={15} />
-              <span>Back to Top</span>
+              <SquarePen size={15} />
+              <span>Create First Post</span>
             </button>
           </div>
+        ) : (
+          <>
+            {filteredPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                comments={comments[post.id] || []}
+                currentUserNickname={userProfile?.nickname || user?.nickname}
+                userProfile={userProfile || user}
+                onLikeClick={onLikeClick}
+                onBookmarkClick={onBookmarkClick}
+                onCommentClick={onCommentClick}
+                onDeletePost={onDeletePost}
+                onEditPost={onEditPost}
+                onVotePoll={onVotePoll}
+                onReportPost={onReportPost}
+                onAuthorClick={onAuthorClick}
+                onVote={onVote}
+                onBookmark={onBookmark}
+                onAddComment={onAddComment}
+                onFlagPost={onFlagPost}
+              />
+            ))}
+
+            {/* End of Posts & Back to Top Handler */}
+            {!hasReachedEnd ? (
+              <div ref={observerTarget} className="py-6 text-center flex flex-col items-center justify-center space-y-3">
+                {isLoadingMore ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-teal-800 bg-teal-50 px-4 py-2.5 rounded-full border border-teal-200/80 shadow-xs">
+                    <Loader2 size={16} className="animate-spin text-teal-700" />
+                    <span>Loading older campus posts...</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={loadMorePosts}
+                    className="text-xs font-bold text-slate-500 hover:text-teal-800 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={14} />
+                    <span>Load older posts...</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="py-6 px-4 bg-white rounded-2xl border border-slate-200/90 text-center space-y-3 shadow-xs">
+                <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-full flex items-center justify-center mx-auto border border-teal-200">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900">You've reached the last post on the feed!</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Click "Back to Top" below to return to the newest updates.</p>
+                </div>
+                <button
+                  onClick={scrollToTop}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95"
+                >
+                  <ArrowUp size={15} />
+                  <span>Back to Top</span>
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

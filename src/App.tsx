@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   INITIAL_USER_PROFILE,
   INITIAL_POSTS,
@@ -54,6 +54,8 @@ import { VerificationBadge } from './components/VerificationBadge';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
 import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon } from 'lucide-react';
+import { getUserNotifications, getReadNotificationIds } from './utils/messagingUtils';
+import { isUserMatchingAudience } from './utils/audienceUtils';
 
 export const App: React.FC = () => {
   // Navigation State
@@ -174,6 +176,46 @@ export const App: React.FC = () => {
   // Active user bookmark IDs key
   const activeUserKey = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
   const myBookmarkedPostIds = userBookmarksMap[activeUserKey] || [];
+
+  // Unread notifications tracker
+  const [notifTrigger, setNotifTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleNotifUpdate = () => {
+      setNotifTrigger((prev) => prev + 1);
+    };
+    window.addEventListener('fuhsi_notification_received', handleNotifUpdate);
+    window.addEventListener('fuhsi_notification_read_updated', handleNotifUpdate);
+    window.addEventListener('fuhsi_direct_message_updated', handleNotifUpdate);
+    return () => {
+      window.removeEventListener('fuhsi_notification_received', handleNotifUpdate);
+      window.removeEventListener('fuhsi_notification_read_updated', handleNotifUpdate);
+      window.removeEventListener('fuhsi_direct_message_updated', handleNotifUpdate);
+    };
+  }, []);
+
+  const unreadNotificationCount = useMemo(() => {
+    if (!userProfile?.nickname) return 0;
+    const readMap = getReadNotificationIds(userProfile.nickname);
+    const userNotifs = getUserNotifications(userProfile.nickname);
+
+    let count = 0;
+    userNotifs.forEach((n) => {
+      const isRead = readMap[n.id] !== undefined ? readMap[n.id] : Boolean(n.isRead);
+      if (!isRead) count++;
+    });
+
+    posts.forEach((p) => {
+      const target = p.targetDepartment;
+      if (!target || target === 'General Campus' || target === 'General') return;
+      if (isUserMatchingAudience(userProfile.department, target)) {
+        const id = `targeted_notif_${p.id}`;
+        if (!readMap[id]) count++;
+      }
+    });
+
+    return count;
+  }, [userProfile?.nickname, userProfile?.department, posts, notifTrigger]);
 
   // Auto Sync States to LocalStorage and Server Central Database
   useEffect(() => {
@@ -1108,12 +1150,22 @@ export const App: React.FC = () => {
   };
 
   const handleMarkAsSold = (itemId: string, ratingStars: number, ratingTag: string) => {
+    const nowIso = new Date().toISOString();
     setMarketplaceItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId
-          ? { ...item, status: 'SOLD', sellerRatingStars: ratingStars, sellerRatingTag: ratingTag }
-          : item
-      )
+      prev.map((item) => {
+        if (item.id === itemId) {
+          const updated: MarketplaceItem = {
+            ...item,
+            status: 'SOLD',
+            soldAt: nowIso,
+            sellerRatingStars: ratingStars,
+            sellerRatingTag: ratingTag,
+          };
+          saveMarketplaceApprovedToFirestore(updated).catch((err) => console.error(err));
+          return updated;
+        }
+        return item;
+      })
     );
   };
 
@@ -1824,11 +1876,18 @@ export const App: React.FC = () => {
           {/* 4. Notification */}
           <button
             onClick={() => handleNavChange(3)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors relative ${
               navIndex === 3 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Bell className="w-5 h-5" />
+            <div className="relative">
+              <Bell className="w-5 h-5" />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -top-1 -right-1.5 min-w-3.5 h-3.5 px-1 bg-rose-600 text-white rounded-full text-[8.5px] font-black flex items-center justify-center animate-pulse">
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </span>
+              )}
+            </div>
             <span className="text-[11px]">Notification</span>
           </button>
 

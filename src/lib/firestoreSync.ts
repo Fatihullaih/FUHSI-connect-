@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage } from '../types';
+import { isDemoUser, isDemoPost, isDemoNickname } from '../utils/postGenerator';
 
 // Collection references
 const USERS_COL = 'users';
@@ -30,7 +31,10 @@ export function subscribeUsers(onUpdate: (users: UserProfile[]) => void) {
   return onSnapshot(collection(db, USERS_COL), (snapshot) => {
     const list: UserProfile[] = [];
     snapshot.forEach((docSnap) => {
-      list.push(docSnap.data() as UserProfile);
+      const u = docSnap.data() as UserProfile;
+      if (!isDemoUser(u) && !isDemoNickname(u.nickname)) {
+        list.push(u);
+      }
     });
     onUpdate(list);
   }, (err) => {
@@ -102,7 +106,10 @@ export function subscribePosts(onUpdate: (posts: Post[]) => void) {
   return onSnapshot(collection(db, POSTS_COL), (snapshot) => {
     const list: Post[] = [];
     snapshot.forEach((docSnap) => {
-      list.push(docSnap.data() as Post);
+      const p = docSnap.data() as Post;
+      if (!isDemoPost(p)) {
+        list.push(p);
+      }
     });
     // Sort descending by createdAt
     list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -224,16 +231,18 @@ export async function saveVerificationRequestToFirestore(req: VerificationReques
  */
 export async function seedFirestoreInitialDataIfNeeded(initialUsers: UserProfile[], initialPosts: Post[]) {
   try {
+    const validUsers = (initialUsers || []).filter((u) => !isDemoUser(u) && !isDemoNickname(u.nickname));
     const usersSnap = await getDocs(collection(db, USERS_COL));
-    if (usersSnap.empty && initialUsers.length > 0) {
-      console.log('Seeding initial users to Firestore...');
-      await saveUsersBatchToFirestore(initialUsers);
+    if (usersSnap.empty && validUsers.length > 0) {
+      console.log('Seeding initial non-demo users to Firestore...');
+      await saveUsersBatchToFirestore(validUsers);
     }
 
+    const validPosts = (initialPosts || []).filter((p) => !isDemoPost(p));
     const postsSnap = await getDocs(collection(db, POSTS_COL));
-    if (postsSnap.empty && initialPosts.length > 0) {
-      console.log('Seeding initial posts to Firestore...');
-      for (const p of initialPosts) {
+    if (postsSnap.empty && validPosts.length > 0) {
+      console.log('Seeding initial non-demo posts to Firestore...');
+      for (const p of validPosts) {
         await savePostToFirestore(p);
       }
     }

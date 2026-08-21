@@ -143,6 +143,7 @@ export interface MarketplaceItem {
   imageUrls: string[];
   viewCount: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SOLD';
+  soldAt?: string;
   buyerDmIntentsCount: number;
   adminNote?: string;
   sellerRatingStars?: number;

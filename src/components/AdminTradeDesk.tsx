@@ -8,7 +8,7 @@ import {
   upsertTransaction, 
   updateTransactionStatus 
 } from '../utils/tradeDeskUtils';
-import { sendDirectMessage, normalizeNickname } from '../utils/messagingUtils';
+import { sendDirectMessage, normalizeNickname, formatMessageTime } from '../utils/messagingUtils';
 import { ChatInterface } from './ChatInterface';
 import { 
   ShieldCheck, 
@@ -145,7 +145,7 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
       senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
       receiverNickname: targetNickname,
       text: messageText.trim(),
-      timestamp: 'Just now',
+      timestamp: formatMessageTime(),
     };
 
     sendDirectMessage(adminMsg);
