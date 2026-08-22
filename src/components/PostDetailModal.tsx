@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { X, MessageSquare, Heart, Bookmark, Send, CornerDownRight, Maximize2, Trash2, AlertTriangle, BarChart2, Check, Image as ImageIcon, Edit3, Lock, ShieldCheck } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, MessageSquare, Heart, Bookmark, Send, CornerDownRight, Maximize2, Trash2, AlertTriangle, BarChart2, Check, Image as ImageIcon, Edit3, Lock, ShieldCheck, Clock } from 'lucide-react';
 import { Post, Comment, UserProfile, PollOption } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
 import { VerificationModal } from './VerificationModal';
-import { formatRelativeTime } from '../utils/dateUtils';
+import { formatRelativeTime, formatExactDateTime, getTimestampMs } from '../utils/dateUtils';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { compressImageFile } from '../utils/imageUtils';
@@ -14,6 +14,7 @@ interface PostDetailModalProps {
   post: Post;
   comments: Comment[];
   userProfile: UserProfile | null;
+  zIndex?: number;
   onClose: () => void;
   onAddComment: (commentText: string, parentId?: string, replyToNickname?: string, imageUrl?: string) => void;
   onLikeComment?: (commentId: string) => void;
@@ -30,6 +31,7 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   post,
   comments = [],
   userProfile,
+  zIndex,
   onClose,
   onAddComment,
   onLikeComment,
@@ -53,6 +55,15 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   const [editedContent, setEditedContent] = useState(post?.content || (post as any)?.text || '');
   const [showEditLockModal, setShowEditLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  // Live ticker to update relative timestamps in real-time every 15 seconds
+  const [, setTimeTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeTick((prev) => prev + 1);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   const isVerifiedUser = useMemo(() => {
     return checkIsUserVerified(post?.authorNickname || userProfile?.nickname, userProfile);
@@ -103,11 +114,22 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
     setCommentImage(null);
   };
 
-  // Build comment tree (top-level vs nested child replies)
-  const topLevelComments = comments.filter((c) => !c.parentId);
+  // Sort comments chronologically (earliest to latest for a natural top-to-bottom discussion flow)
+  const sortedComments = useMemo(() => {
+    return [...(comments || [])].sort((a, b) => {
+      const timeA = getTimestampMs(a.timestamp);
+      const timeB = getTimestampMs(b.timestamp);
+      return timeA - timeB;
+    });
+  }, [comments]);
+
+  // Build comment tree (top-level vs nested child replies) in chronological order
+  const topLevelComments = useMemo(() => {
+    return sortedComments.filter((c) => !c.parentId);
+  }, [sortedComments]);
   
   const getChildReplies = (parentId: string): Comment[] => {
-    return comments.filter((c) => c.parentId === parentId);
+    return sortedComments.filter((c) => c.parentId === parentId);
   };
 
   // Helper component to render a comment item recursively or nested
@@ -118,6 +140,9 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
       userProfile?.nickname &&
       comment.authorNickname?.toLowerCase() === userProfile.nickname.toLowerCase()
     );
+
+    const relativeTime = formatRelativeTime(comment.timestamp);
+    const exactTime = formatExactDateTime(comment.timestamp) || comment.timestamp;
 
     return (
       <div key={comment.id} className="space-y-2">
@@ -170,8 +195,12 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               )}
             </div>
 
-            <span className="text-[10px] text-slate-400 font-medium shrink-0">
-              {formatRelativeTime(comment.timestamp)}
+            <span 
+              className="text-[10px] text-slate-400 font-medium shrink-0 flex items-center gap-1 hover:text-slate-600 transition-colors cursor-help"
+              title={`Exact time: ${exactTime}`}
+            >
+              <Clock size={11} className="text-slate-400 inline shrink-0" />
+              <span>{relativeTime}</span>
             </span>
           </div>
 
@@ -269,7 +298,10 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+      style={{ zIndex: zIndex ?? 75 }}
+    >
       <div className="bg-white rounded-3xl max-w-xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/90 shrink-0">
@@ -329,7 +361,12 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                           {post.department}
                         </span>
                         <span>•</span>
-                        <span className="font-semibold text-slate-500">{formatRelativeTime(post.timestamp)}</span>
+                        <span 
+                          className="font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+                          title={formatExactDateTime(post.timestamp) || post.timestamp}
+                        >
+                          {formatRelativeTime(post.timestamp)}
+                        </span>
                       </div>
                     </div>
                   </div>

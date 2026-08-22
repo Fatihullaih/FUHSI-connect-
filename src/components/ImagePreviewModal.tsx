@@ -37,7 +37,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-6 animate-in fade-in duration-200">
       {/* Top Header Bar */}
       <div className="w-full max-w-5xl flex items-center justify-between z-10 text-white pb-2">
         <div className="flex items-center gap-2">

@@ -1,9 +1,11 @@
-import { DirectMessage, ChatConversation, CampusNotification } from '../types';
+import { DirectMessage, ChatConversation, CampusNotification, ChatReport } from '../types';
 import { pushServerDbSync } from './apiSync';
 import { saveDirectMessageToFirestore } from '../lib/firestoreSync';
+import { evaluateChatMessage } from './safetyFilter';
 
 export const DIRECT_MESSAGES_KEY = 'fuhsi_direct_messages_db';
 export const CONVERSATIONS_KEY = 'fuhsi_conversations_db';
+export const CHAT_REPORTS_KEY = 'fuhsi_chat_reports_db';
 
 /**
  * Normalize nickname for consistent key lookups
@@ -12,6 +14,25 @@ export const normalizeNickname = (nick: string): string => {
   if (!nick) return '';
   return nick.trim().toLowerCase().replace(/^@/, '');
 };
+
+/**
+ * Deterministically generate a conversation ID between two usernames
+ */
+export function getConversationId(userA: string, userB: string): string {
+  const cleanA = normalizeNickname(userA);
+  const cleanB = normalizeNickname(userB);
+
+  // If one of them is admin desk
+  if (cleanA.includes('admin') || cleanA.includes('desk') || cleanA.includes('modula')) {
+    return `conv_admin_${cleanB}`;
+  }
+  if (cleanB.includes('admin') || cleanB.includes('desk') || cleanB.includes('modula')) {
+    return `conv_admin_${cleanA}`;
+  }
+
+  const sorted = [cleanA, cleanB].sort();
+  return `conv_${sorted[0]}_${sorted[1]}`;
+}
 
 export const formatMessageTime = (dateInput?: string | number | Date): string => {
   if (!dateInput || dateInput === 'Just now' || dateInput === 'Live Desk') {
@@ -50,11 +71,237 @@ export function getStoredDirectMessages(): DirectMessage[] {
 }
 
 /**
- * Save new direct message, update conversations, and send a notification to the recipient
+ * Get all stored conversations
  */
-export function sendDirectMessage(msg: DirectMessage): DirectMessage[] {
+export function getStoredConversations(): ChatConversation[] {
+  try {
+    const stored = localStorage.getItem(CONVERSATIONS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.error('Error reading conversations:', err);
+  }
+  return [];
+}
+
+/**
+ * Get active conversations for a specific user, filtering out deleted ones
+ */
+export function getUserConversations(userNickname: string): ChatConversation[] {
+  if (!userNickname) return [];
+  const cleanMe = normalizeNickname(userNickname);
   const allMessages = getStoredDirectMessages();
-  const updatedMessages = [...allMessages, msg];
+  const storedConvs = getStoredConversations();
+
+  // Find all conversation IDs this user is part of
+  const convMap = new Map<string, { otherUser: string; lastMsg: DirectMessage; count: number }>();
+
+  allMessages.forEach((msg) => {
+    const sender = normalizeNickname(msg.senderNickname);
+    const receiver = normalizeNickname(msg.receiverNickname);
+
+    if (sender === cleanMe || receiver === cleanMe) {
+      const other = sender === cleanMe ? msg.receiverNickname : msg.senderNickname;
+      const convId = msg.conversationId || getConversationId(msg.senderNickname, msg.receiverNickname);
+      
+      const existing = convMap.get(convId);
+      if (!existing) {
+        convMap.set(convId, { otherUser: other, lastMsg: msg, count: 1 });
+      } else {
+        // Keep the latest message
+        convMap.set(convId, { otherUser: other, lastMsg: msg, count: existing.count + 1 });
+      }
+    }
+  });
+
+  const result: ChatConversation[] = [];
+
+  convMap.forEach((data, convId) => {
+    const stored = storedConvs.find((c) => c.id === convId);
+    if (stored && stored.isDeletedBy && stored.isDeletedBy.includes(cleanMe)) {
+      return; // Skipped because deleted by user
+    }
+
+    const cleanOther = normalizeNickname(data.otherUser);
+    // Lookup user avatar and verification from users cache
+    let otherAvatarKey = '1';
+    let otherAvatarUrl: string | undefined;
+    let otherIsVerified = false;
+    let otherBadgeType = 'GREEN';
+    let otherBadgeTitle = 'FUHSI Student';
+
+    try {
+      const uStr = localStorage.getItem('fuhsi_users_db');
+      if (uStr) {
+        const uList: any[] = JSON.parse(uStr);
+        const match = uList.find(
+          (u) => normalizeNickname(u.nickname) === cleanOther || u.id === data.otherUser
+        );
+        if (match) {
+          otherAvatarKey = match.avatarKey || '1';
+          otherAvatarUrl = match.avatarUrl;
+          otherIsVerified = Boolean(match.isVerified || match.verificationStatus === 'approved');
+          otherBadgeType = match.badgeType || 'GREEN';
+          otherBadgeTitle = match.badgeTitle || 'FUHSI Student';
+        }
+      }
+    } catch (e) {}
+
+    result.push({
+      id: convId,
+      otherUserNickname: data.otherUser.startsWith('@') ? data.otherUser : `@${data.otherUser}`,
+      otherUserAvatarKey: otherAvatarKey,
+      otherUserAvatarUrl: otherAvatarUrl,
+      otherUserIsVerified: otherIsVerified,
+      otherUserBadgeType: otherBadgeType,
+      otherUserBadgeTitle: otherBadgeTitle,
+      lastMessage: data.lastMsg.text,
+      lastTimestamp: formatMessageTime(data.lastMsg.timestamp),
+      itemId: data.lastMsg.itemId,
+      itemTitle: data.lastMsg.itemTitle,
+      itemPrice: data.lastMsg.itemPrice,
+      meetupPoint: data.lastMsg.meetupPoint,
+      unreadCount: stored?.unreadCount || 0,
+      updatedAt: data.lastMsg.timestamp,
+    });
+  });
+
+  // Sort newest first
+  return result.sort((a, b) => {
+    const tA = new Date(a.updatedAt || 0).getTime() || 0;
+    const tB = new Date(b.updatedAt || 0).getTime() || 0;
+    return tB - tA;
+  });
+}
+
+/**
+ * Delete / Remove conversation for a user
+ */
+export function deleteConversationForUser(conversationId: string, userNickname: string): void {
+  if (!conversationId || !userNickname) return;
+  const clean = normalizeNickname(userNickname);
+  try {
+    const stored = getStoredConversations();
+    const existing = stored.find((c) => c.id === conversationId);
+    let updated: ChatConversation[];
+    if (existing) {
+      const deletedBy = existing.isDeletedBy || [];
+      if (!deletedBy.includes(clean)) {
+        deletedBy.push(clean);
+      }
+      updated = stored.map((c) => (c.id === conversationId ? { ...c, isDeletedBy: deletedBy } : c));
+    } else {
+      updated = [
+        ...stored,
+        {
+          id: conversationId,
+          otherUserNickname: '',
+          lastMessage: '',
+          lastTimestamp: '',
+          unreadCount: 0,
+          isDeletedBy: [clean],
+        },
+      ];
+    }
+    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(updated));
+    pushServerDbSync({ chatConversations: updated } as any).catch(console.error);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fuhsi_conversation_deleted', { detail: { conversationId, userNickname } }));
+    }
+  } catch (err) {
+    console.error('Error deleting conversation:', err);
+  }
+}
+
+/**
+ * Submit a Chat Moderation Report
+ */
+export function submitChatReport(report: ChatReport): void {
+  try {
+    let reports: ChatReport[] = [];
+    const raw = localStorage.getItem(CHAT_REPORTS_KEY);
+    if (raw) reports = JSON.parse(raw);
+
+    reports = [report, ...reports];
+    localStorage.setItem(CHAT_REPORTS_KEY, JSON.stringify(reports));
+
+    pushServerDbSync({ chatReports: reports } as any).catch(console.error);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fuhsi_chat_report_submitted', { detail: report }));
+    }
+  } catch (err) {
+    console.error('Error submitting chat report:', err);
+  }
+}
+
+/**
+ * Get all submitted chat reports (for Admin Console)
+ */
+export function getStoredChatReports(): ChatReport[] {
+  try {
+    const raw = localStorage.getItem(CHAT_REPORTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.error('Error reading chat reports:', err);
+  }
+  return [];
+}
+
+/**
+ * Update chat report status (Admin action)
+ */
+export function updateChatReportStatus(reportId: string, status: 'ACTION_TAKEN' | 'DISMISSED'): void {
+  try {
+    const reports = getStoredChatReports();
+    const updated = reports.map((r) => (r.id === reportId ? { ...r, status } : r));
+    localStorage.setItem(CHAT_REPORTS_KEY, JSON.stringify(updated));
+    pushServerDbSync({ chatReports: updated } as any).catch(console.error);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fuhsi_chat_report_updated', { detail: { reportId, status } }));
+    }
+  } catch (err) {
+    console.error('Error updating chat report:', err);
+  }
+}
+
+/**
+ * Save new direct message, evaluate safety, update conversations, and send notification
+ */
+export function sendDirectMessage(msg: DirectMessage): {
+  updatedMessages: DirectMessage[];
+  warningMessage?: string;
+  isBlocked?: boolean;
+} {
+  // Safety evaluation before dispatching
+  const evalResult = evaluateChatMessage(msg.text, msg.senderNickname);
+
+  if (!evalResult.isAllowed) {
+    return {
+      updatedMessages: getStoredDirectMessages(),
+      warningMessage: evalResult.warningMessage,
+      isBlocked: true,
+    };
+  }
+
+  const effectiveText = evalResult.sanitizedText || msg.text;
+
+  const safeMsg: DirectMessage = {
+    ...msg,
+    text: effectiveText,
+    isSafetyWarning: evalResult.actionTaken === 'REPLACED_CONTACT_INFO',
+    violationNotice: evalResult.actionTaken === 'REPLACED_CONTACT_INFO' ? evalResult.warningMessage : undefined,
+  };
+
+  const allMessages = getStoredDirectMessages();
+  const updatedMessages = [...allMessages, safeMsg];
   
   try {
     localStorage.setItem(DIRECT_MESSAGES_KEY, JSON.stringify(updatedMessages));
@@ -63,35 +310,35 @@ export function sendDirectMessage(msg: DirectMessage): DirectMessage[] {
   }
 
   // Save to Firestore real-time collection
-  saveDirectMessageToFirestore(msg).catch((err) => {
+  saveDirectMessageToFirestore(safeMsg).catch((err) => {
     console.error('Error saving direct message to Firestore:', err);
   });
 
   // Update conversations
-  updateConversationList(msg);
+  updateConversationList(safeMsg);
 
   // Send real notification to recipient
-  const isFromAdmin = msg.senderNickname.includes('Admin') || msg.senderNickname.toLowerCase().includes('modula');
-  const previewText = msg.text.length > 130 ? `${msg.text.substring(0, 130)}...` : msg.text;
+  const isFromAdmin = safeMsg.senderNickname.includes('Admin') || safeMsg.senderNickname.toLowerCase().includes('modula');
+  const previewText = safeMsg.text.length > 130 ? `${safeMsg.text.substring(0, 130)}...` : safeMsg.text;
 
-  const msgTime = formatMessageTime(msg.timestamp);
+  const msgTime = formatMessageTime(safeMsg.timestamp);
 
   const notif: CampusNotification = {
     id: `notif_dm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     type: isFromAdmin ? 'ADMIN' : 'DIRECT_MESSAGE',
-    title: isFromAdmin ? '🛡️ Admin Inquiry / Message' : `💬 Message from ${msg.senderNickname}`,
+    title: isFromAdmin ? '🛡️ Admin Inquiry / Message' : `💬 Message from ${safeMsg.senderNickname}`,
     message: isFromAdmin 
       ? `Official Admin Notice: "${previewText}"`
-      : `${msg.senderNickname}: "${previewText}"`,
+      : `${safeMsg.senderNickname}: "${previewText}"`,
     timestamp: msgTime,
     isRead: false,
-    senderNickname: msg.senderNickname,
-    conversationId: msg.conversationId,
+    senderNickname: safeMsg.senderNickname,
+    conversationId: safeMsg.conversationId,
     actionType: 'OPEN_TRADE_CHAT',
-    itemId: msg.itemId,
+    itemId: safeMsg.itemId,
   };
 
-  sendUserNotification(msg.receiverNickname, notif);
+  sendUserNotification(safeMsg.receiverNickname, notif);
 
   // Push sync to server
   try {
@@ -102,10 +349,14 @@ export function sendDirectMessage(msg: DirectMessage): DirectMessage[] {
 
   // Dispatch custom window event so all active UI components refresh immediately
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated', { detail: msg }));
+    window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated', { detail: safeMsg }));
   }
 
-  return updatedMessages;
+  return {
+    updatedMessages,
+    warningMessage: evalResult.warningMessage,
+    isBlocked: false,
+  };
 }
 
 /**
@@ -117,9 +368,11 @@ export function updateConversationList(msg: DirectMessage): void {
     let convs: ChatConversation[] = stored ? JSON.parse(stored) : [];
     if (!Array.isArray(convs)) convs = [];
 
-    const existingIdx = convs.findIndex((c) => c.id === msg.conversationId);
+    const convId = msg.conversationId || getConversationId(msg.senderNickname, msg.receiverNickname);
+    const existingIdx = convs.findIndex((c) => c.id === convId);
+
     const updatedConv: ChatConversation = {
-      id: msg.conversationId,
+      id: convId,
       otherUserNickname: msg.senderNickname.includes('Admin') ? msg.senderNickname : (msg.receiverNickname.includes('Admin') ? msg.senderNickname : msg.receiverNickname),
       lastMessage: msg.text,
       lastTimestamp: formatMessageTime(msg.timestamp),
@@ -128,18 +381,22 @@ export function updateConversationList(msg: DirectMessage): void {
       itemPrice: msg.itemPrice,
       meetupPoint: msg.meetupPoint,
       unreadCount: (existingIdx >= 0 ? convs[existingIdx].unreadCount : 0) + 1,
+      isDeletedBy: [], // unhide if a new message arrives
+      updatedAt: new Date().toISOString(),
     };
 
     if (existingIdx >= 0) {
       convs[existingIdx] = {
         ...convs[existingIdx],
         ...updatedConv,
+        isDeletedBy: [],
       };
     } else {
       convs.unshift(updatedConv);
     }
 
     localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs));
+    pushServerDbSync({ chatConversations: convs } as any).catch(console.error);
   } catch (err) {
     console.error('Error updating conversations:', err);
   }

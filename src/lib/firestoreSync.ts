@@ -209,6 +209,12 @@ export function subscribeVerificationRequests(onUpdate: (reqs: VerificationReque
       snapshot.forEach((docSnap) => {
         list.push(docSnap.data() as VerificationRequest);
       });
+      // Sort descending by timestamp / creation time
+      list.sort((a, b) => {
+        const timeA = new Date(a.timestamp || 0).getTime() || 0;
+        const timeB = new Date(b.timestamp || 0).getTime() || 0;
+        return timeB - timeA;
+      });
       onUpdate(list);
     },
     (err) => {
@@ -223,6 +229,30 @@ export async function saveVerificationRequestToFirestore(req: VerificationReques
     await setDoc(doc(db, VERIFICATIONS_COL, req.id), sanitizeForFirestore(req), { merge: true });
   } catch (err) {
     console.error('Error saving verification request to Firestore:', err);
+  }
+}
+
+export async function saveVerificationRequestsBatchToFirestore(reqs: VerificationRequest[]): Promise<void> {
+  if (!reqs || reqs.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    reqs.forEach((r) => {
+      if (r && r.id) {
+        batch.set(doc(db, VERIFICATIONS_COL, r.id), sanitizeForFirestore(r), { merge: true });
+      }
+    });
+    await batch.commit();
+  } catch (err) {
+    console.error('Error batch saving verification requests to Firestore:', err);
+  }
+}
+
+export async function deleteVerificationRequestFromFirestore(requestId: string): Promise<void> {
+  if (!requestId) return;
+  try {
+    await deleteDoc(doc(db, VERIFICATIONS_COL, requestId));
+  } catch (err) {
+    console.error('Error deleting verification request from Firestore:', err);
   }
 }
 

@@ -33,6 +33,7 @@ import {
   saveCommentToFirestore,
   saveMarketplaceApprovedToFirestore,
   saveVerificationRequestToFirestore,
+  saveUserToFirestore,
   seedFirestoreInitialDataIfNeeded,
   purgeAllExceptAdminFromFirestore,
 } from './lib/firestoreSync';
@@ -1169,17 +1170,92 @@ export const App: React.FC = () => {
     );
   };
 
-  // Handlers for Verification Application
-  const handleSubmitVerificationRequest = (category: string, statement: string) => {
+  // Dedicated Centralized Verification Application Handler with Real-time Firestore & Central Server Sync
+  const handleSubmitVerification = async (data?: {
+    accountType?: 'Student' | 'Executive' | 'Organization';
+    positionTitle?: string;
+    matricNumber?: string;
+    department?: string;
+    level?: string;
+    proofDetails?: string;
+    paymentRef?: string;
+    amountPaid?: number;
+    category?: string;
+    statement?: string;
+  }) => {
+    if (!userProfile) return;
+
+    const accountType = data?.accountType || 'Student';
+    const positionTitle = data?.positionTitle || '';
+    const updatedUser: UserProfile = {
+      ...userProfile,
+      verificationStatus: 'pending',
+    };
+    setUserProfile(updatedUser);
+    try {
+      localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedUser));
+      const storedUsers = localStorage.getItem('fuhsi_users_db');
+      let list: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : [];
+      const idx = list.findIndex(
+        (u) => u.id === updatedUser.id || u.nickname?.toLowerCase() === updatedUser.nickname?.toLowerCase()
+      );
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...updatedUser };
+      } else {
+        list.push(updatedUser);
+      }
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Instantly save pending status to Firestore
+    saveUserToFirestore(updatedUser).catch((err) => console.error('Error saving user verification status to Firestore:', err));
+
     const newReq: VerificationRequest = {
-      id: `vr_${Date.now()}`,
-      applicantNickname: userProfile.nickname,
-      category,
-      statement,
-      timestamp: 'Just now',
+      id: `verif_req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      applicantNickname: userProfile.nickname || 'Student',
+      applicantFullName: userProfile.realName || userProfile.nickname || 'Student',
+      applicantEmail: userProfile.studentEmail || 'N/A',
+      applicantPhone: userProfile.emergencyHomePhone || 'N/A',
+      department: userProfile.department || data?.department || 'N/A',
+      level: userProfile.level || data?.level || 'N/A',
+      category: data?.category || `${accountType} Verification`,
+      accountType: accountType,
+      positionTitle: positionTitle,
+      matricNumber: userProfile.matricNumber || data?.matricNumber || 'N/A',
+      proofDetails: data?.proofDetails || (positionTitle ? `Position Held: ${positionTitle}` : 'Standard Verification Request'),
+      paymentRef: data?.paymentRef || `SQUADCO-FY7TM2-${Math.floor(100000 + Math.random() * 900000)}`,
+      amountPaid: data?.amountPaid || 1500,
+      statement: data?.statement || `Category: ${accountType}${positionTitle ? ` | Position: ${positionTitle}` : ''} | Name: ${userProfile.realName || userProfile.nickname || 'Student'} | Dept: ${userProfile.department || 'FUHSI'} (${userProfile.level || 'N/A'})`,
+      timestamp: new Date().toISOString(),
       status: 'PENDING',
     };
-    setVerificationRequests((prev) => [newReq, ...prev]);
+
+    // 1. Instantly save to Firestore
+    await saveVerificationRequestToFirestore(newReq);
+
+    // 2. Update local state and localStorage
+    setVerificationRequests((prev) => {
+      const updated = [newReq, ...prev.filter((r) => r.id !== newReq.id)];
+      try {
+        localStorage.setItem('fuhsi_verifications_db', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+
+    // 3. Push to central server db sync
+    try {
+      pushServerDbSync({ verificationRequests: [newReq], users: [updatedUser] });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSubmitVerificationRequest = (category: string, statement: string) => {
+    handleSubmitVerification({ category, statement });
   };
 
   // Admin Handlers
@@ -1488,137 +1564,176 @@ export const App: React.FC = () => {
               onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
               onResolveReport={(repId: string) => setReports((prev) => prev.filter((r) => r.id !== repId))}
             onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = '') => {
-              setVerificationRequests((prev) => prev.map((v) => {
-                if (v.id === reqId) {
-                  const targetApplicantNick = v.applicantNickname;
-                  const assignedTitle = badgeTitle !== undefined ? badgeTitle : (v.positionTitle || '');
-                  const cleanTarget = targetApplicantNick.toLowerCase().replace(/^@/, '');
+              setVerificationRequests((prev) => {
+                const updatedList = prev.map((v) => {
+                  if (v.id === reqId) {
+                    const targetApplicantNick = v.applicantNickname;
+                    const assignedTitle = badgeTitle !== undefined ? badgeTitle : (v.positionTitle || '');
+                    const cleanTarget = targetApplicantNick.toLowerCase().replace(/^@/, '');
 
-                  // 1. Update active user profile if matching
-                  if (userProfile && (
-                    userProfile.nickname.toLowerCase() === targetApplicantNick.toLowerCase() ||
-                    userProfile.nickname.toLowerCase().replace(/^@/, '') === cleanTarget ||
-                    userProfile.id === targetApplicantNick
-                  )) {
-                    const updated = { 
-                      ...userProfile, 
-                      isVerified: true, 
-                      verificationStatus: 'approved' as const, 
-                      badgeType: badgeType, 
-                      badgeTitle: assignedTitle
+                    const approvedReq: VerificationRequest = {
+                      ...v,
+                      status: 'APPROVED' as const,
+                      assignedBadgeType: badgeType,
+                      assignedBadgeTitle: assignedTitle,
                     };
-                    setUserProfile(updated);
-                    try {
-                      localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-                    } catch (e) {}
-                  }
 
-                  // 2. Update user in fuhsi_users_db
-                  try {
-                    const storedUsers = localStorage.getItem('fuhsi_users_db');
-                    let usersList: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : [];
-                    let matched = false;
-                    usersList = usersList.map((u) => {
-                      const uNick = (u.nickname || '').toLowerCase().replace(/^@/, '');
-                      if (uNick === cleanTarget || u.id === targetApplicantNick) {
-                        matched = true;
-                        return {
-                          ...u,
+                    // Persist approved verification request to Firestore
+                    saveVerificationRequestToFirestore(approvedReq).catch((err) => console.error('Error saving approved verification to Firestore:', err));
+
+                    // 1. Update active user profile if matching
+                    if (userProfile && (
+                      userProfile.nickname.toLowerCase() === targetApplicantNick.toLowerCase() ||
+                      userProfile.nickname.toLowerCase().replace(/^@/, '') === cleanTarget ||
+                      userProfile.id === targetApplicantNick
+                    )) {
+                      const updated = { 
+                        ...userProfile, 
+                        isVerified: true, 
+                        verificationStatus: 'approved' as const, 
+                        badgeType: badgeType, 
+                        badgeTitle: assignedTitle
+                      };
+                      setUserProfile(updated);
+                      saveUserToFirestore(updated).catch((err) => console.error(err));
+                      try {
+                        localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                      } catch (e) {}
+                    }
+
+                    // 2. Update user in fuhsi_users_db and Firestore
+                    try {
+                      const storedUsers = localStorage.getItem('fuhsi_users_db');
+                      let usersList: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : [];
+                      let matched = false;
+                      usersList = usersList.map((u) => {
+                        const uNick = (u.nickname || '').toLowerCase().replace(/^@/, '');
+                        if (uNick === cleanTarget || u.id === targetApplicantNick) {
+                          matched = true;
+                          const updatedUserRecord: UserProfile = {
+                            ...u,
+                            isVerified: true,
+                            verificationStatus: 'approved' as const,
+                            badgeType: badgeType,
+                            badgeTitle: assignedTitle
+                          };
+                          saveUserToFirestore(updatedUserRecord).catch((err) => console.error(err));
+                          return updatedUserRecord;
+                        }
+                        return u;
+                      });
+
+                      if (!matched && userProfile && (userProfile.nickname.toLowerCase().replace(/^@/, '') === cleanTarget)) {
+                        const newUserRecord: UserProfile = {
+                          ...userProfile,
                           isVerified: true,
                           verificationStatus: 'approved' as const,
                           badgeType: badgeType,
                           badgeTitle: assignedTitle
                         };
+                        usersList.push(newUserRecord);
+                        saveUserToFirestore(newUserRecord).catch((err) => console.error(err));
                       }
-                      return u;
-                    });
-
-                    if (!matched && userProfile && (userProfile.nickname.toLowerCase().replace(/^@/, '') === cleanTarget)) {
-                      usersList.push({
-                        ...userProfile,
-                        isVerified: true,
-                        verificationStatus: 'approved' as const,
-                        badgeType: badgeType,
-                        badgeTitle: assignedTitle
-                      });
+                      localStorage.setItem('fuhsi_users_db', JSON.stringify(usersList));
+                      pushServerDbSync({ users: usersList });
+                    } catch (e) {
+                      console.error(e);
                     }
-                    localStorage.setItem('fuhsi_users_db', JSON.stringify(usersList));
-                  } catch (e) {
-                    console.error(e);
-                  }
 
-                  // 3. Update all posts in state and fuhsi_posts_db
-                  setPosts((prevPosts) => {
-                    const updatedPosts = prevPosts.map((p) => {
-                      const pNick = (p.authorNickname || '').toLowerCase().replace(/^@/, '');
-                      if (pNick === cleanTarget || p.authorNickname === targetApplicantNick) {
-                        return {
-                          ...p,
-                          isVerified: true,
-                          authorBadgeType: badgeType,
-                          authorBadgeTitle: assignedTitle,
-                          authorIsVerified: true
-                        };
-                      }
-                      return p;
+                    // 3. Update all posts in state, localStorage & Firestore
+                    setPosts((prevPosts) => {
+                      const updatedPosts = prevPosts.map((p) => {
+                        const pNick = (p.authorNickname || '').toLowerCase().replace(/^@/, '');
+                        if (pNick === cleanTarget || p.authorNickname === targetApplicantNick) {
+                          const updatedPost = {
+                            ...p,
+                            isVerified: true,
+                            authorBadgeType: badgeType,
+                            authorBadgeTitle: assignedTitle,
+                            authorIsVerified: true
+                          };
+                          savePostToFirestore(updatedPost).catch((err) => console.error(err));
+                          return updatedPost;
+                        }
+                        return p;
+                      });
+                      try {
+                        localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
+                      } catch (e) {}
+                      return updatedPosts;
                     });
-                    try {
-                      localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
-                    } catch (e) {}
-                    return updatedPosts;
-                  });
 
-                  // 4. Update all comments in state and fuhsi_comments_db
-                  setComments((prevComments) => {
-                    const updatedComments = prevComments.map((c) => {
-                      const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '');
-                      if (cNick === cleanTarget || c.authorNickname === targetApplicantNick) {
-                        return {
-                          ...c,
-                          isVerified: true,
-                          authorIsVerified: true,
-                          authorBadgeType: badgeType,
-                          authorBadgeTitle: assignedTitle
-                        };
-                      }
-                      return c;
+                    // 4. Update all comments in state, localStorage & Firestore
+                    setComments((prevComments) => {
+                      const updatedComments = prevComments.map((c) => {
+                        const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '');
+                        if (cNick === cleanTarget || c.authorNickname === targetApplicantNick) {
+                          const updatedComment = {
+                            ...c,
+                            isVerified: true,
+                            authorIsVerified: true,
+                            authorBadgeType: badgeType,
+                            authorBadgeTitle: assignedTitle
+                          };
+                          saveCommentToFirestore(updatedComment).catch((err) => console.error(err));
+                          return updatedComment;
+                        }
+                        return c;
+                      });
+                      try {
+                        localStorage.setItem('fuhsi_comments_db', JSON.stringify(updatedComments));
+                      } catch (e) {}
+                      return updatedComments;
                     });
+
+                    // 5. Send in-app notification
                     try {
-                      localStorage.setItem('fuhsi_comments_db', JSON.stringify(updatedComments));
-                    } catch (e) {}
-                    return updatedComments;
-                  });
+                      const notifKey = `fuhsi_user_notifications_${cleanTarget}`;
+                      const verifNotif = {
+                        id: `verif_appr_${Date.now()}`,
+                        type: 'VERIFICATION',
+                        title: '🎉 Account Verified!',
+                        message: `Congratulations! Your verification application has been approved by the Administrator. Your profile now displays your verified checkmark badge (${assignedTitle}) across FUHSI Connect.`,
+                        timestamp: 'Just now',
+                        isRead: false,
+                      };
+                      let existingNotifs = [];
+                      const storedNotifs = localStorage.getItem(notifKey);
+                      if (storedNotifs) existingNotifs = JSON.parse(storedNotifs);
+                      localStorage.setItem(notifKey, JSON.stringify([verifNotif, ...existingNotifs]));
+                    } catch (e) {
+                      console.error(e);
+                    }
 
-                  // 5. Send in-app notification
-                  try {
-                    const notifKey = `fuhsi_user_notifications_${cleanTarget}`;
-                    const verifNotif = {
-                      id: `verif_appr_${Date.now()}`,
-                      type: 'VERIFICATION',
-                      title: '🎉 Account Verified!',
-                      message: `Congratulations! Your verification application has been approved by the Administrator. Your profile now displays your verified checkmark badge (${assignedTitle}) across FUHSI Connect.`,
-                      timestamp: 'Just now',
-                      isRead: false,
-                    };
-                    let existingNotifs = [];
-                    const storedNotifs = localStorage.getItem(notifKey);
-                    if (storedNotifs) existingNotifs = JSON.parse(storedNotifs);
-                    localStorage.setItem(notifKey, JSON.stringify([verifNotif, ...existingNotifs]));
-                  } catch (e) {
-                    console.error(e);
+                    return approvedReq;
                   }
+                  return v;
+                });
 
-                  return { 
-                    ...v, 
-                    status: 'APPROVED' as const, 
-                    assignedBadgeType: badgeType, 
-                    assignedBadgeTitle: assignedTitle 
-                  };
-                }
-                return v;
-              }));
+                try {
+                  localStorage.setItem('fuhsi_verifications_db', JSON.stringify(updatedList));
+                  pushServerDbSync({ verificationRequests: updatedList });
+                } catch (e) {}
+                return updatedList;
+              });
             }}
-            onRejectVerification={(reqId) => setVerificationRequests((prev) => prev.map((v) => (v.id === reqId ? { ...v, status: 'REJECTED' } : v)))}
+            onRejectVerification={(reqId) => {
+              setVerificationRequests((prev) => {
+                const updated = prev.map((v) => {
+                  if (v.id === reqId) {
+                    const rejectedReq = { ...v, status: 'REJECTED' as const };
+                    saveVerificationRequestToFirestore(rejectedReq).catch((err) => console.error(err));
+                    return rejectedReq;
+                  }
+                  return v;
+                });
+                try {
+                  localStorage.setItem('fuhsi_verifications_db', JSON.stringify(updated));
+                  pushServerDbSync({ verificationRequests: updated });
+                } catch (e) {}
+                return updated;
+              });
+            }}
             onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
             onUpdateBadge={(badgeType, badgeTitle) => {
               if (userProfile) {
@@ -1655,187 +1770,338 @@ export const App: React.FC = () => {
       )}
       </main>
 
-      {/* Profile Modal / Drawer (Triggered by Top-Left Profile Picture Avatar) */}
-      {showProfileModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
-            <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
-              <div className="flex items-center gap-2.5">
-                <AvatarIcon avatarKey={userProfile?.avatarKey || 'caduceus'} avatarUrl={userProfile?.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
-                <div>
-                  <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
-                  <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
-                </div>
-              </div>
-              <button
-                onClick={closeModalUI}
-                className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
+      {/* Stack-Based Modals Layer */}
+      {modalStack.length > 0 ? (
+        modalStack.map((item, idx) => {
+          const stackZIndex = 70 + idx * 10;
+          if (item.type === 'postDetail') {
+            return (
+              <PostDetailModal
+                key={`modal_post_${item.post.id}_${idx}`}
+                post={item.post}
+                comments={(comments || []).filter((c) => c && c.postId === item.post.id)}
+                userProfile={userProfile}
+                zIndex={stackZIndex}
+                onClose={closeModalUI}
+                onAddComment={(text, parentId, replyToNickname, imageUrl) =>
+                  handleAddComment(item.post.id, text, parentId, replyToNickname, imageUrl)
+                }
+                onLikeComment={handleLikeComment}
+                onToggleLike={handleLikeClick}
+                onToggleBookmark={handleBookmarkClick}
+                onDeletePost={handleDeletePost}
+                onEditPost={handleEditPost}
+                onDeleteComment={handleDeleteComment}
+                onVotePoll={handleVotePoll}
+                onAuthorClick={(author) => {
+                  const dummyPost: Post = {
+                    id: `author_${author.nickname}`,
+                    authorNickname: author.nickname,
+                    authorAvatarKey: author.avatarKey || 'caduceus',
+                    authorAvatarUrl: author.avatarUrl,
+                    authorBadgeType: (author.badgeType as any) || 'NONE',
+                    authorBadgeTitle: author.badgeTitle || '',
+                    authorPoints: 0,
+                    timeAgo: '',
+                    category: 'General',
+                    categoryTag: 'General',
+                    content: '',
+                    text: '',
+                    timestamp: new Date().toISOString(),
+                    likesCount: 0,
+                    commentsCount: 0,
+                    isQuarantined: false,
+                    createdAt: '',
+                  };
+                  openAuthorProfile(dummyPost);
+                }}
+              />
+            );
+          }
 
-            <div className="overflow-y-auto p-2 sm:p-4">
-              <ProfileScreen
+          if (item.type === 'authorProfile') {
+            return (
+              <AuthorProfileModal
+                key={`modal_author_${item.post.id || item.post.authorNickname}_${idx}`}
+                authorNickname={item.post.authorNickname || (item.post as any).nickname || 'Student'}
+                authorAvatarKey={item.post.authorAvatarKey || 'caduceus'}
+                authorAvatarUrl={item.post.authorAvatarUrl}
+                authorBadgeType={item.post.authorBadgeType as BadgeType}
+                authorBadgeTitle={item.post.authorBadgeTitle}
+                authorPoints={item.post.authorPoints}
+                authorJoinedDate="Jul 2026"
+                currentUserNickname={userProfile?.nickname || ''}
                 userProfile={userProfile}
                 allPosts={posts}
                 allComments={comments}
-                bookmarkedPostIds={myBookmarkedPostIds}
-                onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
-                  const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
-                  if (!err) closeModalUI();
-                  return err;
-                }}
-                onSubmitVerification={(data: any) => {
+                zIndex={stackZIndex}
+                onClose={closeModalUI}
+                onLikeClick={handleLikeClick}
+                onBookmarkClick={handleBookmarkClick}
+                onDeletePost={handleDeletePost}
+                onAuthorClick={openAuthorProfile}
+                onCommentClick={openPostDetail}
+              />
+            );
+          }
+
+          if (item.type === 'profile') {
+            return (
+              <div
+                key={`modal_profile_${idx}`}
+                className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+                style={{ zIndex: stackZIndex }}
+              >
+                <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
+                  <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
+                    <div className="flex items-center gap-2.5">
+                      <AvatarIcon avatarKey={userProfile?.avatarKey || 'caduceus'} avatarUrl={userProfile?.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
+                      <div>
+                        <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
+                        <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={closeModalUI}
+                      className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="overflow-y-auto p-2 sm:p-4">
+                    <ProfileScreen
+                      userProfile={userProfile}
+                      allPosts={posts}
+                      allComments={comments}
+                      bookmarkedPostIds={myBookmarkedPostIds}
+                      onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
+                        const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
+                        if (!err) closeModalUI();
+                        return err;
+                      }}
+                      onSubmitVerification={handleSubmitVerification}
+                      onOpenAuthModal={() => {
+                        closeModalUI();
+                        openAuthModal();
+                      }}
+                      onLogout={handleLogout}
+                      onLikeClick={handleLikeClick}
+                      onBookmarkClick={handleBookmarkClick}
+                      onCommentClick={openPostDetail}
+                      onAuthorClick={openAuthorProfile}
+                      onDeletePost={handleDeletePost}
+                      onDeleteComment={handleDeleteComment}
+                      onClose={closeModalUI}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (item.type === 'createPost') {
+            return (
+              <CreatePostModal
+                key={`modal_createPost_${idx}`}
+                userProfile={userProfile}
+                onClose={closeModalUI}
+                onSubmit={handleCreatePost}
+                checkDoxxingThreats={checkDoxxingThreats}
+                onOpenVerification={(data) => {
                   if (userProfile) {
                     const updated = {
                       ...userProfile,
                       verificationStatus: 'pending' as const,
                     };
                     setUserProfile(updated);
-                    try {
-                      localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-                    } catch (e) {
-                      console.error(e);
-                    }
-
-                    const newReq: VerificationRequest = {
-                      id: `verif_req_${Date.now()}`,
-                      applicantNickname: userProfile.nickname || 'Student',
-                      applicantFullName: userProfile.realName || userProfile.nickname || 'Student',
-                      applicantEmail: userProfile.studentEmail || 'N/A',
-                      applicantPhone: userProfile.emergencyHomePhone || 'N/A',
-                      department: userProfile.department || 'N/A',
-                      level: userProfile.level || 'N/A',
-                      category: `${data?.accountType || 'Student'} Verification`,
-                      accountType: data?.accountType || 'Student',
-                      positionTitle: data?.positionTitle || '',
-                      matricNumber: userProfile.matricNumber || 'N/A',
-                      proofDetails: data?.proofDetails || 'Standard Verification Request',
-                      paymentRef: data?.paymentRef || `SQUADCO-FY7TM2-${Math.floor(100000 + Math.random() * 900000)}`,
-                      amountPaid: data?.amountPaid || 1500,
-                      statement: `Category: ${data?.accountType || 'Student'}${data?.positionTitle ? ` | Position: ${data.positionTitle}` : ''} | Name: ${userProfile.realName || userProfile.nickname || 'Student'} | Dept: ${userProfile.department || 'FUHSI'} (${userProfile.level || 'N/A'})`,
-                      timestamp: new Date().toISOString(),
-                      status: 'PENDING',
-                    };
-                    setVerificationRequests((prev) => [newReq, ...prev]);
+                    localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
                   }
                 }}
-                onOpenAuthModal={() => {
+              />
+            );
+          }
+
+          if (item.type === 'auth') {
+            return (
+              <AuthModal
+                key={`modal_auth_${idx}`}
+                isOpen={true}
+                onClose={closeModalUI}
+                onLoginSuccess={(user) => {
+                  setUserProfile(user);
                   closeModalUI();
-                  openAuthModal();
                 }}
-                onLogout={handleLogout}
-                onLikeClick={handleLikeClick}
-                onBookmarkClick={handleBookmarkClick}
-                onCommentClick={openPostDetail}
-                onAuthorClick={openAuthorProfile}
-                onDeletePost={handleDeletePost}
-                onDeleteComment={handleDeleteComment}
+              />
+            );
+          }
+
+          if (item.type === 'pwa') {
+            return (
+              <PWAInstallModal
+                key={`modal_pwa_${idx}`}
+                isOpen={true}
                 onClose={closeModalUI}
               />
+            );
+          }
+
+          return null;
+        })
+      ) : (
+        <>
+          {/* Profile Modal / Drawer (Triggered by Top-Left Profile Picture Avatar) */}
+          {showProfileModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+              <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
+                <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
+                  <div className="flex items-center gap-2.5">
+                    <AvatarIcon avatarKey={userProfile?.avatarKey || 'caduceus'} avatarUrl={userProfile?.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
+                    <div>
+                      <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
+                      <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeModalUI}
+                    className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto p-2 sm:p-4">
+                  <ProfileScreen
+                    userProfile={userProfile}
+                    allPosts={posts}
+                    allComments={comments}
+                    bookmarkedPostIds={myBookmarkedPostIds}
+                    onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
+                      const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
+                      if (!err) closeModalUI();
+                      return err;
+                    }}
+                    onSubmitVerification={handleSubmitVerification}
+                    onOpenAuthModal={() => {
+                      closeModalUI();
+                      openAuthModal();
+                    }}
+                    onLogout={handleLogout}
+                    onLikeClick={handleLikeClick}
+                    onBookmarkClick={handleBookmarkClick}
+                    onCommentClick={openPostDetail}
+                    onAuthorClick={openAuthorProfile}
+                    onDeletePost={handleDeletePost}
+                    onDeleteComment={handleDeleteComment}
+                    onClose={closeModalUI}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+
+          {/* Author Profile Details Modal (When clicking author name or avatar) */}
+          {selectedAuthorPost && (
+            <AuthorProfileModal
+              authorNickname={selectedAuthorPost.authorNickname || selectedAuthorPost.nickname || 'Student'}
+              authorAvatarKey={selectedAuthorPost.authorAvatarKey || 'caduceus'}
+              authorAvatarUrl={selectedAuthorPost.authorAvatarUrl}
+              authorBadgeType={selectedAuthorPost.authorBadgeType as BadgeType}
+              authorBadgeTitle={selectedAuthorPost.authorBadgeTitle}
+              authorPoints={selectedAuthorPost.authorPoints}
+              authorJoinedDate="Jul 2026"
+              currentUserNickname={userProfile?.nickname || ''}
+              userProfile={userProfile}
+              allPosts={posts}
+              allComments={comments}
+              zIndex={70}
+              onClose={closeModalUI}
+              onLikeClick={handleLikeClick}
+              onBookmarkClick={handleBookmarkClick}
+              onDeletePost={handleDeletePost}
+              onAuthorClick={openAuthorProfile}
+              onCommentClick={openPostDetail}
+            />
+          )}
+
+          {/* Post Details Modal */}
+          {selectedPost && (
+            <PostDetailModal
+              post={selectedPost}
+              comments={(comments || []).filter((c) => c && c.postId === selectedPost.id)}
+              userProfile={userProfile}
+              zIndex={85}
+              onClose={closeModalUI}
+              onAddComment={(text, parentId, replyToNickname, imageUrl) => handleAddComment(selectedPost.id, text, parentId, replyToNickname, imageUrl)}
+              onLikeComment={handleLikeComment}
+              onToggleLike={handleLikeClick}
+              onToggleBookmark={handleBookmarkClick}
+              onDeletePost={handleDeletePost}
+              onEditPost={handleEditPost}
+              onDeleteComment={handleDeleteComment}
+              onVotePoll={handleVotePoll}
+              onAuthorClick={(author) => {
+                const dummyPost: Post = {
+                  id: `author_${author.nickname}`,
+                  authorNickname: author.nickname,
+                  authorAvatarKey: author.avatarKey || 'caduceus',
+                  authorAvatarUrl: author.avatarUrl,
+                  authorBadgeType: (author.badgeType as any) || 'NONE',
+                  authorBadgeTitle: author.badgeTitle || '',
+                  authorPoints: 0,
+                  timeAgo: '',
+                  category: 'General',
+                  categoryTag: 'General',
+                  content: '',
+                  text: '',
+                  timestamp: new Date().toISOString(),
+                  likesCount: 0,
+                  commentsCount: 0,
+                  isQuarantined: false,
+                  createdAt: '',
+                };
+                openAuthorProfile(dummyPost);
+              }}
+            />
+          )}
+
+          {/* Create Post Modal */}
+          {showCreatePostModal && (
+            <CreatePostModal
+              userProfile={userProfile}
+              onClose={closeModalUI}
+              onSubmit={handleCreatePost}
+              checkDoxxingThreats={checkDoxxingThreats}
+              onOpenVerification={(data) => {
+                if (userProfile) {
+                  const updated = {
+                    ...userProfile,
+                    verificationStatus: 'pending' as const,
+                  };
+                  setUserProfile(updated);
+                  localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                }
+              }}
+            />
+          )}
+
+          {/* PWA App Install Modal */}
+          <PWAInstallModal
+            isOpen={showPwaModal}
+            onClose={closeModalUI}
+          />
+
+          {/* Account Register & Login Modal */}
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={closeModalUI}
+            onLoginSuccess={(user) => {
+              setUserProfile(user);
+              closeModalUI();
+            }}
+          />
+        </>
       )}
-
-      {/* Post Details Modal */}
-      {selectedPost && (
-        <PostDetailModal
-          post={selectedPost}
-          comments={(comments || []).filter((c) => c && c.postId === selectedPost.id)}
-          userProfile={userProfile}
-          onClose={closeModalUI}
-          onAddComment={(text, parentId, replyToNickname, imageUrl) => handleAddComment(selectedPost.id, text, parentId, replyToNickname, imageUrl)}
-          onLikeComment={handleLikeComment}
-          onToggleLike={handleLikeClick}
-          onToggleBookmark={handleBookmarkClick}
-          onDeletePost={handleDeletePost}
-          onEditPost={handleEditPost}
-          onDeleteComment={handleDeleteComment}
-          onVotePoll={handleVotePoll}
-          onAuthorClick={(author) => {
-            const dummyPost: Post = {
-              id: `author_${author.nickname}`,
-              authorNickname: author.nickname,
-              authorAvatarKey: author.avatarKey || 'caduceus',
-              authorAvatarUrl: author.avatarUrl,
-              authorBadgeType: (author.badgeType as any) || 'NONE',
-              authorBadgeTitle: author.badgeTitle || '',
-              authorPoints: 0,
-              timeAgo: '',
-              category: 'General',
-              categoryTag: 'General',
-              content: '',
-              text: '',
-              timestamp: new Date().toISOString(),
-              likesCount: 0,
-              commentsCount: 0,
-              isQuarantined: false,
-              createdAt: '',
-            };
-            openAuthorProfile(dummyPost);
-          }}
-        />
-      )}
-
-      {/* Author Profile Details Modal (When clicking author name or avatar) */}
-      {selectedAuthorPost && (
-        <AuthorProfileModal
-          authorNickname={selectedAuthorPost.authorNickname || selectedAuthorPost.nickname || 'Student'}
-          authorAvatarKey={selectedAuthorPost.authorAvatarKey || 'caduceus'}
-          authorAvatarUrl={selectedAuthorPost.authorAvatarUrl}
-          authorBadgeType={selectedAuthorPost.authorBadgeType as BadgeType}
-          authorBadgeTitle={selectedAuthorPost.authorBadgeTitle}
-          authorPoints={selectedAuthorPost.authorPoints}
-          authorJoinedDate="Jul 2026"
-          currentUserNickname={userProfile?.nickname || ''}
-          userProfile={userProfile}
-          allPosts={posts}
-          allComments={comments}
-          onClose={closeModalUI}
-          onLikeClick={handleLikeClick}
-          onBookmarkClick={handleBookmarkClick}
-          onDeletePost={handleDeletePost}
-          onCommentClick={openPostDetail}
-        />
-      )}
-
-      {/* Create Post Modal */}
-      {showCreatePostModal && (
-        <CreatePostModal
-          userProfile={userProfile}
-          onClose={closeModalUI}
-          onSubmit={handleCreatePost}
-          checkDoxxingThreats={checkDoxxingThreats}
-          onOpenVerification={(data) => {
-            if (userProfile) {
-              const updated = {
-                ...userProfile,
-                verificationStatus: 'pending' as const,
-              };
-              setUserProfile(updated);
-              localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-            }
-          }}
-        />
-      )}
-
-      {/* PWA App Install Modal */}
-      <PWAInstallModal
-        isOpen={showPwaModal}
-        onClose={closeModalUI}
-      />
-
-      {/* Account Register & Login Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={closeModalUI}
-        onLoginSuccess={(user) => {
-          setUserProfile(user);
-          closeModalUI();
-        }}
-      />
 
       {/* Bottom Footer Sticky Navigation Bar - Feed, Search, Hub&Fund, Notification, Ranking */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-lg">

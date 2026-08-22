@@ -13,6 +13,7 @@ import {
   UserCheck, 
   FileText, 
   MessageSquare,
+  MessageCircle,
   Lock,
   ArrowRight
 } from 'lucide-react';
@@ -31,11 +32,14 @@ interface AuthorProfileModalProps {
   allPosts?: Post[];
   posts?: Post[];
   allComments?: Comment[];
+  zIndex?: number;
   onClose: () => void;
   onLikeClick?: (post: Post) => void;
   onBookmarkClick?: (post: Post) => void;
   onCommentClick?: (post: Post) => void;
+  onAuthorClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
+  onStartChat?: (recipientNickname: string, recipientAvatarKey?: string, recipientAvatarUrl?: string) => void;
 }
 
 export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => {
@@ -53,11 +57,14 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     allPosts = [],
     posts = [],
     allComments = [],
+    zIndex,
     onClose,
     onLikeClick,
     onBookmarkClick,
     onCommentClick,
+    onAuthorClick,
     onDeletePost,
+    onStartChat,
   } = props;
 
   const [activeTab, setActiveTab] = useState<'threads' | 'replies'>('threads');
@@ -110,6 +117,8 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     : `@${authorNickname.replace(/\s+/g, '_').toLowerCase()}`;
 
   const normAuthor = authorNickname ? authorNickname.toLowerCase().replace(/^@/, '').trim() : '';
+  const normCurrentUser = (currentUserNickname || userProfile?.nickname || '').toLowerCase().replace(/^@/, '').trim();
+  const isViewingSelf = Boolean(normCurrentUser && normAuthor === normCurrentUser);
   const effectivePosts = (allPosts && allPosts.length > 0) ? allPosts : posts;
 
   // Find all threads written by this author, sorted chronologically (newest first)
@@ -173,7 +182,10 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
   const displayPoints = computedPoints;
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+      style={{ zIndex: zIndex ?? 70 }}
+    >
       <div className="bg-slate-50 w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative animate-in zoom-in-95">
         {/* Header Banner */}
         <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-5 sm:p-6 text-white relative">
@@ -218,6 +230,24 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                 <Calendar size={13} className="text-teal-300 shrink-0" />
                 <span>Joined {authorJoinedDate}</span>
               </p>
+
+              {/* 💬 Start / Open Chat Button */}
+              {!isViewingSelf && (
+                <div className="mt-2.5">
+                  <button
+                    id={`btn-chat-with-${normAuthor}`}
+                    onClick={() => {
+                      if (onStartChat) {
+                        onStartChat(authorNickname, authorAvatarKey, authorAvatarUrl);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-teal-900 hover:bg-teal-50 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border border-teal-200 cursor-pointer"
+                  >
+                    <MessageCircle size={14} className="text-teal-700" />
+                    <span>💬 Chat</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -282,6 +312,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                 <PostCard
                   key={post.id}
                   post={post}
+                  comments={(allComments || []).filter((c) => c && c.postId === post.id)}
                   currentUserNickname={currentUserNickname}
                   userProfile={userProfile}
                   onLikeClick={onLikeClick}
@@ -289,6 +320,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                   onCommentClick={(p) => {
                     if (onCommentClick) onCommentClick(p);
                   }}
+                  onAuthorClick={onAuthorClick}
                   onDeletePost={onDeletePost}
                 />
               ))
@@ -308,38 +340,57 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
               </div>
             ) : (
               <div className="space-y-2.5">
-                {authorReplies.map(({ comment, parentPost }) => (
-                  <div
-                    key={comment.id}
-                    onClick={() => {
-                      if (parentPost && onCommentClick) {
-                        onCommentClick(parentPost);
-                      }
-                    }}
-                    className="p-3.5 rounded-2xl bg-white border border-slate-200/90 text-xs space-y-2 hover:bg-teal-50/50 hover:border-teal-300 transition-all cursor-pointer group shadow-2xs"
-                    title="Click to view full thread"
-                  >
-                    <div className="flex items-center justify-between text-[11px] font-medium gap-2">
-                      <div className="flex items-center gap-1.5 font-extrabold text-teal-800 truncate">
-                        <MessageSquare className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                        <span className="truncate">
-                          Replying on: "{parentPost ? (parentPost.content.length > 45 ? parentPost.content.substring(0, 45) + '...' : parentPost.content) : 'Campus Thread'}"
+                {authorReplies.map(({ comment, parentPost }) => {
+                  const targetPost = parentPost || effectivePosts.find((p) => p.id === comment.postId);
+                  return (
+                    <div
+                      key={comment.id}
+                      onClick={() => {
+                        if (targetPost && onCommentClick) {
+                          onCommentClick(targetPost);
+                        } else if (onCommentClick) {
+                          const fallbackPost: Post = {
+                            id: comment.postId || `post_${comment.id}`,
+                            authorNickname: 'Student',
+                            authorAvatarKey: 'caduceus',
+                            category: 'General',
+                            categoryTag: 'General',
+                            content: 'Campus Thread Discussion',
+                            text: '',
+                            timestamp: comment.timestamp || new Date().toISOString(),
+                            likesCount: 0,
+                            commentsCount: 1,
+                            isQuarantined: false,
+                            createdAt: '',
+                          };
+                          onCommentClick(fallbackPost);
+                        }
+                      }}
+                      className="p-3.5 rounded-2xl bg-white border border-slate-200/90 text-xs space-y-2 hover:bg-teal-50/50 hover:border-teal-300 transition-all cursor-pointer group shadow-2xs"
+                      title="Click to view full thread and comments"
+                    >
+                      <div className="flex items-center justify-between text-[11px] font-medium gap-2">
+                        <div className="flex items-center gap-1.5 font-extrabold text-teal-800 truncate">
+                          <MessageSquare className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span className="truncate">
+                            Replying on: "{targetPost ? (targetPost.content.length > 45 ? targetPost.content.substring(0, 45) + '...' : targetPost.content) : 'Campus Thread'}"
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-teal-700 group-hover:underline font-extrabold shrink-0 flex items-center gap-0.5">
+                          View thread & comments <ArrowRight size={10} />
                         </span>
                       </div>
-                      <span className="text-[10px] text-teal-700 group-hover:underline font-extrabold shrink-0 flex items-center gap-0.5">
-                        View thread <ArrowRight size={10} />
-                      </span>
-                    </div>
 
-                    <p className="text-slate-800 font-semibold leading-relaxed pl-3.5 border-l-2 border-teal-500/50">
-                      {comment.content}
-                    </p>
+                      <p className="text-slate-800 font-semibold leading-relaxed pl-3.5 border-l-2 border-teal-500/50">
+                        {comment.content}
+                      </p>
 
-                    <div className="text-[10px] text-slate-400 font-medium text-right">
-                      {formatRelativeTime(comment.timestamp)}
+                      <div className="text-[10px] text-slate-400 font-medium text-right">
+                        {formatRelativeTime(comment.timestamp)}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}

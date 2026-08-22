@@ -57,6 +57,21 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Chat Reports
+    match /chat_reports/{reportId} {
+      allow read, write: if true;
+    }
+
+    // Chat Restrictions
+    match /chat_restrictions/{restrictionId} {
+      allow read, write: if true;
+    }
+
+    // Chat Conversations
+    match /chat_conversations/{convId} {
+      allow read, write: if true;
+    }
+
     // Admins Collection
     match /admins/{adminId} {
       allow read, write: if true;

@@ -184,12 +184,19 @@ export interface DirectMessage {
   itemPrice?: number;
   meetupPoint?: string;
   isPledgeConfirmed?: boolean;
+  isSafetyWarning?: boolean;
+  violationNotice?: string;
 }
 
 export interface ChatConversation {
   id: string;
   otherUserNickname: string;
   otherUserAvatarKey?: string;
+  otherUserAvatarUrl?: string;
+  otherUserBadgeType?: BadgeType | string;
+  otherUserBadgeTitle?: string;
+  otherUserIsVerified?: boolean;
+  participants?: string[];
   lastMessage: string;
   lastTimestamp: string;
   itemId?: string;
@@ -197,6 +204,21 @@ export interface ChatConversation {
   itemPrice?: number;
   meetupPoint?: string;
   unreadCount: number;
+  isDeletedBy?: string[];
+  updatedAt?: string;
+}
+
+export interface ChatReport {
+  id: string;
+  conversationId: string;
+  reportedNickname: string;
+  reporterNickname: string;
+  reason: string;
+  notes?: string;
+  messageSnippet: string;
+  recentMessages?: Array<{ sender: string; text: string; time: string }>;
+  timestamp: string;
+  status: 'PENDING' | 'ACTION_TAKEN' | 'DISMISSED';
 }
 
 export interface VerificationRequest {

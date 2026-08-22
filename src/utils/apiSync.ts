@@ -1,4 +1,4 @@
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report } from '../types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, ChatConversation, ChatReport } from '../types';
 
 export interface ServerDbState {
   users: UserProfile[];
@@ -13,6 +13,11 @@ export interface ServerDbState {
   verifCandidates: any[];
   sentEmails: any[];
   tradeDeskTransactions?: any[];
+  directMessages?: DirectMessage[];
+  chatConversations?: ChatConversation[];
+  chatReports?: ChatReport[];
+  chatRestrictions?: any[];
+  chatViolations?: any[];
 }
 
 export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserProfile[] {
@@ -55,6 +60,7 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
         isApproved,
         isDeclined,
         isVerified: Boolean(u.isVerified !== undefined ? u.isVerified : existing.isVerified),
+        verificationStatus: u.verificationStatus || existing.verificationStatus,
         isAdmin: Boolean(existing.isAdmin || u.isAdmin),
         reputationScore: Math.max(existing.reputationScore || 0, u.reputationScore || 0),
         badgeType: u.badgeType ? u.badgeType : existing.badgeType || 'GREEN',
@@ -143,13 +149,25 @@ export function mergeVerificationRequests(a: VerificationRequest[] = [], b: Veri
     if (!existing) {
       map.set(r.id, { ...r });
     } else {
-      const status = r.status !== 'PENDING' ? r.status : existing.status;
-      map.set(r.id, { ...existing, ...r, status });
+      const status = r.status !== 'PENDING' ? r.status : (existing.status || r.status);
+      const assignedBadgeType = r.assignedBadgeType || existing.assignedBadgeType;
+      const assignedBadgeTitle = r.assignedBadgeTitle || existing.assignedBadgeTitle;
+      map.set(r.id, {
+        ...existing,
+        ...r,
+        status,
+        assignedBadgeType,
+        assignedBadgeTitle,
+      });
     }
   };
   a.forEach(processReq);
   b.forEach(processReq);
-  return Array.from(map.values());
+  return Array.from(map.values()).sort((x, y) => {
+    const tX = isNaN(new Date(x.timestamp).getTime()) ? 0 : new Date(x.timestamp).getTime();
+    const tY = isNaN(new Date(y.timestamp).getTime()) ? 0 : new Date(y.timestamp).getTime();
+    return tY - tX;
+  });
 }
 
 export function mergeReports(a: Report[] = [], b: Report[] = []): Report[] {
@@ -169,6 +187,42 @@ export function mergeVerifCandidates(a: any[] = [], b: any[] = []): any[] {
   };
   a.forEach(processCand);
   b.forEach(processCand);
+  return Array.from(map.values());
+}
+
+export function mergeDirectMessages(a: DirectMessage[] = [], b: DirectMessage[] = []): DirectMessage[] {
+  const map = new Map<string, DirectMessage>();
+  a.forEach((m) => m?.id && map.set(m.id, { ...m }));
+  b.forEach((m) => m?.id && map.set(m.id, { ...(map.get(m.id) || {}), ...m }));
+  return Array.from(map.values()).sort((x, y) => {
+    const tX = isNaN(new Date(x.timestamp).getTime()) ? 0 : new Date(x.timestamp).getTime();
+    const tY = isNaN(new Date(y.timestamp).getTime()) ? 0 : new Date(y.timestamp).getTime();
+    return tX - tY;
+  });
+}
+
+export function mergeChatConversations(a: ChatConversation[] = [], b: ChatConversation[] = []): ChatConversation[] {
+  const map = new Map<string, ChatConversation>();
+  a.forEach((c) => c?.id && map.set(c.id, { ...c }));
+  b.forEach((c) => c?.id && map.set(c.id, { ...(map.get(c.id) || {}), ...c }));
+  return Array.from(map.values());
+}
+
+export function mergeChatReports(a: ChatReport[] = [], b: ChatReport[] = []): ChatReport[] {
+  const map = new Map<string, ChatReport>();
+  a.forEach((r) => r?.id && map.set(r.id, { ...r }));
+  b.forEach((r) => r?.id && map.set(r.id, { ...(map.get(r.id) || {}), ...r }));
+  return Array.from(map.values()).sort((x, y) => {
+    const tX = isNaN(new Date(x.timestamp).getTime()) ? 0 : new Date(x.timestamp).getTime();
+    const tY = isNaN(new Date(y.timestamp).getTime()) ? 0 : new Date(y.timestamp).getTime();
+    return tY - tX;
+  });
+}
+
+export function mergeChatRestrictions(a: any[] = [], b: any[] = []): any[] {
+  const map = new Map<string, any>();
+  a.forEach((r) => r?.userNickname && map.set(r.userNickname.toLowerCase(), { ...r }));
+  b.forEach((r) => r?.userNickname && map.set(r.userNickname.toLowerCase(), { ...(map.get(r.userNickname.toLowerCase()) || {}), ...r }));
   return Array.from(map.values());
 }
 

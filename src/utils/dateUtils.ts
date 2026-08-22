@@ -107,3 +107,19 @@ export function getTimestampMs(timestampStr?: string): number {
   return Date.now() - ageInMinutes * 60 * 1000;
 }
 
+export function formatExactDateTime(dateInput?: string | number | Date): string {
+  if (!dateInput) return '';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) {
+    return String(dateInput);
+  }
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+

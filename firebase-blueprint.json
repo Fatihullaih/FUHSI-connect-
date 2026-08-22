@@ -143,7 +143,7 @@
     },
     "direct_messages": {
       "title": "direct_messages",
-      "description": "Real-time direct chat messages and admin inquiries filtered by conversationId",
+      "description": "Real-time direct chat messages and student conversations filtered by conversationId",
       "properties": {
         "id": { "type": "string" },
         "conversationId": { "type": "string" },
@@ -154,9 +154,40 @@
         "itemId": { "type": "string" },
         "itemTitle": { "type": "string" },
         "itemPrice": { "type": "number" },
-        "meetupPoint": { "type": "string" }
+        "meetupPoint": { "type": "string" },
+        "isSafetyWarning": { "type": "boolean" },
+        "violationNotice": { "type": "string" }
       },
       "required": ["id", "conversationId", "senderNickname", "receiverNickname", "text"]
+    },
+    "chat_reports": {
+      "title": "chat_reports",
+      "description": "Moderation reports submitted by students for chat conversations",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "reportedNickname": { "type": "string" },
+        "reporterNickname": { "type": "string" },
+        "reason": { "type": "string" },
+        "notes": { "type": "string" },
+        "messageSnippet": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "conversationId", "reportedNickname", "reporterNickname", "reason"]
+    },
+    "chat_restrictions": {
+      "title": "chat_restrictions",
+      "description": "Active temporary chat restrictions applied to rule-violating accounts",
+      "properties": {
+        "userNickname": { "type": "string" },
+        "isRestricted": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "restrictedAt": { "type": "string" },
+        "restrictedUntil": { "type": "string" },
+        "durationDays": { "type": "number" }
+      },
+      "required": ["userNickname", "isRestricted"]
     }
   }
 }

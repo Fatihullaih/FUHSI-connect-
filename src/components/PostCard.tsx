@@ -545,7 +545,7 @@ export const PostCard: React.FC<PostCardProps> = ({
                         </div>
                         <span className="font-bold text-slate-800 group-hover/user:text-teal-700 group-hover/user:underline">{comment.authorNickname}</span>
                       </div>
-                      <span className="text-slate-400 text-[10px]">{comment.timestamp}</span>
+                      <span className="text-slate-400 text-[10px]" title={comment.timestamp}>{formatRelativeTime(comment.timestamp)}</span>
                     </div>
                     <p className="text-slate-700 leading-relaxed pl-7">{comment.content}</p>
                   </div>

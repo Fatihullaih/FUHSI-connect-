@@ -12,6 +12,10 @@ import {
   mergeVerificationRequests,
   mergeReports,
   mergeVerifCandidates,
+  mergeDirectMessages,
+  mergeChatConversations,
+  mergeChatReports,
+  mergeChatRestrictions,
 } from './src/utils/apiSync';
 
 const app = express();
@@ -50,6 +54,10 @@ function initAndLoadServerDb() {
         reports: parsed.reports || [],
         verifCandidates: parsed.verifCandidates || [],
         sentEmails: parsed.sentEmails || [],
+        directMessages: mergeDirectMessages([], parsed.directMessages || []),
+        chatConversations: mergeChatConversations([], parsed.chatConversations || []),
+        chatReports: mergeChatReports([], parsed.chatReports || []),
+        chatRestrictions: mergeChatRestrictions([], parsed.chatRestrictions || []),
       };
       persistServerDb();
       console.log('[DB Init] Loaded central database from data/db.json on server disk.');
@@ -147,6 +155,38 @@ app.post('/api/db/sync', (req, res) => {
           activeDb.verifCandidates = updates.verifCandidates;
         } else {
           activeDb.verifCandidates = mergeVerifCandidates(activeDb.verifCandidates, updates.verifCandidates);
+        }
+        changed = true;
+      }
+      if (Array.isArray(updates.directMessages)) {
+        if (updates.replaceDirectMessages) {
+          activeDb.directMessages = updates.directMessages;
+        } else {
+          activeDb.directMessages = mergeDirectMessages(activeDb.directMessages, updates.directMessages);
+        }
+        changed = true;
+      }
+      if (Array.isArray(updates.chatConversations)) {
+        if (updates.replaceChatConversations) {
+          activeDb.chatConversations = updates.chatConversations;
+        } else {
+          activeDb.chatConversations = mergeChatConversations(activeDb.chatConversations, updates.chatConversations);
+        }
+        changed = true;
+      }
+      if (Array.isArray(updates.chatReports)) {
+        if (updates.replaceChatReports) {
+          activeDb.chatReports = updates.chatReports;
+        } else {
+          activeDb.chatReports = mergeChatReports(activeDb.chatReports, updates.chatReports);
+        }
+        changed = true;
+      }
+      if (Array.isArray(updates.chatRestrictions)) {
+        if (updates.replaceChatRestrictions) {
+          activeDb.chatRestrictions = updates.chatRestrictions;
+        } else {
+          activeDb.chatRestrictions = mergeChatRestrictions(activeDb.chatRestrictions, updates.chatRestrictions);
         }
         changed = true;
       }

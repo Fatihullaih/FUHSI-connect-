@@ -21,4 +21,8 @@ export const DEFAULT_SERVER_DB = {
   notifications: {},
   verifCandidates: INITIAL_VERIFICATION_CANDIDATES,
   sentEmails: [],
+  directMessages: [],
+  chatConversations: [],
+  chatReports: [],
+  chatRestrictions: [],
 };
