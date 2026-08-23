@@ -6,8 +6,10 @@ import {
   getStoredDirectMessages, 
   getUserConversations, 
   sendDirectMessage, 
+  markConversationMessagesAsRead,
   deleteConversationForUser, 
   submitChatReport, 
+  extractPreservedReportEvidence,
   getConversationId, 
   normalizeNickname,
   formatMessageTime 
@@ -43,6 +45,8 @@ interface ChatsScreenProps {
   onOpenProfile?: (nickname: string) => void;
   initialConversationId?: string;
   initialRecipientNickname?: string;
+  initialRecipient?: { nickname: string; avatarKey?: string; avatarUrl?: string } | null;
+  onClearInitialRecipient?: () => void;
   allUsers?: UserProfile[];
 }
 
@@ -51,6 +55,8 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
   onOpenProfile,
   initialConversationId,
   initialRecipientNickname,
+  initialRecipient,
+  onClearInitialRecipient,
   allUsers = [],
 }) => {
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -111,12 +117,15 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
 
   // Handle initial recipient or conversation
   useEffect(() => {
-    if (initialRecipientNickname) {
+    if (initialRecipient && initialRecipient.nickname) {
+      handleSelectRecipient(initialRecipient.nickname, initialRecipient.avatarKey, initialRecipient.avatarUrl);
+      if (onClearInitialRecipient) onClearInitialRecipient();
+    } else if (initialRecipientNickname) {
       handleSelectRecipient(initialRecipientNickname);
     } else if (initialConversationId) {
       setActiveConvId(initialConversationId);
     }
-  }, [initialRecipientNickname, initialConversationId]);
+  }, [initialRecipient, initialRecipientNickname, initialConversationId]);
 
   // When activeConvId changes, find recipient metadata and subscribe to messages
   useEffect(() => {
@@ -131,6 +140,9 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
       (m) => (m.conversationId || getConversationId(m.senderNickname, m.receiverNickname)) === activeConvId
     );
     setActiveMessages(localMsgs);
+
+    // Mark incoming messages as read by this user
+    markConversationMessagesAsRead(activeConvId, myNickname);
 
     // 2. Resolve recipient metadata
     const conv = conversations.find((c) => c.id === activeConvId);
@@ -290,21 +302,22 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     e.preventDefault();
     if (!activeRecipient || !activeConvId) return;
 
-    const recentSnippets = activeMessages.slice(-5).map((m) => ({
-      sender: m.senderNickname,
-      text: m.text,
-      time: formatMessageTime(m.timestamp),
-    }));
+    // Securely extract strictly the last 5 messages from @reporter ↔ @reportedUser in exact chronological order
+    const preservedEvidence = extractPreservedReportEvidence(
+      myNickname,
+      activeRecipient.nickname,
+      activeMessages
+    );
 
     const report: ChatReport = {
       id: `chatreport_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       conversationId: activeConvId,
-      reportedNickname: activeRecipient.nickname,
-      reporterNickname: myNickname,
+      reportedNickname: activeRecipient.nickname.startsWith('@') ? activeRecipient.nickname : `@${activeRecipient.nickname}`,
+      reporterNickname: myNickname.startsWith('@') ? myNickname : `@${myNickname}`,
       reason: reportReason,
       notes: reportNotes.trim() || undefined,
-      messageSnippet: activeMessages[activeMessages.length - 1]?.text || 'Chat conversation reported',
-      recentMessages: recentSnippets,
+      messageSnippet: preservedEvidence[preservedEvidence.length - 1]?.text || activeMessages[activeMessages.length - 1]?.text || 'Chat conversation reported',
+      recentMessages: preservedEvidence,
       timestamp: new Date().toISOString(),
       status: 'PENDING',
     };
@@ -312,7 +325,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     submitChatReport(report);
     setShowReportModal(false);
     setReportNotes('');
-    showToast('Report submitted. Our Moderation Council will review this safely.', 'success');
+    showToast('Report submitted. The moderation case has been securely created for review.', 'success');
   };
 
   // Filtered conversations
@@ -693,7 +706,23 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                             }`}
                           >
                             <span>{formatMessageTime(msg.timestamp)}</span>
-                            {isMe && <CheckCheck size={12} className="opacity-90" />}
+                            {isMe && (
+                              msg.isRead ? (
+                                <span 
+                                  title="Viewed / Read by recipient" 
+                                  className="flex items-center gap-0.5 text-cyan-300 font-black cursor-help"
+                                >
+                                  <CheckCheck size={13} className="text-cyan-300 stroke-[2.5]" />
+                                </span>
+                              ) : (
+                                <span 
+                                  title="Sent / Delivered (Unread)" 
+                                  className="flex items-center gap-0.5 text-teal-200/60 cursor-help"
+                                >
+                                  <CheckCheck size={13} className="text-teal-200/60" />
+                                </span>
+                              )
+                            )}
                           </div>
                         </div>
                       </div>
@@ -877,13 +906,13 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
                   <ShieldAlert size={16} />
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900">Report Conversation</h3>
-                  <p className="text-[10px] text-slate-400 font-bold">Reporting {activeRecipient?.nickname}</p>
+                  <p className="text-[11px] text-slate-500 font-bold">Reporting {activeRecipient?.nickname}</p>
                 </div>
               </div>
               <button
@@ -902,7 +931,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                 <select
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
-                  className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
                 >
                   <option value="HARASSMENT">Harassment & Bullying</option>
                   <option value="SEXUAL_HARASSMENT">Sexual Harassment & Inappropriate Behavior</option>
@@ -921,13 +950,9 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                   value={reportNotes}
                   onChange={(e) => setReportNotes(e.target.value)}
                   rows={3}
-                  placeholder="Explain the incident for the Moderation Council..."
+                  placeholder="Explain what happened and why you are reporting this conversation."
                   className="w-full text-xs font-medium bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 />
-              </div>
-
-              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                The Moderation Council will review the last 5 messages in this conversation. False reports may result in account warnings.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

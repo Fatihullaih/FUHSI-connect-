@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import fuhsiLogo from '../assets/images/fuhsi_logo_1785485694958.jpg';
 import { UserProfile } from '../types';
-import { getStoredUsers, upsertUser } from '../utils/userDbUtils';
+import { getStoredUsers, upsertUser, updateUserPassword } from '../utils/userDbUtils';
 import { fetchServerDb, mergeUsers, pushServerDbSync } from '../utils/apiSync';
 import { AvatarIcon } from './AvatarIcon';
 import { 
@@ -642,37 +642,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     // Permanently update user password in database
     try {
-      const stored = localStorage.getItem('fuhsi_users_db');
-      let usersList: any[] = stored ? JSON.parse(stored) : existingUsers;
-      const targetId = forgotUser?.id;
-      const targetEmail = forgotUser?.studentEmail?.toLowerCase();
-
-      usersList = usersList.map((u) => {
-        const isMatch = (targetId && u.id === targetId) || (targetEmail && u.studentEmail?.toLowerCase() === targetEmail);
-        if (isMatch) {
-          return {
-            ...u,
-            savedPassword: forgotNewPassword.trim(),
-            password: forgotNewPassword.trim(),
-          };
-        }
-        return u;
-      });
-
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(usersList));
-
-      // Also update active user profile in localStorage if currently logged in as this user
-      const activeJson = localStorage.getItem('fuhsi_active_user');
-      if (activeJson) {
-        const activeUser = JSON.parse(activeJson);
-        if (activeUser.id === targetId || activeUser.studentEmail?.toLowerCase() === targetEmail) {
-          localStorage.setItem('fuhsi_active_user', JSON.stringify({
-            ...activeUser,
-            savedPassword: forgotNewPassword.trim(),
-            password: forgotNewPassword.trim(),
-          }));
-        }
-      }
+      const targetIdentifier = forgotUser?.id || forgotUser?.studentEmail || forgotUser?.nickname || '';
+      updateUserPassword(targetIdentifier, forgotNewPassword.trim());
     } catch (err) {
       console.error('Error updating password:', err);
     }

@@ -109,7 +109,16 @@ export function upsertUser(user: UserProfile): UserProfile[] {
 
   let updatedUser = user;
   if (index >= 0) {
-    users[index] = { ...users[index], ...user };
+    const existing = users[index];
+    const existingPassword = (existing as any).savedPassword || (existing as any).password;
+    const incomingPassword = (user as any).savedPassword || (user as any).password;
+    const finalPassword = incomingPassword || existingPassword;
+    users[index] = { 
+      ...existing, 
+      ...user,
+      savedPassword: finalPassword,
+      password: finalPassword,
+    };
     updatedUser = users[index];
   } else {
     users.push(user);
@@ -122,4 +131,54 @@ export function upsertUser(user: UserProfile): UserProfile[] {
 
   saveStoredUsers(users);
   return users;
+}
+
+/**
+ * Permanently update password for a specific user and sync to Firestore, server DB, and localStorage
+ */
+export function updateUserPassword(identifierOrEmail: string, newPassword: string): boolean {
+  if (!identifierOrEmail || !newPassword) return false;
+  const cleanId = identifierOrEmail.trim().toLowerCase().replace(/^@/, '');
+  const users = getStoredUsers();
+
+  const index = users.findIndex((u) => {
+    if (u.id && u.id.toLowerCase() === cleanId) return true;
+    if (u.nickname && u.nickname.trim().toLowerCase().replace(/^@/, '') === cleanId) return true;
+    if (u.studentEmail && u.studentEmail.trim().toLowerCase() === cleanId) return true;
+    return false;
+  });
+
+  if (index >= 0) {
+    users[index] = {
+      ...users[index],
+      savedPassword: newPassword.trim(),
+      password: newPassword.trim(),
+    };
+
+    saveUserToFirestore(users[index]).catch((err) => console.error('Error updating user password in Firestore:', err));
+    saveStoredUsers(users);
+
+    // Update active user profile in localStorage if matching
+    try {
+      const activeUserJson = localStorage.getItem('fuhsi_active_user');
+      if (activeUserJson) {
+        const active = JSON.parse(activeUserJson);
+        const matchActive = (active.id === users[index].id) ||
+          (active.nickname && active.nickname.toLowerCase().replace(/^@/, '') === cleanId) ||
+          (active.studentEmail && active.studentEmail.toLowerCase() === cleanId);
+        if (matchActive) {
+          localStorage.setItem('fuhsi_active_user', JSON.stringify({
+            ...active,
+            savedPassword: newPassword.trim(),
+            password: newPassword.trim(),
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('Error updating active user password:', e);
+    }
+
+    return true;
+  }
+  return false;
 }

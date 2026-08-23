@@ -46,6 +46,7 @@ import { ModerationScreen } from './screens/ModerationScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { SearchScreen } from './screens/SearchScreen';
 import { NotificationScreen } from './screens/NotificationScreen';
+import { ChatsScreen } from './screens/ChatsScreen';
 import { CreatePostModal } from './components/CreatePostModal';
 import { PostDetailModal } from './components/PostDetailModal';
 import { AuthorProfileModal } from './components/AuthorProfileModal';
@@ -54,8 +55,8 @@ import { AuthModal } from './components/AuthModal';
 import { VerificationBadge } from './components/VerificationBadge';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
-import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon } from 'lucide-react';
-import { getUserNotifications, getReadNotificationIds } from './utils/messagingUtils';
+import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon, MessageCircle } from 'lucide-react';
+import { getUserNotifications, getReadNotificationIds, getUserConversations } from './utils/messagingUtils';
 import { isUserMatchingAudience } from './utils/audienceUtils';
 
 export const App: React.FC = () => {
@@ -66,6 +67,11 @@ export const App: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [appTotalMembers, setAppTotalMembers] = useState<number>(() => getApprovedMembersCount());
+  const [activeChatRecipient, setActiveChatRecipient] = useState<{
+    nickname: string;
+    avatarKey?: string;
+    avatarUrl?: string;
+  } | null>(null);
 
   // Dynamically calculate total registered community members based on approved user accounts only
   useEffect(() => {
@@ -217,6 +223,17 @@ export const App: React.FC = () => {
 
     return count;
   }, [userProfile?.nickname, userProfile?.department, posts, notifTrigger]);
+
+  // Unread Chats Count for Navigation Badge
+  const unreadChatsCount = useMemo(() => {
+    if (!userProfile?.nickname) return 0;
+    try {
+      const convs = getUserConversations(userProfile.nickname);
+      return convs.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+    } catch (e) {
+      return 0;
+    }
+  }, [userProfile?.nickname, notifTrigger]);
 
   // Auto Sync States to LocalStorage and Server Central Database
   useEffect(() => {
@@ -698,6 +715,23 @@ export const App: React.FC = () => {
       window.history.pushState({ type: 'modal', modalType: 'pwa', time: Date.now() }, '');
     } catch (e) { console.error(e); }
   }, []);
+
+  const handleStartChat = useCallback((recipientNickname: string, avatarKey?: string, avatarUrl?: string) => {
+    setActiveChatRecipient({
+      nickname: recipientNickname,
+      avatarKey,
+      avatarUrl,
+    });
+    // Close any open modals so student seamlessly navigates to chat
+    setSelectedAuthorPost(null);
+    setSelectedPost(null);
+    setShowProfileModal(false);
+    setShowCreatePostModal(false);
+    setShowAuthModal(false);
+    setShowPwaModal(false);
+    setModalStack([]);
+    handleNavChange(4); // Switch to Chats screen
+  }, [handleNavChange]);
 
   // Close top modal via UI "X" / "Back" button
   const closeModalUI = useCallback(() => {
@@ -1277,6 +1311,17 @@ export const App: React.FC = () => {
     setPendingMarketplaceItems((prev) => prev.filter((i) => i.id !== id));
   };
 
+  const handleDeleteMarketplaceItem = (id: string) => {
+    setMarketplaceItems((prev) => {
+      const updated = prev.filter((i) => i.id !== id);
+      try {
+        localStorage.setItem('fuhsi_marketplace_db', JSON.stringify(updated));
+        pushServerDbSync({ marketplaceItems: updated });
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   const handleSaveUserProfile = (
     nickname: string,
     department: string,
@@ -1455,9 +1500,9 @@ export const App: React.FC = () => {
 
             {userProfile?.isAdmin && (
               <button
-                onClick={() => handleNavChange(5)}
+                onClick={() => handleNavChange(6)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm ${
-                  navIndex === 5
+                  navIndex === 6
                     ? 'bg-amber-400 text-slate-900 ring-2 ring-amber-300'
                     : 'bg-amber-500/90 hover:bg-amber-400 text-slate-950'
                 }`}
@@ -1521,7 +1566,7 @@ export const App: React.FC = () => {
             onRecordDmBuyIntent={handleRecordDmBuyIntent}
             onMarkAsSold={handleMarkAsSold}
             onAuthorClick={openAuthorProfile}
-            onOpenAdminConsole={() => handleNavChange(5)}
+            onOpenAdminConsole={() => handleNavChange(6)}
             onApplyVerificationWithFee={() =>
               handleSubmitVerificationRequest(
                 'Verification Review Fee Paid (₦1,500)',
@@ -1537,12 +1582,42 @@ export const App: React.FC = () => {
             allPosts={posts}
             onSelectPost={openPostDetail}
             onOpenTradeChat={(_convId) => {
-              handleNavChange(2);
+              handleNavChange(4);
             }}
           />
         )}
 
         {navIndex === 4 && (
+          <ChatsScreen
+            userProfile={userProfile}
+            initialRecipient={activeChatRecipient}
+            onClearInitialRecipient={() => setActiveChatRecipient(null)}
+            onOpenProfile={(nickname: string) => {
+              const dummyPost: Post = {
+                id: `chat_author_${nickname}`,
+                authorNickname: nickname,
+                authorAvatarKey: 'caduceus',
+                authorBadgeType: 'NONE',
+                authorBadgeTitle: '',
+                authorPoints: 0,
+                timeAgo: '',
+                category: 'General',
+                categoryTag: 'General',
+                content: '',
+                text: '',
+                timestamp: new Date().toISOString(),
+                likesCount: 0,
+                commentsCount: 0,
+                isQuarantined: false,
+                createdAt: '',
+              };
+              openAuthorProfile(dummyPost);
+            }}
+            allUsers={getStoredUsers()}
+          />
+        )}
+
+        {navIndex === 5 && (
           <LeaderboardScreen
             userProfile={userProfile}
             activePosts={posts}
@@ -1551,7 +1626,7 @@ export const App: React.FC = () => {
           />
         )}
 
-        {navIndex === 5 && (
+        {navIndex === 6 && (
           userProfile?.isAdmin ? (
             <ModerationScreen
               userProfile={userProfile}
@@ -1562,6 +1637,7 @@ export const App: React.FC = () => {
               verificationRequests={verificationRequests}
               onAdminApproveMarketplaceItem={handleAdminApproveMarketplaceItem}
               onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
+              onDeleteMarketplaceItem={handleDeleteMarketplaceItem}
               onResolveReport={(repId: string) => setReports((prev) => prev.filter((r) => r.id !== repId))}
             onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = '') => {
               setVerificationRequests((prev) => {
@@ -2021,6 +2097,9 @@ export const App: React.FC = () => {
               onDeletePost={handleDeletePost}
               onAuthorClick={openAuthorProfile}
               onCommentClick={openPostDetail}
+              onStartChat={(recipientNickname, avatarKey, avatarUrl) => {
+                handleStartChat(recipientNickname, avatarKey, avatarUrl);
+              }}
             />
           )}
 
@@ -2103,46 +2182,46 @@ export const App: React.FC = () => {
         </>
       )}
 
-      {/* Bottom Footer Sticky Navigation Bar - Feed, Search, Hub&Fund, Notification, Ranking */}
+      {/* Bottom Footer Sticky Navigation Bar - Feed, Search, Hub&Fund, Notification, Chats, Ranking */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-lg">
-        <div className="max-w-md mx-auto flex items-center justify-around py-2 px-2">
+        <div className="max-w-md mx-auto flex items-center justify-around py-2 px-1 sm:px-2">
           {/* 1. Feed */}
           <button
             onClick={() => handleNavChange(0)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
               navIndex === 0 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <DynamicFeedIcon className="w-5 h-5" />
-            <span className="text-[11px]">Feed</span>
+            <span className="text-[10px] sm:text-[11px]">Feed</span>
           </button>
 
           {/* 2. Search */}
           <button
             onClick={() => handleNavChange(1)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
               navIndex === 1 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Search className="w-5 h-5" />
-            <span className="text-[11px]">Search</span>
+            <span className="text-[10px] sm:text-[11px]">Search</span>
           </button>
 
           {/* 3. Hub&Fund */}
           <button
             onClick={() => handleNavChange(2)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
               navIndex === 2 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <StorefrontIcon className="w-5 h-5" />
-            <span className="text-[11px]">Hub&Fund</span>
+            <span className="text-[10px] sm:text-[11px]">Hub&Fund</span>
           </button>
 
           {/* 4. Notification */}
           <button
             onClick={() => handleNavChange(3)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors relative ${
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors relative ${
               navIndex === 3 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -2154,18 +2233,36 @@ export const App: React.FC = () => {
                 </span>
               )}
             </div>
-            <span className="text-[11px]">Notification</span>
+            <span className="text-[10px] sm:text-[11px]">Notifications</span>
           </button>
 
-          {/* 5. Ranking */}
+          {/* 5. Chats */}
           <button
             onClick={() => handleNavChange(4)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors relative ${
               navIndex === 4 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
+            <div className="relative">
+              <MessageCircle className="w-5 h-5" />
+              {unreadChatsCount > 0 && (
+                <span className="absolute -top-1 -right-1.5 min-w-3.5 h-3.5 px-1 bg-teal-600 text-white rounded-full text-[8.5px] font-black flex items-center justify-center animate-pulse">
+                  {unreadChatsCount > 99 ? '99+' : unreadChatsCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] sm:text-[11px]">Chats</span>
+          </button>
+
+          {/* 6. Ranking */}
+          <button
+            onClick={() => handleNavChange(5)}
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
+              navIndex === 5 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
             <LeaderboardIcon className="w-5 h-5" />
-            <span className="text-[11px]">Ranking</span>
+            <span className="text-[10px] sm:text-[11px]">Ranking</span>
           </button>
         </div>
       </nav>

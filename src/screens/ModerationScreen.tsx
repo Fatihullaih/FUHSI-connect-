@@ -6,6 +6,7 @@ import { deleteUserFromFirestore } from '../lib/firestoreSync';
 import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AdminTradeDesk } from '../components/AdminTradeDesk';
+import { AdminChatReportsDesk } from '../components/AdminChatReportsDesk';
 import { INITIAL_VERIFICATION_CANDIDATES, INITIAL_USER_PROFILE } from '../data/initialData';
 import { sendDirectMessage, normalizeNickname, formatMessageTime } from '../utils/messagingUtils';
 
@@ -29,6 +30,7 @@ interface ModerationScreenProps {
   onResolveReport?: (reportId: string) => void;
   onAdminApproveMarketplaceItem?: (id: string, approvedPrice: number, note: string) => void;
   onAdminRejectMarketplaceItem?: (id: string, note: string) => void;
+  onDeleteMarketplaceItem?: (id: string) => void;
   onSendPriceAdvisory?: (id: string, suggestedPrice: number, message: string) => void;
 }
 
@@ -52,6 +54,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   onResolveReport = () => {},
   onAdminApproveMarketplaceItem = () => {},
   onAdminRejectMarketplaceItem = () => {},
+  onDeleteMarketplaceItem,
   onSendPriceAdvisory = () => {},
 }) => {
   // Authorization Security Guard
@@ -425,29 +428,13 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             <Shield className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="font-extrabold text-base">FUHSI Safety & Moderation Council</h1>
+            <h1 className="font-extrabold text-base">FUHSI Safety & Moderation Console</h1>
             <p className="text-xs text-indigo-200">
               Admin Trade Desk, Student Verification Vault & Content Moderation Console
             </p>
           </div>
         </div>
       </div>
-
-      {/* ADMIN TRADE DESK MODULE */}
-      <AdminTradeDesk
-        userProfile={userProfile}
-        approvedMarketplaceItems={approvedMarketplaceItems}
-        pendingMarketplaceItems={pendingMarketplaceItems}
-        reports={reports}
-        onAdminApproveMarketplaceItem={onAdminApproveMarketplaceItem}
-        onAdminRejectMarketplaceItem={onAdminRejectMarketplaceItem}
-        onResolveReport={(repId) => {
-          const report = reports.find((r) => r.id === repId);
-          if (report) {
-            onDismissReport(repId, report.postId);
-          }
-        }}
-      />
 
       {/* Safety Toggles Section */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
@@ -671,161 +658,18 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         })()}
       </div>
 
-      {/* ADMIN MARKETPLACE MIDDLEMAN TRADE DESK */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <div>
-            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
-              <ShoppingBag className="w-4 h-4 text-teal-600" /> Admin Marketplace Middleman Control Desk ({adminTradeRequests.length})
-            </h2>
-            <p className="text-[11px] text-slate-500">
-              Admin acts as trusted middleman: contact sellers privately, verify availability, & arrange safe campus meet-ups.
-            </p>
-          </div>
-          <span className="text-xs font-bold bg-teal-50 text-teal-800 px-2.5 py-1 rounded-full border border-teal-200">
-            Zero Escrow / Safe Meetups
-          </span>
-        </div>
+      {/* ADMIN MARKETPLACE MANAGEMENT DESK */}
+      <AdminTradeDesk
+        userProfile={userProfile}
+        approvedMarketplaceItems={approvedMarketplaceItems}
+        pendingMarketplaceItems={pendingMarketplaceItems}
+        onAdminApproveMarketplaceItem={onAdminApproveMarketplaceItem}
+        onAdminRejectMarketplaceItem={onAdminRejectMarketplaceItem}
+        onDeleteMarketplaceItem={onDeleteMarketplaceItem}
+      />
 
-        <div className="space-y-3">
-          {adminTradeRequests.map((req) => (
-            <div key={req.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between items-start flex-wrap gap-2">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-extrabold text-slate-900 text-sm">{req.buyerNickname}</span>
-                    <span className="text-[10px] text-slate-500">wants to buy</span>
-                    <span className="font-extrabold text-teal-800">{req.itemTitle}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 mt-0.5">
-                    Listed by <span className="font-bold text-slate-800">{req.sellerNickname}</span> for <span className="font-bold text-teal-700">₦{req.price.toLocaleString()}</span> • Meet-up: <span className="font-bold">{req.meetupPoint}</span>
-                  </p>
-                </div>
-
-                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                  req.status === 'CONFIRMED_AVAILABLE' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
-                  req.status === 'SELLER_CONTACTED' ? 'bg-indigo-100 text-indigo-900 border-indigo-300' :
-                  req.status === 'UNAVAILABLE' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
-                }`}>
-                  {req.status === 'CONFIRMED_AVAILABLE' ? '✅ AVAILABLE & MEET-UP ARRANGED' :
-                   req.status === 'SELLER_CONTACTED' ? '📲 SELLER CONTACTED PRIVATELY' :
-                   req.status === 'UNAVAILABLE' ? '❌ ITEM UNAVAILABLE' : '🔔 PENDING ADMIN SELLER CHECK'}
-                </span>
-              </div>
-
-              <div className="p-2 rounded-lg bg-white border border-slate-200/80 text-[11px] text-slate-700">
-                <span className="font-bold text-slate-900">Admin Log:</span> {req.adminNote}
-              </div>
-
-              {/* Admin Actions */}
-              <div className="flex gap-2 pt-1 flex-wrap">
-                <button
-                  onClick={() => {
-                    const sellerMsg: DirectMessage = {
-                      id: `dm_seller_check_${Date.now()}`,
-                      conversationId: `conv_${normalizeNickname(req.sellerNickname)}_admin`,
-                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
-                      receiverNickname: req.sellerNickname,
-                      text: `Hello ${req.sellerNickname}! A verified student (${req.buyerNickname}) has requested to purchase your "${req.itemTitle}" for ₦${req.price.toLocaleString()}.\n\nIs this item still available for inspection and sale at ${req.meetupPoint}? Please reply directly to confirm!`,
-                      timestamp: formatMessageTime(),
-                      itemId: req.id,
-                      itemTitle: req.itemTitle,
-                      itemPrice: req.price,
-                      meetupPoint: req.meetupPoint,
-                    };
-                    sendDirectMessage(sellerMsg);
-
-                    setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
-                      ...r,
-                      status: 'SELLER_CONTACTED',
-                      adminNote: `Admin sent live direct inquiry to ${req.sellerNickname} to confirm item availability.`
-                    } : r));
-                    setQueryToast(`✓ Live inquiry message dispatched to seller ${req.sellerNickname}!`);
-                    setTimeout(() => setQueryToast(null), 4000);
-                  }}
-                  className="flex-1 py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <PhoneCall size={13} />
-                  <span>Contact Seller Privately</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    // Send to Buyer
-                    const buyerMsg: DirectMessage = {
-                      id: `dm_meetup_buyer_${Date.now()}`,
-                      conversationId: `conv_${normalizeNickname(req.buyerNickname)}_admin`,
-                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
-                      receiverNickname: req.buyerNickname,
-                      text: `Good news ${req.buyerNickname}! Seller ${req.sellerNickname} has confirmed that "${req.itemTitle}" (₦${req.price.toLocaleString()}) is available!\n\n📍 Scheduled Meet-up Location: ${req.meetupPoint}\n\n🛡️ Safety Guidelines: Inspect the item thoroughly in person before making payment. Do not pay in advance.`,
-                      timestamp: formatMessageTime(),
-                      itemId: req.id,
-                      itemTitle: req.itemTitle,
-                      itemPrice: req.price,
-                      meetupPoint: req.meetupPoint,
-                    };
-                    sendDirectMessage(buyerMsg);
-
-                    // Send to Seller
-                    const sellerMsg: DirectMessage = {
-                      id: `dm_meetup_seller_${Date.now()}`,
-                      conversationId: `conv_${normalizeNickname(req.sellerNickname)}_admin`,
-                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
-                      receiverNickname: req.sellerNickname,
-                      text: `Hi ${req.sellerNickname}, meet-up scheduled with buyer ${req.buyerNickname} for "${req.itemTitle}"!\n\n📍 Meet-up Point: ${req.meetupPoint}\nAmount: ₦${req.price.toLocaleString()}.\n\nPlease ensure you bring the item in clean condition.`,
-                      timestamp: formatMessageTime(),
-                      itemId: req.id,
-                      itemTitle: req.itemTitle,
-                      itemPrice: req.price,
-                      meetupPoint: req.meetupPoint,
-                    };
-                    sendDirectMessage(sellerMsg);
-
-                    setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
-                      ...r,
-                      status: 'CONFIRMED_AVAILABLE',
-                      adminNote: `Seller ${req.sellerNickname} confirmed item is available! Both buyer (${req.buyerNickname}) and seller notified for safe campus exchange at ${req.meetupPoint}.`
-                    } : r));
-                    setQueryToast(`✓ Meet-up scheduled! Live notices dispatched to ${req.buyerNickname} & ${req.sellerNickname}.`);
-                    setTimeout(() => setQueryToast(null), 4500);
-                  }}
-                  className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <CheckCircle2 size={13} />
-                  <span>Confirm & Schedule Meet-up</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const buyerMsg: DirectMessage = {
-                      id: `dm_unavail_buyer_${Date.now()}`,
-                      conversationId: `conv_${normalizeNickname(req.buyerNickname)}_admin`,
-                      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Trade Desk',
-                      receiverNickname: req.buyerNickname,
-                      text: `Hello ${req.buyerNickname}, we checked with seller ${req.sellerNickname} and unfortunately "${req.itemTitle}" is no longer available (sold or reserved). Please explore other listings in the Campus Hub!`,
-                      timestamp: formatMessageTime(),
-                      itemId: req.id,
-                      itemTitle: req.itemTitle,
-                    };
-                    sendDirectMessage(buyerMsg);
-
-                    setAdminTradeRequests(prev => prev.map(r => r.id === req.id ? {
-                      ...r,
-                      status: 'UNAVAILABLE',
-                      adminNote: `Seller informed Admin item was sold elsewhere. Buyer ${req.buyerNickname} notified.`
-                    } : r));
-                    setQueryToast(`✓ Item marked unavailable. Notice sent to ${req.buyerNickname}.`);
-                    setTimeout(() => setQueryToast(null), 4000);
-                  }}
-                  className="py-1.5 px-3 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Mark Unavailable
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* CHAT MODERATION CASES & REPORTED CONVERSATIONS DESK */}
+      <AdminChatReportsDesk userProfile={userProfile || undefined} />
 
       {/* Admin Student Identity & Emergency Phone Lookup */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
@@ -1232,10 +1076,10 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         )}
       </div>
 
-      {/* Moderation Council Queue */}
+      {/* Flagged Posts Queue */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
         <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-rose-700">
-          <AlertTriangle className="w-4 h-4" /> Moderation Council Flagged Posts ({flaggedPosts.length})
+          <AlertTriangle className="w-4 h-4" /> Flagged Community Posts Queue ({flaggedPosts.length})
         </h2>
 
         {flaggedPosts.length === 0 ? (

@@ -1,4 +1,4 @@
-import { DirectMessage, ChatConversation, CampusNotification, ChatReport } from '../types';
+import { DirectMessage, ChatConversation, CampusNotification, ChatReport, PreservedChatMessage } from '../types';
 import { pushServerDbSync } from './apiSync';
 import { saveDirectMessageToFirestore } from '../lib/firestoreSync';
 import { evaluateChatMessage } from './safetyFilter';
@@ -6,6 +6,72 @@ import { evaluateChatMessage } from './safetyFilter';
 export const DIRECT_MESSAGES_KEY = 'fuhsi_direct_messages_db';
 export const CONVERSATIONS_KEY = 'fuhsi_conversations_db';
 export const CHAT_REPORTS_KEY = 'fuhsi_chat_reports_db';
+
+/**
+ * Accurately extracts and preserves the last 5 messages strictly between the reporter and reported user
+ * at the exact moment of reporting in correct chronological order.
+ */
+export function extractPreservedReportEvidence(
+  reporterNickname: string,
+  reportedNickname: string,
+  currentActiveMessages: DirectMessage[] = []
+): PreservedChatMessage[] {
+  const cleanReporter = normalizeNickname(reporterNickname);
+  const cleanReported = normalizeNickname(reportedNickname);
+
+  if (!cleanReporter || !cleanReported) return [];
+
+  // Combine stored messages and current active messages for completeness
+  const storedMessages = getStoredDirectMessages();
+  const msgMap = new Map<string, DirectMessage>();
+
+  // Filter ONLY messages strictly between reporter and reported user
+  [...storedMessages, ...currentActiveMessages].forEach((m) => {
+    const s = normalizeNickname(m.senderNickname);
+    const r = normalizeNickname(m.receiverNickname);
+    const isDirectMatch = (s === cleanReporter && r === cleanReported) || (s === cleanReported && r === cleanReporter);
+    if (isDirectMatch && m.text && m.text.trim()) {
+      msgMap.set(m.id, m);
+    }
+  });
+
+  const matched = Array.from(msgMap.values());
+
+  // Sort strictly by actual recorded timestamp in chronological order (oldest to newest)
+  matched.sort((a, b) => {
+    const tA = new Date(a.timestamp || 0).getTime() || 0;
+    const tB = new Date(b.timestamp || 0).getTime() || 0;
+    if (tA !== tB) return tA - tB;
+    return a.id.localeCompare(b.id);
+  });
+
+  // Preserve the last 5 messages in exact chronological order
+  const lastFive = matched.slice(-5);
+
+  return lastFive.map((m) => {
+    const d = new Date(m.timestamp);
+    const isValidDate = !isNaN(d.getTime());
+    const formattedTime = isValidDate
+      ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
+      : formatMessageTime(m.timestamp);
+    const formattedDate = isValidDate
+      ? d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'Recorded';
+
+    const normalizedSender = m.senderNickname.startsWith('@')
+      ? m.senderNickname
+      : `@${m.senderNickname}`;
+
+    return {
+      id: m.id,
+      sender: normalizedSender,
+      text: m.text,
+      time: formattedTime,
+      date: formattedDate,
+      timestamp: m.timestamp || new Date().toISOString(),
+    };
+  });
+}
 
 /**
  * Normalize nickname for consistent key lookups
@@ -149,6 +215,12 @@ export function getUserConversations(userNickname: string): ChatConversation[] {
       }
     } catch (e) {}
 
+    // Calculate unread count specifically for incoming unread messages for this user
+    const unreadMessagesCount = allMessages.filter((m) => {
+      const mConvId = m.conversationId || getConversationId(m.senderNickname, m.receiverNickname);
+      return mConvId === convId && normalizeNickname(m.receiverNickname) === cleanMe && !m.isRead;
+    }).length;
+
     result.push({
       id: convId,
       otherUserNickname: data.otherUser.startsWith('@') ? data.otherUser : `@${data.otherUser}`,
@@ -163,7 +235,7 @@ export function getUserConversations(userNickname: string): ChatConversation[] {
       itemTitle: data.lastMsg.itemTitle,
       itemPrice: data.lastMsg.itemPrice,
       meetupPoint: data.lastMsg.meetupPoint,
-      unreadCount: stored?.unreadCount || 0,
+      unreadCount: unreadMessagesCount,
       updatedAt: data.lastMsg.timestamp,
     });
   });
@@ -257,15 +329,23 @@ export function getStoredChatReports(): ChatReport[] {
 /**
  * Update chat report status (Admin action)
  */
-export function updateChatReportStatus(reportId: string, status: 'ACTION_TAKEN' | 'DISMISSED'): void {
+export function updateChatReportStatus(
+  reportId: string, 
+  status: 'ACTION_TAKEN' | 'RESOLVED' | 'DISMISSED',
+  actionNote?: string
+): void {
   try {
     const reports = getStoredChatReports();
-    const updated = reports.map((r) => (r.id === reportId ? { ...r, status } : r));
+    const updated = reports.map((r) => 
+      r.id === reportId 
+        ? { ...r, status, actionNote: actionNote !== undefined ? actionNote : r.actionNote } 
+        : r
+    );
     localStorage.setItem(CHAT_REPORTS_KEY, JSON.stringify(updated));
     pushServerDbSync({ chatReports: updated } as any).catch(console.error);
 
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('fuhsi_chat_report_updated', { detail: { reportId, status } }));
+      window.dispatchEvent(new CustomEvent('fuhsi_chat_report_updated', { detail: { reportId, status, actionNote } }));
     }
   } catch (err) {
     console.error('Error updating chat report:', err);
@@ -296,6 +376,7 @@ export function sendDirectMessage(msg: DirectMessage): {
   const safeMsg: DirectMessage = {
     ...msg,
     text: effectiveText,
+    isRead: false,
     isSafetyWarning: evalResult.actionTaken === 'REPLACED_CONTACT_INFO',
     violationNotice: evalResult.actionTaken === 'REPLACED_CONTACT_INFO' ? evalResult.warningMessage : undefined,
   };
@@ -399,6 +480,83 @@ export function updateConversationList(msg: DirectMessage): void {
     pushServerDbSync({ chatConversations: convs } as any).catch(console.error);
   } catch (err) {
     console.error('Error updating conversations:', err);
+  }
+}
+
+/**
+ * Mark all incoming direct messages in a conversation as read by the viewing user
+ */
+export function markConversationMessagesAsRead(conversationId: string, readerNickname: string): void {
+  if (!conversationId || !readerNickname) return;
+  const cleanReader = normalizeNickname(readerNickname);
+  let changed = false;
+
+  const allMessages = getStoredDirectMessages();
+  const updatedMessages = allMessages.map((msg) => {
+    const msgConvId = msg.conversationId || getConversationId(msg.senderNickname, msg.receiverNickname);
+    const isTargetConv = msgConvId === conversationId;
+    const isIncomingToMe = normalizeNickname(msg.receiverNickname) === cleanReader;
+
+    if (isTargetConv && isIncomingToMe && !msg.isRead) {
+      changed = true;
+      const updatedMsg: DirectMessage = {
+        ...msg,
+        isRead: true,
+        readAt: new Date().toISOString(),
+      };
+      // Save read status to Firestore real-time collection
+      saveDirectMessageToFirestore(updatedMsg).catch((err) => {
+        console.error('Error updating read status in Firestore:', err);
+      });
+      return updatedMsg;
+    }
+    return msg;
+  });
+
+  if (changed) {
+    try {
+      localStorage.setItem(DIRECT_MESSAGES_KEY, JSON.stringify(updatedMessages));
+    } catch (e) {
+      console.error('Error storing updated direct messages:', e);
+    }
+
+    // Reset unread count for this conversation in conversations list
+    try {
+      const storedConvs = getStoredConversations();
+      const updatedConvs = storedConvs.map((c) => {
+        if (c.id === conversationId) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      });
+      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(updatedConvs));
+      pushServerDbSync({ directMessages: updatedMessages, chatConversations: updatedConvs } as any).catch(console.error);
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Also mark related notifications for this conversation as read
+    try {
+      const notifs = getUserNotifications(readerNickname);
+      let notifChanged = false;
+      const updatedNotifs = notifs.map((n) => {
+        if (n.conversationId === conversationId && !n.isRead) {
+          notifChanged = true;
+          return { ...n, isRead: true };
+        }
+        return n;
+      });
+      if (notifChanged) {
+        localStorage.setItem(`fuhsi_user_notifications_${cleanReader}`, JSON.stringify(updatedNotifs));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated', { detail: { conversationId, readerNickname } }));
+      window.dispatchEvent(new CustomEvent('fuhsi_notification_read_updated', { detail: { nickname: readerNickname } }));
+    }
   }
 }
 

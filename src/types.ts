@@ -136,20 +136,39 @@ export interface MarketplaceItem {
   sellerNickname: string;
   sellerPhone: string;
   askingPrice: number;
-  adminApprovedPrice: number;
+  adminApprovedPrice?: number;
   conditionTag: string;
   description: string;
   meetupPoint: string;
   imageUrls: string[];
   viewCount: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SOLD';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SOLD' | 'REMOVED';
   soldAt?: string;
+  createdAt?: string;
   buyerDmIntentsCount: number;
   adminNote?: string;
   sellerRatingStars?: number;
   sellerRatingTag?: string;
   isFeatured?: boolean;
   featuredDays?: number;
+  isHousing?: boolean;
+  propertyLocation?: string;
+  rentDuration?: string;
+  roomType?: string;
+}
+
+export interface MarketplaceReport {
+  id: string;
+  type: 'LISTING' | 'SELLER';
+  itemId?: string;
+  itemTitle?: string;
+  sellerNickname: string;
+  reporterNickname: string;
+  reason: 'Fake item' | 'Fraud/scam' | 'Fake transfer' | 'Misleading listing' | 'Item not as described' | 'Seller misconduct' | 'Other marketplace problems' | string;
+  details?: string;
+  timestamp: string;
+  status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
+  actionTaken?: string;
 }
 
 export interface CommunityFundSummary {
@@ -186,6 +205,8 @@ export interface DirectMessage {
   isPledgeConfirmed?: boolean;
   isSafetyWarning?: boolean;
   violationNotice?: string;
+  isRead?: boolean;
+  readAt?: string;
 }
 
 export interface ChatConversation {
@@ -208,6 +229,15 @@ export interface ChatConversation {
   updatedAt?: string;
 }
 
+export interface PreservedChatMessage {
+  id?: string;
+  sender: string;
+  text: string;
+  time: string;
+  date?: string;
+  timestamp: string;
+}
+
 export interface ChatReport {
   id: string;
   conversationId: string;
@@ -216,9 +246,10 @@ export interface ChatReport {
   reason: string;
   notes?: string;
   messageSnippet: string;
-  recentMessages?: Array<{ sender: string; text: string; time: string }>;
+  recentMessages?: PreservedChatMessage[];
   timestamp: string;
-  status: 'PENDING' | 'ACTION_TAKEN' | 'DISMISSED';
+  status: 'PENDING' | 'ACTION_TAKEN' | 'RESOLVED' | 'DISMISSED';
+  actionNote?: string;
 }
 
 export interface VerificationRequest {

@@ -66,7 +66,8 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
         badgeType: u.badgeType ? u.badgeType : existing.badgeType || 'GREEN',
         badgeTitle: u.badgeTitle ? u.badgeTitle : existing.badgeTitle || 'FUHSI Student',
         studentEmail: u.studentEmail || existing.studentEmail,
-        savedPassword: (u as any).savedPassword || (existing as any).savedPassword || (u as any).password || (existing as any).password,
+        savedPassword: (u as any).savedPassword || (u as any).password || (existing as any).savedPassword || (existing as any).password,
+        password: (u as any).savedPassword || (u as any).password || (existing as any).savedPassword || (existing as any).password,
       };
       map.set(key, merged);
     }
@@ -193,7 +194,21 @@ export function mergeVerifCandidates(a: any[] = [], b: any[] = []): any[] {
 export function mergeDirectMessages(a: DirectMessage[] = [], b: DirectMessage[] = []): DirectMessage[] {
   const map = new Map<string, DirectMessage>();
   a.forEach((m) => m?.id && map.set(m.id, { ...m }));
-  b.forEach((m) => m?.id && map.set(m.id, { ...(map.get(m.id) || {}), ...m }));
+  b.forEach((m) => {
+    if (m?.id) {
+      const existing = map.get(m.id);
+      if (existing) {
+        map.set(m.id, {
+          ...existing,
+          ...m,
+          isRead: Boolean(existing.isRead || m.isRead),
+          readAt: m.readAt || existing.readAt,
+        });
+      } else {
+        map.set(m.id, { ...m });
+      }
+    }
+  });
   return Array.from(map.values()).sort((x, y) => {
     const tX = isNaN(new Date(x.timestamp).getTime()) ? 0 : new Date(x.timestamp).getTime();
     const tY = isNaN(new Date(y.timestamp).getTime()) ? 0 : new Date(y.timestamp).getTime();

@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MarketplaceItem, UserProfile, DirectMessage, ChatConversation } from '../types';
+import { MarketplaceItem, UserProfile, MarketplaceReport } from '../types';
 import { 
   ShoppingBag, 
-  ShieldCheck, 
   MapPin, 
   Eye, 
   Plus, 
-  Star, 
-  Send, 
   Camera, 
   AlertCircle, 
   Clock, 
-  Info, 
-  ShieldAlert, 
   Lock, 
   Upload, 
   Trash2, 
@@ -21,18 +16,26 @@ import {
   X, 
   CheckCircle2, 
   SlidersHorizontal, 
-  ChevronRight, 
-  ExternalLink, 
   MessageCircle, 
   Tag,
-  BadgePercent,
-  Sparkles,
-  HelpCircle
+  ShieldAlert,
+  Flag,
+  Ban,
+  Home,
+  Check,
+  AlertTriangle,
+  PhoneCall,
+  Sparkles
 } from 'lucide-react';
 import { checkIsUserVerified } from '../utils/verificationUtils';
 import { compressImageFile } from '../utils/imageUtils';
 import { VerificationModal } from '../components/VerificationModal';
-import { getStoredDirectMessages, sendDirectMessage, CONVERSATIONS_KEY, formatMessageTime } from '../utils/messagingUtils';
+import { 
+  generateWhatsAppTradeUrl, 
+  saveMarketplaceReport, 
+  MARKETPLACE_REPORT_REASONS 
+} from '../utils/marketplaceUtils';
+import { blockUser, getBlockedUsers, isUserBlocked } from '../utils/blockUtils';
 
 interface CampusHubScreenProps {
   userProfile: UserProfile | null;
@@ -47,25 +50,63 @@ interface CampusHubScreenProps {
     sellerPhone: string;
     meetupPoint: string;
     imageUrls: string[];
+    isHousing?: boolean;
+    propertyLocation?: string;
+    rentDuration?: string;
+    roomType?: string;
   }) => void;
-  onRecordDmBuyIntent: (itemId: string) => void;
+  onRecordDmBuyIntent?: (itemId: string) => void;
   onMarkAsSold: (itemId: string, ratingStars: number, ratingTag: string) => void;
-  onApplyVerificationWithFee: () => void;
+  onDeleteMarketplaceItem?: (itemId: string) => void;
+  onApplyVerificationWithFee?: () => void;
   onAuthorClick?: (post: any) => void;
   onOpenAdminConsole?: () => void;
 }
 
-// Category definitions matching the design
+// Category definitions with icons
 const CATEGORY_OPTIONS = [
   { id: 'All', label: 'All', icon: '📦' },
-  { id: 'Phones', label: 'Phones', icon: '📱' },
-  { id: 'Digital', label: 'Digital', icon: '📁' },
-  { id: 'Services', label: 'Services', icon: '🛠️' },
+  { id: 'Textbooks', label: 'Textbooks', icon: '📚' },
+  { id: 'Rooms & Housing', label: 'Rooms & Housing', icon: '🏠' },
   { id: 'Electronics', label: 'Electronics', icon: '💻' },
+  { id: 'Phones', label: 'Phones', icon: '📱' },
   { id: 'Fashion', label: 'Fashion', icon: '👕' },
   { id: 'Medical Equipment', label: 'Medical Equipment', icon: '🩺' },
-  { id: 'Textbooks', label: 'Textbooks', icon: '📚' },
-  { id: 'Housing', label: 'Housing', icon: '🏠' },
+  { id: 'Food & Snacks', label: 'Food & Snacks', icon: '🍲' },
+  { id: 'Services', label: 'Services', icon: '🛠️' },
+  { id: 'Other', label: 'Other', icon: '🏷️' },
+];
+
+// Room / Housing Types
+const HOUSING_ROOM_TYPES = [
+  'Single Room',
+  'Self-Contain Room',
+  '2-Bedroom Flat',
+  'Shared Bedspace',
+  'Hostel Bedspace',
+  'Mini Flat / Studio',
+  'Other Accommodation'
+];
+
+// Rent Durations
+const RENT_DURATIONS = [
+  'Per Year (Annual)',
+  'Per Semester',
+  'Per Month',
+  'Per Academic Session'
+];
+
+// Safe Meetup Locations around FUHSI
+const MEETUP_LOCATIONS = [
+  'FUHSI School Main Gate',
+  'School Market',
+  'Matriculation Pavillion',
+  'Owuoluwa Junction',
+  'Just-Love Kitchen',
+  'College High School Junction',
+  'School Hostel (Male/Female)',
+  'Ayeka Main Road',
+  'Okitipupa Town Center'
 ];
 
 export const formatPriceShort = (price: number): string => {
@@ -94,12 +135,10 @@ export function getSoldStatusInfo(item: MarketplaceItem): {
     return { isSold: false, soldBadgeText: '', isExpired: false, daysAgo: -1 };
   }
 
-  // Parse sold date or fallback to now
   const soldTimestamp = item.soldAt ? new Date(item.soldAt).getTime() : Date.now();
   const diffMs = Date.now() - soldTimestamp;
   const daysAgo = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 
-  // If sold more than 7 days ago, it is expired and must be purged
   if (daysAgo > 7) {
     return { isSold: true, soldBadgeText: 'Expired', isExpired: true, daysAgo };
   }
@@ -120,105 +159,68 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   onSubmitMarketplaceItem,
   onRecordDmBuyIntent,
   onMarkAsSold,
-  onApplyVerificationWithFee: _onApplyVerificationWithFee,
+  onDeleteMarketplaceItem,
   onAuthorClick,
-  onOpenAdminConsole: _onOpenAdminConsole,
 }) => {
   // Navigation & filter state
-  const [activeView, setActiveView] = useState<'listings' | 'my_trades'>('listings');
+  const [activeView, setActiveView] = useState<'listings' | 'my_listings'>('listings');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Item Details Preview Modal State (Picture 2)
+  // Item Details Preview Modal State
   const [detailsModalItem, setDetailsModalItem] = useState<MarketplaceItem | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
 
-  // Sell Item Form Modal State
+  // Sell / Post Listing Modal State
   const [showSellModal, setShowSellModal] = useState(false);
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('Phones');
+  const [category, setCategory] = useState('Textbooks');
   const [askingPrice, setAskingPrice] = useState<number | ''>('');
-  const [conditionTag, setConditionTag] = useState('New');
+  const [conditionTag, setConditionTag] = useState('Fairly Used');
   const [description, setDescription] = useState('');
-  const [sellerPhone] = useState(userProfile?.emergencyHomePhone || '');
+  const [sellerPhone, setSellerPhone] = useState(userProfile?.emergencyHomePhone || (userProfile as any)?.phone || '');
   const [meetupPoint, setMeetupPoint] = useState('FUHSI School Main Gate');
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [sellSuccessMsg, setSellSuccessMsg] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Buy Intent & Middleman Modal State
-  const [buyModalItem, setBuyModalItem] = useState<MarketplaceItem | null>(null);
-  const [pledgeChecked, setPledgeChecked] = useState(false);
-  const [buyIntentSuccess, setBuyIntentSuccess] = useState(false);
+  // Housing specific fields
+  const [roomType, setRoomType] = useState('Single Room');
+  const [rentDuration, setRentDuration] = useState('Per Year (Annual)');
+  const [propertyLocation, setPropertyLocation] = useState('Owuoluwa Junction, Ayeka');
+
+  // Reporting Modal State
+  const [reportingItem, setReportingItem] = useState<MarketplaceItem | null>(null);
+  const [reportReason, setReportReason] = useState<string>('Fraud/scam');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSuccessToast, setReportSuccessToast] = useState<string | null>(null);
+
+  // Block confirmation modal state
+  const [blockingSeller, setBlockingSeller] = useState<string | null>(null);
+  const [blockToast, setBlockToast] = useState<string | null>(null);
+
+  // Blocked users tracker state
+  const [blockedUsersList, setBlockedUsersList] = useState<string[]>(() => 
+    getBlockedUsers(userProfile?.nickname)
+  );
+
+  // Verification & Sold Modals
   const [showMarketplaceLockModal, setShowMarketplaceLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
-
-  // Mark Sold Modal State
   const [soldModalItem, setSoldModalItem] = useState<MarketplaceItem | null>(null);
   const [soldSuccessNotify, setSoldSuccessNotify] = useState(false);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<MarketplaceItem | null>(null);
 
   const isVerifiedUser = checkIsUserVerified(userProfile?.nickname, userProfile);
 
-  // Admin Middleman Trade Desk Conversations State
-  const [conversations, setConversations] = useState<ChatConversation[]>(() => {
-    try {
-      const stored = localStorage.getItem(CONVERSATIONS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return [
-      {
-        id: 'conv_admin_desk',
-        otherUserNickname: '🛡️ Trade Desk',
-        lastMessage: 'Trade Desk Active: Connect with buyers & sellers safely on campus.',
-        lastTimestamp: formatMessageTime(),
-        itemId: 'item_1',
-        itemTitle: 'Campus Marketplace Trade Desk',
-        itemPrice: 0,
-        meetupPoint: 'FUHSI School Main Gate',
-        unreadCount: 0
-      }
-    ];
-  });
-
-  const [activeConvId, setActiveConvId] = useState<string | null>('conv_admin_desk');
-  const [directMessages, setDirectMessages] = useState<DirectMessage[]>(() => {
-    const msgs = getStoredDirectMessages();
-    if (msgs.length > 0) return msgs;
-    return [
-      {
-        id: 'dm_admin_1',
-        conversationId: 'conv_admin_desk',
-        senderNickname: '🛡️ Trade Desk',
-        receiverNickname: userProfile?.nickname || '@FUHSI_Student',
-        text: 'Welcome to the Official FUHSI Trade Desk!\n\n💡 Safe campus trading with FUHSI-Connect.',
-        timestamp: formatMessageTime(),
-        isPledgeConfirmed: true
-      }
-    ];
-  });
-  const [chatInputText, setChatInputText] = useState('');
-
-  // Listen for direct messages and conversations updates
+  // Listen for block updates
   useEffect(() => {
-    const handleDmUpdated = () => {
-      const msgs = getStoredDirectMessages();
-      setDirectMessages(msgs);
-      try {
-        const stored = localStorage.getItem(CONVERSATIONS_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) setConversations(parsed);
-        }
-      } catch (e) {}
+    const handleBlockUpdate = () => {
+      setBlockedUsersList(getBlockedUsers(userProfile?.nickname));
     };
-    window.addEventListener('fuhsi_direct_message_updated', handleDmUpdated);
-    return () => window.removeEventListener('fuhsi_direct_message_updated', handleDmUpdated);
-  }, []);
+    window.addEventListener('fuhsi_blocks_updated', handleBlockUpdate);
+    return () => window.removeEventListener('fuhsi_blocks_updated', handleBlockUpdate);
+  }, [userProfile?.nickname]);
 
   // Popstate listener for back button navigation
   useEffect(() => {
@@ -227,8 +229,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         setDetailsModalItem(null);
         return;
       }
-      if (buyModalItem) {
-        setBuyModalItem(null);
+      if (reportingItem) {
+        setReportingItem(null);
         return;
       }
       if (showSellModal) {
@@ -243,41 +245,61 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [detailsModalItem, buyModalItem, showSellModal, soldModalItem]);
+  }, [detailsModalItem, reportingItem, showSellModal, soldModalItem]);
 
-  // Meetup locations
-  const meetupLocations = [
-    'FUHSI School Main Gate',
-    'School Market',
-    'Matriculation Pavillion',
-    'Owuoluwa Junction',
-    'Just-Love Kitchen',
-    'College High school Junction',
-    'School Hostel',
-  ];
+  // Is category housing?
+  const isHousingCategory = 
+    category === 'Rooms & Housing' || 
+    category.toLowerCase().includes('housing') || 
+    category.toLowerCase().includes('room');
 
-  // Price calculations for posting form
-  const priceVal = typeof askingPrice === 'number' ? askingPrice : 0;
-  const adminFee = Math.round(priceVal * 0.1);
-  const netPayout = priceVal - adminFee;
-
-  // Filter listings based on category, search query, and 7-DAY AUTO-PURGE FOR SOLD ITEMS
+  // Filter listings based on category, search query, blocked users, and 7-DAY AUTO-PURGE
   const filteredListings = useMemo(() => {
     return approvedMarketplaceItems.filter((item) => {
-      // 7-day auto purge for sold items (never show >7 days)
+      // 1. Hide items by blocked sellers
+      if (userProfile?.nickname && isUserBlocked(userProfile.nickname, item.sellerNickname)) {
+        return false;
+      }
+
+      // 2. Hide items that were explicitly removed by admin or seller
+      if (item.status === 'REMOVED' || item.status === 'REJECTED') {
+        return false;
+      }
+
+      // 3. 7-day auto purge for sold items (never show >7 days)
       const soldInfo = getSoldStatusInfo(item);
       if (soldInfo.isExpired) {
         return false;
       }
 
-      const matchesCat =
-        selectedCategory === 'All' ||
-        item.category?.toLowerCase() === selectedCategory.toLowerCase() ||
-        (selectedCategory === 'Phones' && item.category?.toLowerCase().includes('phone')) ||
-        (selectedCategory === 'Electronics' && (item.category?.toLowerCase().includes('electron') || item.category?.toLowerCase().includes('gadget'))) ||
-        (selectedCategory === 'Textbooks' && (item.category?.toLowerCase().includes('book') || item.category?.toLowerCase().includes('study'))) ||
-        (selectedCategory === 'Medical Equipment' && (item.category?.toLowerCase().includes('medic') || item.category?.toLowerCase().includes('lab')));
+      // 4. Category matching
+      const catLower = item.category?.toLowerCase() || '';
+      const selectedLower = selectedCategory.toLowerCase();
+      
+      let matchesCat = selectedCategory === 'All';
+      if (!matchesCat) {
+        if (selectedCategory === 'Rooms & Housing') {
+          matchesCat = catLower.includes('housing') || catLower.includes('room') || catLower.includes('hostel') || Boolean(item.isHousing);
+        } else if (selectedCategory === 'Textbooks') {
+          matchesCat = catLower.includes('book') || catLower.includes('textbook') || catLower.includes('study');
+        } else if (selectedCategory === 'Electronics') {
+          matchesCat = catLower.includes('electron') || catLower.includes('gadget') || catLower.includes('laptop');
+        } else if (selectedCategory === 'Phones') {
+          matchesCat = catLower.includes('phone') || catLower.includes('tecno') || catLower.includes('iphone') || catLower.includes('samsung');
+        } else if (selectedCategory === 'Medical Equipment') {
+          matchesCat = catLower.includes('medic') || catLower.includes('lab') || catLower.includes('stethoscope') || catLower.includes('scrub');
+        } else if (selectedCategory === 'Food & Snacks') {
+          matchesCat = catLower.includes('food') || catLower.includes('snack') || catLower.includes('meal') || catLower.includes('drink');
+        } else if (selectedCategory === 'Services') {
+          matchesCat = catLower.includes('service') || catLower.includes('skill') || catLower.includes('repair');
+        } else if (selectedCategory === 'Fashion') {
+          matchesCat = catLower.includes('fashion') || catLower.includes('cloth') || catLower.includes('shoe') || catLower.includes('wear');
+        } else {
+          matchesCat = catLower === selectedLower;
+        }
+      }
 
+      // 5. Search query matching
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -285,23 +307,31 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         item.description?.toLowerCase().includes(q) ||
         item.sellerNickname?.toLowerCase().includes(q) ||
         item.category?.toLowerCase().includes(q) ||
-        item.meetupPoint?.toLowerCase().includes(q);
+        item.meetupPoint?.toLowerCase().includes(q) ||
+        item.propertyLocation?.toLowerCase().includes(q);
 
       return matchesCat && matchesSearch;
     });
-  }, [approvedMarketplaceItems, selectedCategory, searchQuery]);
+  }, [approvedMarketplaceItems, selectedCategory, searchQuery, userProfile?.nickname, blockedUsersList]);
 
-  // Handle Photo upload
+  // Handle Photo upload (Pictures only, no video)
   const handlePhotosFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
+    
+    // Filter out video files
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length < files.length) {
+      setFormError('Only photo/picture uploads are allowed. Videos are not supported for marketplace or property listings.');
+    }
+
     const remainingSlots = 6 - uploadedPhotos.length;
     if (remainingSlots <= 0) return;
 
-    const filesToProcess = files.slice(0, remainingSlots);
+    const filesToProcess = imageFiles.slice(0, remainingSlots);
     for (const file of filesToProcess) {
       try {
-        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        const compressed = await compressImageFile(file, 900, 900, 0.78);
         setUploadedPhotos((prev) => [...prev, compressed]);
       } catch (err) {
         console.error('Photo compression error:', err);
@@ -320,27 +350,36 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     setFormError('');
 
     if (!title.trim()) {
-      setFormError('Please enter a descriptive item title.');
+      setFormError('Please enter a descriptive item/property title.');
       return;
     }
+    const priceVal = typeof askingPrice === 'number' ? askingPrice : 0;
     if (!askingPrice || priceVal <= 0) {
-      setFormError('Please enter a valid asking price.');
+      setFormError('Please enter a valid asking price (in ₦).');
+      return;
+    }
+    if (!sellerPhone.trim() || sellerPhone.replace(/\D/g, '').length < 8) {
+      setFormError('Please provide a valid WhatsApp contact phone number for buyers to reach you.');
       return;
     }
     if (uploadedPhotos.length < 1) {
-      setFormError('Please select at least 1 clear photo of the item from your device.');
+      setFormError('Please select at least 1 clear picture/photo from your device.');
       return;
     }
 
     onSubmitMarketplaceItem({
-      title,
+      title: title.trim(),
       category,
       askingPrice: priceVal,
-      conditionTag,
-      description,
-      sellerPhone,
-      meetupPoint,
+      conditionTag: isHousingCategory ? roomType : conditionTag,
+      description: description.trim(),
+      sellerPhone: sellerPhone.trim(),
+      meetupPoint: isHousingCategory ? propertyLocation : meetupPoint,
       imageUrls: uploadedPhotos,
+      isHousing: isHousingCategory,
+      propertyLocation: isHousingCategory ? propertyLocation : undefined,
+      rentDuration: isHousingCategory ? rentDuration : undefined,
+      roomType: isHousingCategory ? roomType : undefined,
     });
 
     setSellSuccessMsg(true);
@@ -352,121 +391,61 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       setDescription('');
       setUploadedPhotos([]);
       setFormError('');
-    }, 1600);
-  };
-
-  /**
-   * Official WhatsApp Trade Desk Routing with 10% Escrow Protection
-   * When buyers click WhatsApp, they are routed through the official Trade Desk Coordinator
-   * to guarantee the 10% commission for the platform and ensure safe payment & handoff.
-   */
-  const handleOpenTradeDeskWhatsApp = (item: MarketplaceItem) => {
-    const rawPhone = item.sellerPhone || userProfile?.emergencyHomePhone || '08000000000';
-    let cleanPhone = rawPhone.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '234' + cleanPhone.substring(1);
-    }
-
-    const price = item.adminApprovedPrice ?? item.askingPrice ?? 0;
-    const message = `Hello, I saw your listing for "${item.title}" (₦${price.toLocaleString()}) on FUHSI-Connect. I would like to buy it and meet up at ${item.meetupPoint || 'FUHSI School Main Gate'}.`;
-
-    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  // Buy Intent & Pledge via In-App Admin Desk
-  const handleConfirmPledgeAndOpenDM = () => {
-    if (!buyModalItem || !pledgeChecked) return;
-
-    onRecordDmBuyIntent(buyModalItem.id);
-
-    const price = buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice ?? 0;
-    const fee = Math.round(price * 0.1);
-    const sellerPayout = price - fee;
-    const convId = 'conv_admin_desk';
-    const buyerNickname = userProfile?.nickname || '@FUHSI_Student';
-    const itemPriceFormatted = price.toLocaleString();
-
-    const buyerRequestText = `Hello Admin, I am interested in buying "${buyModalItem.title}" listed by ${buyModalItem.sellerNickname} for ₦${itemPriceFormatted}.\nI am ready to meet at (${buyModalItem.meetupPoint}).`;
-
-    const currentTime = formatMessageTime();
-
-    const newBuyerMsg: DirectMessage = {
-      id: `dm_${Date.now()}`,
-      conversationId: convId,
-      senderNickname: buyerNickname,
-      receiverNickname: '🛡️ Trade Desk',
-      text: buyerRequestText,
-      timestamp: currentTime,
-      itemId: buyModalItem.id,
-      itemTitle: buyModalItem.title,
-      itemPrice: price,
-      meetupPoint: buyModalItem.meetupPoint,
-      isPledgeConfirmed: true
-    };
-
-    // Pick a suitable item icon based on category/title
-    const getItemIcon = (cat?: string, tit?: string) => {
-      const c = (cat || '').toLowerCase();
-      const t = (tit || '').toLowerCase();
-      if (c.includes('phone') || t.includes('phone') || t.includes('spark') || t.includes('iphone') || t.includes('samsung')) return '📱';
-      if (c.includes('electronic') || t.includes('fan') || t.includes('laptop') || t.includes('charger') || t.includes('tv')) return '⚡';
-      if (c.includes('digital')) return '📁';
-      if (c.includes('service')) return '🛠️';
-      if (c.includes('fashion') || t.includes('shirt') || t.includes('cloth') || t.includes('shoe')) return '👕';
-      if (c.includes('medical') || t.includes('stethoscope') || t.includes('scrub') || t.includes('coat')) return '🩺';
-      if (c.includes('textbook') || t.includes('book')) return '📚';
-      if (c.includes('housing') || t.includes('hostel') || t.includes('room')) return '🏠';
-      return '📦';
-    };
-
-    const itemIcon = getItemIcon(buyModalItem.category, buyModalItem.title);
-
-    const newAdminMsg: DirectMessage = {
-      id: `dm_resp_${Date.now()}`,
-      conversationId: convId,
-      senderNickname: '🛡️ Trade Desk',
-      receiverNickname: buyerNickname,
-      text: `🛡️ [PURCHASE REQUEST LOGGED]\nHello ${buyerNickname}!\nYour trade ticket for "${buyModalItem.title}" has been created.\n\n💰 Total Price: ₦${itemPriceFormatted}\n${itemIcon} Item: ${buyModalItem.title}\n📍 Campus Meetup: ${buyModalItem.meetupPoint}\n\nOur coordinator will verify the seller's availability. Inspect the item thoroughly before authorizing final payout release.`,
-      timestamp: currentTime,
-      itemId: buyModalItem.id,
-      itemTitle: buyModalItem.title,
-      itemPrice: price,
-      meetupPoint: buyModalItem.meetupPoint
-    };
-
-    sendDirectMessage(newBuyerMsg);
-    sendDirectMessage(newAdminMsg);
-
-    setActiveConvId(convId);
-    setBuyIntentSuccess(true);
-
-    setTimeout(() => {
-      setBuyIntentSuccess(false);
-      setBuyModalItem(null);
-      setPledgeChecked(false);
-      setActiveView('my_trades');
     }, 1200);
   };
 
-  const handleSendDirectMessage = (e: React.FormEvent) => {
+  /**
+   * Direct WhatsApp Contact Initiation
+   * Opens WhatsApp directly with pre-filled message:
+   * > Hello, I saw your item "[Item Title]" on FUHSI Connect and I'm interested in it. Is it still available?
+   */
+  const handleContactOnWhatsApp = (item: MarketplaceItem) => {
+    if (onRecordDmBuyIntent) {
+      onRecordDmBuyIntent(item.id);
+    }
+    const waUrl = generateWhatsAppTradeUrl(item);
+    if (waUrl) {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      alert('The seller has not provided a valid WhatsApp contact number.');
+    }
+  };
+
+  // Submit Listing / Seller Report
+  const handleSubmitReport = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInputText.trim() || !activeConvId) return;
+    if (!reportingItem) return;
 
-    const currentConv = conversations.find((c) => c.id === activeConvId);
-    if (!currentConv) return;
-
-    const newMsg: DirectMessage = {
-      id: `dm_${Date.now()}`,
-      conversationId: activeConvId,
-      senderNickname: userProfile?.nickname || '@FUHSI_Student',
-      receiverNickname: currentConv.otherUserNickname,
-      text: chatInputText.trim(),
-      timestamp: formatMessageTime(),
+    const report: MarketplaceReport = {
+      id: `mreport_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type: 'LISTING',
+      itemId: reportingItem.id,
+      itemTitle: reportingItem.title,
+      sellerNickname: reportingItem.sellerNickname,
+      reporterNickname: userProfile?.nickname || 'Anonymous Student',
+      reason: reportReason,
+      details: reportDetails.trim(),
+      timestamp: new Date().toISOString(),
+      status: 'PENDING',
     };
 
-    sendDirectMessage(newMsg);
-    setChatInputText('');
+    saveMarketplaceReport(report);
+    setReportSuccessToast(`Report submitted successfully. The Admin Moderation Council will review "${reportingItem.title}".`);
+    setReportingItem(null);
+    setReportDetails('');
+    setTimeout(() => setReportSuccessToast(null), 5000);
+  };
+
+  // Block Seller
+  const handleConfirmBlockSeller = () => {
+    if (!blockingSeller || !userProfile?.nickname) return;
+    blockUser(userProfile.nickname, blockingSeller);
+    setBlockToast(`Blocked @${blockingSeller.replace(/^@/, '')}. Their listings and posts are now hidden.`);
+    setBlockingSeller(null);
+    if (detailsModalItem && detailsModalItem.sellerNickname === blockingSeller) {
+      setDetailsModalItem(null);
+    }
+    setTimeout(() => setBlockToast(null), 4500);
   };
 
   // Confirm Mark as Sold
@@ -484,50 +463,78 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
             soldAt: new Date().toISOString(),
           });
         }
-      }, 900);
+      }, 800);
     }
   };
 
-  const activeMessages = directMessages.filter((m) => m.conversationId === activeConvId);
+  // Confirm Delete Item
+  const handleConfirmDelete = () => {
+    if (deleteConfirmItem) {
+      if (onDeleteMarketplaceItem) {
+        onDeleteMarketplaceItem(deleteConfirmItem.id);
+      }
+      setDeleteConfirmItem(null);
+      if (detailsModalItem && detailsModalItem.id === deleteConfirmItem.id) {
+        setDetailsModalItem(null);
+      }
+    }
+  };
 
-  // My pending & approved counts
-  const myPending = (pendingMarketplaceItems || []).filter(
-    (item) => item.sellerNickname === userProfile?.nickname
+  // My items
+  const myItems = approvedMarketplaceItems.filter(
+    (item) => item.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase()
   );
-  const myApproved = approvedMarketplaceItems.filter(
-    (item) => item.sellerNickname === userProfile?.nickname
+  const myPending = (pendingMarketplaceItems || []).filter(
+    (item) => item.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase()
   );
 
   return (
     <div className="max-w-2xl mx-auto pb-28 px-3 sm:px-4 pt-2 space-y-4">
-      {/* 1. GREEN HEADER (Matching User Image 1) */}
+      {/* Toast Notifications */}
+      {reportSuccessToast && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm animate-in fade-in">
+          <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+          <span>{reportSuccessToast}</span>
+        </div>
+      )}
+
+      {blockToast && (
+        <div className="p-3.5 bg-slate-900 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg animate-in fade-in">
+          <Ban className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{blockToast}</span>
+        </div>
+      )}
+
+      {/* 1. GREEN HEADER BANNER */}
       <div className="bg-[#0a6627] text-white rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="font-extrabold text-xl sm:text-2xl tracking-tight flex items-center gap-2">
+            <h1 className="font-black text-xl sm:text-2xl tracking-tight flex items-center gap-2">
               <span>FUHSI MARKETPLACE</span>
             </h1>
-            <p className="text-xs sm:text-sm text-emerald-100/90 mt-0.5 font-medium">
-              Buy, sell, and promote your items on FUHSI-Connect.
+            <p className="text-xs sm:text-sm text-emerald-100/95 mt-0.5 font-medium">
+              Buy, sell, and rent rooms directly with verified campus peers on WhatsApp.
             </p>
+            {/* Zero Commission Tag */}
+            <div className="inline-flex items-center gap-1.5 mt-2 bg-emerald-800/80 border border-emerald-500/40 text-emerald-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+              <Sparkles size={12} className="text-amber-300" />
+              <span>0% Commission • Direct WhatsApp Negotiations</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* View My Listings & Trades */}
             <button
-              onClick={() => setActiveView(activeView === 'listings' ? 'my_trades' : 'listings')}
-              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold border ${
-                activeView === 'my_trades'
+              onClick={() => setActiveView(activeView === 'listings' ? 'my_listings' : 'listings')}
+              className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold border cursor-pointer ${
+                activeView === 'my_listings'
                   ? 'bg-white text-[#0a6627] border-white shadow-sm'
                   : 'bg-emerald-800/80 hover:bg-emerald-800 text-white border-emerald-600/50'
               }`}
-              title="Toggle My Listings & Trade Desk"
+              title="Toggle My Listings"
             >
               <SlidersHorizontal size={14} />
-              <span className="hidden sm:inline">
-                {activeView === 'listings' ? 'My Trades' : 'View Hub'}
-              </span>
-              {(myPending.length > 0 || conversations.some((c) => c.unreadCount > 0)) && (
+              <span>{activeView === 'listings' ? 'My Listings' : 'All Listings'}</span>
+              {(myItems.length > 0 || myPending.length > 0) && (
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               )}
             </button>
@@ -541,7 +548,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search items..."
+            placeholder="Search textbooks, electronics, rooms for rent, services..."
             className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white text-slate-900 text-xs sm:text-sm font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm"
           />
           {searchQuery && (
@@ -555,10 +562,10 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       </div>
 
-      {/* VIEW 1: MAIN MARKETPLACE LISTINGS & CATEGORIES */}
+      {/* VIEW 1: MAIN MARKETPLACE LISTINGS */}
       {activeView === 'listings' && (
         <div className="space-y-4">
-          {/* 2. BROWSE CATEGORIES (Matching User Image 1) */}
+          {/* 2. BROWSE CATEGORIES */}
           <div>
             <h2 className="text-xs sm:text-sm font-bold text-slate-600 mb-2 px-1">
               Browse Categories
@@ -584,19 +591,19 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
             </div>
           </div>
 
-          {/* 3. LATEST LISTINGS (Matching User Image 1) */}
+          {/* 3. LATEST LISTINGS */}
           <div>
             <div className="flex items-center justify-between mb-2 px-1">
               <h2 className="text-xs sm:text-sm font-bold text-slate-600 flex items-center gap-1.5">
-                <span>Latest Listings</span>
+                <span>Latest Campus Listings</span>
                 <span className="text-[11px] font-normal text-slate-400">
-                  (Includes live items & recent 7-day deals)
+                  ({filteredListings.length} available)
                 </span>
               </h2>
               {selectedCategory !== 'All' && (
                 <button
                   onClick={() => setSelectedCategory('All')}
-                  className="text-xs text-emerald-700 font-bold hover:underline"
+                  className="text-xs text-emerald-700 font-bold hover:underline cursor-pointer"
                 >
                   Clear filter ({selectedCategory})
                 </button>
@@ -607,11 +614,12 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               {filteredListings.map((item) => {
                 const soldInfo = getSoldStatusInfo(item);
                 const isSold = soldInfo.isSold;
-                const isOwner = item.sellerNickname === userProfile?.nickname;
+                const isOwner = item.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase();
                 const mainPhoto = item.imageUrls?.[0] || 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=400';
                 const priceVal = item.adminApprovedPrice ?? item.askingPrice ?? 0;
                 const priceFormatted = formatPriceShort(priceVal);
-                const locationText = item.meetupPoint?.replace(/^📍\s*/, '') || 'Ayeka, Ondo State';
+                const isHousing = item.isHousing || item.category?.toLowerCase().includes('housing') || item.category?.toLowerCase().includes('room');
+                const locationText = item.propertyLocation || item.meetupPoint?.replace(/^📍\s*/, '') || 'Ayeka, Ondo State';
 
                 return (
                   <div
@@ -627,7 +635,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     }`}
                   >
                     {/* Left Thumbnail Photo with Sold Overlay */}
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200/80 relative">
+                    <div className="w-22 h-22 sm:w-26 sm:h-26 rounded-xl sm:rounded-2xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200/80 relative">
                       <img
                         src={mainPhoto}
                         alt={item.title}
@@ -636,6 +644,12 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                         }`}
                         loading="lazy"
                       />
+                      {isHousing && (
+                        <div className="absolute top-1 left-1 bg-blue-600/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                          <Home size={10} />
+                          <span>HOUSING</span>
+                        </div>
+                      )}
                       {isSold && (
                         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-1 text-center">
                           <span className="text-[10px] font-black text-white px-2 py-0.5 rounded-full bg-rose-600 shadow-sm uppercase tracking-wider">
@@ -657,13 +671,23 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                             <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-[#0a6627] transition-colors">
                               {item.title}
                             </h3>
-                            {/* Sold Tag if Sold */}
-                            {isSold && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md mt-0.5">
-                                <span>🏷️</span>
-                                <span>{soldInfo.soldBadgeText}</span>
+                            {/* Badges */}
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span className="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                                {item.conditionTag || item.category}
                               </span>
-                            )}
+                              {item.rentDuration && (
+                                <span className="inline-block text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/60">
+                                  {item.rentDuration}
+                                </span>
+                              )}
+                              {isSold && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md">
+                                  <span>🏷️</span>
+                                  <span>{soldInfo.soldBadgeText}</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="text-right shrink-0">
@@ -672,20 +696,35 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                             }`}>
                               {priceFormatted}
                             </span>
-                            {isSold && (
-                              <span className="block text-[9px] font-bold text-rose-600">
-                                DEAL CLOSED
+                            {isHousing && item.rentDuration && (
+                              <span className="block text-[9px] font-bold text-slate-400">
+                                {item.rentDuration.split(' ')[0]}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Author Nickname & Location Row */}
-                        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-600 font-medium mt-1 flex-wrap">
-                          <span className="flex items-center gap-1 text-slate-800 font-semibold">
+                        {/* Author Nickname & Location */}
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onAuthorClick) {
+                                onAuthorClick({
+                                  id: `seller_${item.id}`,
+                                  authorNickname: item.sellerNickname,
+                                  timeAgo: 'Marketplace',
+                                  categoryTag: 'Trade',
+                                  text: `Seller of ${item.title}`,
+                                });
+                              }
+                            }}
+                            className="flex items-center gap-1 text-slate-900 font-bold hover:text-emerald-700 transition-colors"
+                          >
                             <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <span>{item.sellerNickname || 'FUHSI Student'}</span>
-                          </span>
+                          </button>
                           <span className="text-slate-300">•</span>
                           <span className="flex items-center gap-1 text-slate-500 line-clamp-1">
                             <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
@@ -693,13 +732,13 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                           </span>
                         </div>
 
-                        {/* Description snippet / Specs */}
+                        {/* Description snippet */}
                         <p className="text-[11px] sm:text-xs text-slate-600 mt-1 line-clamp-1">
                           {item.description || `${item.conditionTag} • ${item.category}`}
                         </p>
                       </div>
 
-                      {/* Action buttons (View Details & Interested / Mark Sold) */}
+                      {/* Action buttons (View Details & Direct WhatsApp / Mark Sold) */}
                       <div
                         className="flex items-center gap-2 mt-2.5 pt-1 flex-wrap"
                         onClick={(e) => e.stopPropagation()}
@@ -709,7 +748,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                             setDetailsModalItem(item);
                             setActivePhotoIdx(0);
                           }}
-                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-colors cursor-pointer"
                         >
                           View Details
                         </button>
@@ -718,25 +757,35 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                           <>
                             {!isOwner ? (
                               <button
-                                onClick={() => setBuyModalItem(item)}
-                                className="px-3 py-1 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                                onClick={() => handleContactOnWhatsApp(item)}
+                                className="px-3.5 py-1.5 bg-[#25D366] hover:bg-[#1ebd5a] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                title="Open Direct WhatsApp Chat"
                               >
-                                <ShoppingBag size={13} />
-                                <span>Interested</span>
+                                <MessageCircle size={14} className="fill-white/20" />
+                                <span>💬 Contact on WhatsApp</span>
                               </button>
                             ) : (
-                              <button
-                                onClick={() => setSoldModalItem(item)}
-                                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-lg border border-rose-200 transition-colors cursor-pointer"
-                              >
-                                Mark Sold
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => setSoldModalItem(item)}
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors cursor-pointer"
+                                >
+                                  Mark Sold
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmItem(item)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Delete Listing"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             )}
                           </>
                         ) : (
                           <div className="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
                             <CheckCircle2 size={13} />
-                            <span>{soldInfo.soldBadgeText} (Missed Deal)</span>
+                            <span>{soldInfo.soldBadgeText}</span>
                           </div>
                         )}
                       </div>
@@ -747,16 +796,16 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
               {filteredListings.length > 0 ? (
                 <div className="text-center py-6 text-xs text-slate-400 font-medium">
-                  No more listings
+                  End of listings
                 </div>
               ) : (
                 <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 p-6 space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-xl">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto text-xl">
                     🛍️
                   </div>
                   <p className="font-bold text-slate-700 text-sm">No items found matching your filter</p>
                   <p className="text-xs text-slate-500">
-                    {searchQuery ? `No results for "${searchQuery}"` : 'Be the first student to post an item in this category!'}
+                    {searchQuery ? `No results for "${searchQuery}"` : 'Be the first student to post an item or house listing in this category!'}
                   </p>
                   <button
                     onClick={() => {
@@ -768,7 +817,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     }}
                     className="px-4 py-2 bg-[#0a6627] hover:bg-[#08521f] text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Plus size={14} /> Post an Item Now
+                    <Plus size={14} /> Post an Item or Room
                   </button>
                 </div>
               )}
@@ -777,136 +826,92 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       )}
 
-      {/* VIEW 2: MY SUBMITTED LISTINGS & ADMIN TRADE DESK */}
-      {activeView === 'my_trades' && (
+      {/* VIEW 2: MY LISTINGS VIEW */}
+      {activeView === 'my_listings' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
             <div>
-              <h2 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+              <h2 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
                 <Tag className="w-4 h-4 text-[#0a6627]" />
-                <span>My Submitted Listings & Trade Desk</span>
+                <span>My Active Listings ({myItems.length})</span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Track your active item sales, admin approvals, and trade desk chats.
+                Manage your posted items, mark them as sold, or remove old listings.
               </p>
             </div>
             <button
               onClick={() => setActiveView('listings')}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
             >
-              Back to Hub
+              Back to Browse
             </button>
           </div>
 
-          {/* User's Items List */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500">
-              My Items ({myPending.length + myApproved.length})
-            </h3>
-
-            {myPending.length === 0 && myApproved.length === 0 ? (
-              <div className="p-4 text-center text-slate-500 bg-slate-50 rounded-xl text-xs">
-                You haven't posted any marketplace items yet. Click the floating "+" button to list your first item!
+            {myItems.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl text-xs space-y-2">
+                <p className="font-bold text-slate-700 text-sm">You haven't posted any listings yet.</p>
+                <p className="text-slate-500 text-xs">
+                  Sell your textbooks, gadgets, room slots, or skills directly to fellow FUHSI students with 0% commission!
+                </p>
+                <button
+                  onClick={() => {
+                    if (isVerifiedUser) {
+                      setShowSellModal(true);
+                    } else {
+                      setShowMarketplaceLockModal(true);
+                    }
+                  }}
+                  className="mt-2 px-4 py-2 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus size={14} /> Post an Item Now
+                </button>
               </div>
             ) : (
-              <div className="space-y-2.5">
-                {myPending.map((item) => (
-                  <div key={item.id} className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-xs flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {item.imageUrls?.[0] && (
-                        <img src={item.imageUrls[0]} alt={item.title} className="w-12 h-12 rounded-lg object-cover border border-amber-300 shrink-0" />
-                      )}
-                      <div>
-                        <h4 className="font-bold text-slate-900">{item.title}</h4>
-                        <p className="text-[11px] text-slate-600">
-                          ₦{item.askingPrice.toLocaleString()} • {item.category}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-amber-200 text-amber-950 font-bold text-[10px] shrink-0 flex items-center gap-1">
-                      <Clock size={12} /> Pending Review
-                    </span>
-                  </div>
-                ))}
-
-                {myApproved.map((item) => {
+              <div className="space-y-3">
+                {myItems.map((item) => {
                   const soldInfo = getSoldStatusInfo(item);
                   return (
-                    <div key={item.id} className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div key={item.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3 min-w-0">
                         {item.imageUrls?.[0] && (
-                          <img src={item.imageUrls[0]} alt={item.title} className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shrink-0" />
+                          <img src={item.imageUrls[0]} alt={item.title} className="w-14 h-14 rounded-xl object-cover border border-slate-300 shrink-0" />
                         )}
-                        <div>
-                          <h4 className="font-bold text-slate-900">{item.title}</h4>
-                          <p className="text-[11px] text-slate-600">
-                            ₦{(item.adminApprovedPrice ?? item.askingPrice).toLocaleString()} • {item.category}
+                        <div className="min-w-0">
+                          <h4 className="font-extrabold text-slate-900 text-sm line-clamp-1">{item.title}</h4>
+                          <p className="text-xs text-slate-600 font-semibold">
+                            ₦{item.askingPrice.toLocaleString()} • {item.category}
                           </p>
+                          <span className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-md mt-1 ${
+                            soldInfo.isSold ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-900'
+                          }`}>
+                            {soldInfo.isSold ? `✓ ${soldInfo.soldBadgeText}` : '● LIVE & ACTIVE'}
+                          </span>
                         </div>
                       </div>
+
                       <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] shrink-0 ${
-                          soldInfo.isSold ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-emerald-200 text-emerald-950'
-                        }`}>
-                          {soldInfo.isSold ? `✓ ${soldInfo.soldBadgeText}` : 'LIVE'}
-                        </span>
                         {!soldInfo.isSold && (
                           <button
                             onClick={() => setSoldModalItem(item)}
-                            className="px-2.5 py-1 bg-rose-600 text-white rounded-lg font-bold text-[10px] hover:bg-rose-700 cursor-pointer"
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-xs cursor-pointer"
                           >
                             Mark Sold
                           </button>
                         )}
+                        <button
+                          onClick={() => setDeleteConfirmItem(item)}
+                          className="px-2.5 py-1.5 bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                          title="Delete Listing"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
-
-          {/* Trade Desk Chat Area */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              Trade Desk
-            </h3>
-
-            <div className="border border-slate-100 rounded-xl bg-slate-50/50 p-3 max-h-72 overflow-y-auto space-y-2.5 text-xs">
-              {activeMessages.map((msg) => {
-                const isMe = msg.senderNickname === userProfile?.nickname;
-                return (
-                  <div
-                    key={msg.id}
-                    className={`p-3 rounded-2xl max-w-[85%] space-y-1 ${
-                      isMe
-                        ? 'bg-[#0a6627] text-white ml-auto rounded-br-xs'
-                        : 'bg-white text-slate-800 mr-auto rounded-bl-xs border border-slate-200 shadow-xs'
-                    }`}
-                  >
-                    <p className="whitespace-pre-line font-medium leading-relaxed">{msg.text}</p>
-                    <span className="text-[9px] block text-right opacity-70">{formatMessageTime(msg.timestamp)}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <form onSubmit={handleSendDirectMessage} className="flex gap-2">
-              <input
-                type="text"
-                value={chatInputText}
-                onChange={(e) => setChatInputText(e.target.value)}
-                placeholder="Reply to Trade Desk..."
-                className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2.5 rounded-xl bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs transition-colors cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
           </div>
         </div>
       )}
@@ -921,36 +926,43 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
           }
         }}
         className="fixed bottom-20 sm:bottom-8 right-5 sm:right-8 z-40 bg-[#0a6627] hover:bg-[#08521f] text-white rounded-full p-3.5 sm:px-5 sm:py-3.5 shadow-2xl shadow-emerald-950/40 flex items-center gap-2 border-2 border-white/90 active:scale-95 transition-all cursor-pointer group"
-        title="Post Item for Sale"
+        title="Post Item or Housing for Rent"
       >
         <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
         <span className="font-extrabold text-xs sm:text-sm tracking-wide hidden sm:inline">
-          Post Item
+          Post Listing
         </span>
       </button>
 
-      {/* 5. "VIEW DETAILS" MODAL (Matching User Image 2) */}
+      {/* 5. "VIEW DETAILS" MODAL WITH DIRECT WHATSAPP BUTTON */}
       {detailsModalItem && (() => {
         const soldInfo = getSoldStatusInfo(detailsModalItem);
         const isSold = soldInfo.isSold;
         const itemPrice = detailsModalItem.adminApprovedPrice ?? detailsModalItem.askingPrice ?? 0;
-        const fee = Math.round(itemPrice * 0.1);
-        const sellerNet = itemPrice - fee;
-        const isOwner = detailsModalItem.sellerNickname === userProfile?.nickname;
+        const isOwner = detailsModalItem.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase();
+        const isHousing = detailsModalItem.isHousing || detailsModalItem.category?.toLowerCase().includes('housing') || detailsModalItem.category?.toLowerCase().includes('room');
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
             <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-auto relative max-h-[92vh] overflow-y-auto no-scrollbar">
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h2 className="font-extrabold text-slate-800 text-sm tracking-wider uppercase flex items-center gap-2">
-                  <span>VIEW DETAILS</span>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-black text-slate-800 text-sm tracking-wider uppercase">
+                    VIEW DETAILS
+                  </h2>
+                  {isHousing && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-extrabold text-[10px] flex items-center gap-1">
+                      <Home size={11} /> Housing & Rent
+                    </span>
+                  )}
                   {isSold && (
                     <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px]">
                       {soldInfo.soldBadgeText}
                     </span>
                   )}
-                </h2>
+                </div>
+
                 <button
                   onClick={() => setDetailsModalItem(null)}
                   className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
@@ -960,7 +972,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                 </button>
               </div>
 
-              {/* Large Photo Preview with Rounded Corners (Matching Picture 2) */}
+              {/* Large Photo Preview (Picture Only, No Video) */}
               <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 w-full h-64 sm:h-72">
                 <img
                   src={
@@ -980,13 +992,13 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                       ✓ {soldInfo.soldBadgeText.toUpperCase()}
                     </span>
                     <p className="text-rose-100 text-[11px] font-bold mt-1.5 max-w-xs">
-                      ⚡ Deal Completed on Campus! (Archiving in {Math.max(1, 7 - soldInfo.daysAgo)} days)
+                      Deal Completed on Campus.
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Photo Thumbnails selector (if multiple photos) */}
+              {/* Photo Thumbnails selector */}
               {detailsModalItem.imageUrls && detailsModalItem.imageUrls.length > 1 && (
                 <div className="flex gap-2 justify-center overflow-x-auto py-1">
                   {detailsModalItem.imageUrls.map((url, idx) => (
@@ -1005,115 +1017,156 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                 </div>
               )}
 
-              {/* Title & Price Row (Matching Picture 2) */}
+              {/* Title & Price Row */}
               <div className="flex items-start justify-between gap-3 pt-1">
-                <h3 className="font-black text-slate-900 text-lg sm:text-xl leading-tight">
-                  {detailsModalItem.title}
-                </h3>
-                <span className={`font-black text-lg sm:text-2xl shrink-0 ${
-                  isSold ? 'text-slate-400 line-through' : 'text-[#0a6627]'
-                }`}>
-                  {formatPriceShort(itemPrice)}
-                </span>
+                <div className="min-w-0">
+                  <h3 className="font-black text-slate-900 text-lg sm:text-xl leading-tight">
+                    {detailsModalItem.title}
+                  </h3>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      {detailsModalItem.conditionTag || detailsModalItem.category}
+                    </span>
+                    {detailsModalItem.roomType && (
+                      <span className="text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        {detailsModalItem.roomType}
+                      </span>
+                    )}
+                    {detailsModalItem.rentDuration && (
+                      <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                        {detailsModalItem.rentDuration}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className={`font-black text-xl sm:text-2xl ${
+                    isSold ? 'text-slate-400 line-through' : 'text-[#0a6627]'
+                  }`}>
+                    ₦{itemPrice.toLocaleString()}
+                  </span>
+                  {isHousing && detailsModalItem.rentDuration && (
+                    <span className="block text-[10px] font-bold text-slate-500">
+                      {detailsModalItem.rentDuration}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Sub-row: 👤 Nickname, 📍 Location, 👁️ Views (Matching Picture 2) */}
+              {/* Sub-row: 👤 Nickname, 📍 Location, 👁️ Views */}
               <div className="flex items-center gap-3 text-xs text-slate-600 font-medium flex-wrap">
-                <span className="flex items-center gap-1 text-slate-900 font-bold">
+                <button
+                  onClick={() => {
+                    if (onAuthorClick) {
+                      onAuthorClick({
+                        id: `seller_${detailsModalItem.id}`,
+                        authorNickname: detailsModalItem.sellerNickname,
+                        timeAgo: 'Marketplace',
+                        categoryTag: 'Trade',
+                        text: `Seller of ${detailsModalItem.title}`,
+                      });
+                      setDetailsModalItem(null);
+                    }
+                  }}
+                  className="flex items-center gap-1 text-slate-900 font-bold hover:text-emerald-700 transition-colors"
+                >
                   <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span>{detailsModalItem.sellerNickname || 'FUHSI Student'}</span>
-                </span>
+                </button>
 
                 <span className="flex items-center gap-1 text-slate-600">
                   <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                  <span>{detailsModalItem.meetupPoint?.replace(/^📍\s*/, '') || 'Ayeka, Ondo State'}</span>
+                  <span>
+                    {detailsModalItem.propertyLocation || 
+                     detailsModalItem.meetupPoint?.replace(/^📍\s*/, '') || 
+                     'FUHSI Campus / Ayeka'}
+                  </span>
                 </span>
 
                 <span className="flex items-center gap-1 text-slate-500 ml-auto">
                   <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{detailsModalItem.viewCount || 24}</span>
+                  <span>{detailsModalItem.viewCount || 28}</span>
                 </span>
               </div>
 
-              {/* Description Section (Matching Picture 2) */}
+              {/* Description Section */}
               <div className="space-y-1 pt-1 text-xs">
                 <p className="font-bold text-slate-900 text-xs">
-                  Description:
+                  Description & Details:
                 </p>
-                <p className="text-slate-700 leading-relaxed font-normal whitespace-pre-wrap">
-                  {detailsModalItem.description || 'No additional description provided for this listing.'}
+                <p className="text-slate-700 leading-relaxed font-normal whitespace-pre-wrap bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  {detailsModalItem.description || 'No additional description provided.'}
                 </p>
               </div>
 
-              {/* Price & Protection Note */}
-              {!isSold && (
-                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs flex justify-between items-center text-slate-700">
-                  <span>Price: <strong className="text-slate-900 font-bold">₦{itemPrice.toLocaleString()}</strong></span>
-                  <span className="text-[11px] text-slate-500">Seller receives: <strong className="text-emerald-800 font-bold">₦{sellerNet.toLocaleString()}</strong> (10% platform fee)</span>
-                </div>
-              )}
+              {/* Zero Commission & Privacy Shield Notice */}
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3 text-[11px] space-y-1 text-emerald-950">
+                <p className="font-extrabold flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-amber-600" />
+                  <span>Direct WhatsApp Trade (0% Commission)</span>
+                </p>
+                <p className="text-emerald-900/90 leading-relaxed font-medium">
+                  • Deal directly with the seller on WhatsApp without middleman fees.<br />
+                  • Seller's phone number is securely protected from web crawlers.
+                </p>
+              </div>
 
-              {/* Sold Record Notification if already purchased */}
-              {isSold && (
-                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-xs space-y-1">
-                  <p className="font-bold text-rose-900 flex items-center gap-1.5">
-                    <span>⚡ Completed Deal Record</span>
-                    <span className="text-rose-700 font-normal">({soldInfo.soldBadgeText})</span>
-                  </p>
-                  <p className="text-rose-800 text-[11px] leading-relaxed">
-                    This item was successfully sold on FUHSI-Connect. It remains as a campus price reference for 7 days before being automatically purged.
-                  </p>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-3 border-t border-slate-100">
+              {/* Primary Action Buttons */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
                 {!isSold ? (
                   <>
                     {!isOwner ? (
                       <div className="space-y-2">
+                        {/* 💬 Contact Seller on WhatsApp */}
                         <button
-                          onClick={() => {
-                            setBuyModalItem(detailsModalItem);
-                          }}
-                          className="w-full py-3 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                          onClick={() => handleContactOnWhatsApp(detailsModalItem)}
+                          className="w-full py-3.5 bg-[#25D366] hover:bg-[#1ebd5a] text-white font-extrabold text-xs sm:text-sm rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
                         >
-                          <ShoppingBag className="w-4 h-4" />
-                          <span>Interested</span>
+                          <MessageCircle className="w-5 h-5 fill-white/20" />
+                          <span>💬 Contact Seller on WhatsApp</span>
                         </button>
 
-                        <button
-                          onClick={() => {
-                            if (onAuthorClick) {
-                              onAuthorClick({
-                                id: `seller_${detailsModalItem.id}`,
-                                authorNickname: detailsModalItem.sellerNickname,
-                                timeAgo: 'Marketplace',
-                                categoryTag: 'Trade',
-                                text: `Seller of ${detailsModalItem.title}`,
-                                likesCount: 0,
-                                commentsCount: 0,
-                                createdAt: '',
-                              });
-                              setDetailsModalItem(null);
-                            }
-                          }}
-                          className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
-                        >
-                          <User size={13} className="text-slate-500" />
-                          <span>View Seller Profile</span>
-                        </button>
+                        {/* Safety Actions: Report & Block */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => {
+                              setReportingItem(detailsModalItem);
+                            }}
+                            className="flex-1 py-2 bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 font-semibold text-[11px] rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border border-slate-200"
+                          >
+                            <Flag size={13} className="text-amber-600" />
+                            <span>Report Listing</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setBlockingSeller(detailsModalItem.sellerNickname);
+                            }}
+                            className="flex-1 py-2 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-800 font-semibold text-[11px] rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border border-slate-200"
+                          >
+                            <Ban size={13} className="text-rose-600" />
+                            <span>Block Seller</span>
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          setSoldModalItem(detailsModalItem);
-                        }}
-                        className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Mark as Sold</span>
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSoldModalItem(detailsModalItem)}
+                          className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>Mark as Sold</span>
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmItem(detailsModalItem)}
+                          className="px-4 py-3 bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                          title="Delete Listing"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     )}
                   </>
                 ) : (
@@ -1124,12 +1177,6 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     >
                       <span>✓ Item Sold ({soldInfo.soldBadgeText})</span>
                     </button>
-
-                    {isOwner && (
-                      <p className="text-[11px] text-center text-slate-500">
-                        You marked this item as sold. It will auto-delete in {Math.max(1, 7 - soldInfo.daysAgo)} days.
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
@@ -1138,7 +1185,371 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         );
       })()}
 
-      {/* MODAL: MARK AS SOLD CONFIRMATION (SIMPLIFIED) */}
+      {/* 6. MODAL: POST ITEM / HOUSING FORM */}
+      {showSellModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-8 max-h-[92vh] overflow-y-auto no-scrollbar">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Create Marketplace Listing</h3>
+                <p className="text-[11px] text-emerald-700 font-bold">
+                  ⚡ Direct WhatsApp Trade • 0% Commission
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowSellModal(false)} 
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {sellSuccessMsg ? (
+              <div className="p-6 bg-emerald-50 text-emerald-900 rounded-2xl text-center space-y-2">
+                <CheckCircle2 size={32} className="text-emerald-600 mx-auto" />
+                <h4 className="font-extrabold text-sm">Listing Published!</h4>
+                <p className="text-xs text-emerald-700">
+                  Your listing is now live on the FUHSI Marketplace. Interested buyers will contact you directly on WhatsApp.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSellSubmit} className="space-y-3.5">
+                {formError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isHousingCategory ? 'Property / Room Title' : 'Item / Product Title'}
+                  </label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={isHousingCategory ? "e.g. Spacious Self-Contain Room at Owuoluwa" : "e.g. TECNO Spark 8 (64GB) / Macleod Clinical Examination"}
+                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      {CATEGORY_OPTIONS.filter((c) => c.id !== 'All').map((c) => (
+                        <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isHousingCategory ? 'Rent Amount (₦)' : 'Asking Price (₦)'}
+                    </label>
+                    <input
+                      type="number"
+                      value={askingPrice}
+                      onChange={(e) => setAskingPrice(Number(e.target.value) || '')}
+                      placeholder={isHousingCategory ? "e.g. 120000" : "e.g. 15000"}
+                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Housing Specific Inputs */}
+                {isHousingCategory ? (
+                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-2xl space-y-2.5">
+                    <p className="text-[11px] font-extrabold text-blue-900 flex items-center gap-1.5">
+                      <Home size={13} className="text-blue-700" />
+                      <span>Property & Accommodation Details</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Room / Property Type</label>
+                        <select
+                          value={roomType}
+                          onChange={(e) => setRoomType(e.target.value)}
+                          className="w-full text-xs rounded-xl border border-slate-200 p-2 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {HOUSING_ROOM_TYPES.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Rent Duration</label>
+                        <select
+                          value={rentDuration}
+                          onChange={(e) => setRentDuration(e.target.value)}
+                          className="w-full text-xs rounded-xl border border-slate-200 p-2 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {RENT_DURATIONS.map((d) => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Property Location / Area</label>
+                      <input
+                        type="text"
+                        value={propertyLocation}
+                        onChange={(e) => setPropertyLocation(e.target.value)}
+                        placeholder="e.g. Owuoluwa Junction, Ayeka (Near Just-Love)"
+                        className="w-full text-xs rounded-xl border border-slate-200 p-2 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Condition Tag</label>
+                      <select
+                        value={conditionTag}
+                        onChange={(e) => setConditionTag(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="New">Brand New</option>
+                        <option value="Newly used">Newly Used</option>
+                        <option value="Fairly Used">Fairly Used</option>
+                        <option value="Refurbished / Working">Refurbished / Working</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Campus Meetup Spot</label>
+                      <select
+                        value={meetupPoint}
+                        onChange={(e) => setMeetupPoint(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {MEETUP_LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* WhatsApp Contact Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Seller's WhatsApp Contact Number</span>
+                    <span className="text-[10px] text-emerald-700 font-semibold">🔒 Protected from web scraping</span>
+                  </label>
+                  <div className="relative">
+                    <MessageCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
+                    <input
+                      type="tel"
+                      value={sellerPhone}
+                      onChange={(e) => setSellerPhone(e.target.value)}
+                      placeholder="e.g. 08012345678 or +2348012345678"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-slate-200 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      required
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Buyers will click the <strong>"💬 Contact on WhatsApp"</strong> button to message you directly.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isHousingCategory ? 'Property Features & Amenities' : 'Description & Specs'}
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={
+                      isHousingCategory 
+                        ? "Describe room condition, running water, electricity, security, tile floor, fenced compound..."
+                        : "Describe item condition, accessories included, reason for selling..."
+                    }
+                    rows={3}
+                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                    required
+                  />
+                </div>
+
+                {/* Pictures Upload Section (Picture only, not video) */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <Camera size={15} className="text-emerald-600" />
+                      <span>{isHousingCategory ? 'Property Pictures (1–6 Photos)' : 'Item Pictures (1–6 Photos)'}</span>
+                    </label>
+                    <span className="text-[10px] font-extrabold text-slate-500">
+                      {uploadedPhotos.length} / 6 selected
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic">
+                    ⚠️ Picture uploads only. Video uploads are not supported.
+                  </p>
+
+                  {uploadedPhotos.length < 6 && (
+                    <label className="flex items-center justify-center gap-2 p-3 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-100 transition-colors">
+                      <Upload size={16} className="text-emerald-700" />
+                      <span className="text-xs font-bold text-emerald-800">
+                        Select Photos from Device
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handlePhotosFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+
+                  {uploadedPhotos.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2">
+                      {uploadedPhotos.map((photo, idx) => (
+                        <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 aspect-square group">
+                          <img src={photo} alt={`Item ${idx + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveUploadedPhoto(idx)}
+                            className="absolute top-1 right-1 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center text-xs font-bold hover:bg-rose-700 cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-2xl bg-[#0a6627] hover:bg-[#08521f] text-white font-extrabold text-xs sm:text-sm transition-colors cursor-pointer shadow-md active:scale-95"
+                >
+                  Publish Listing to Marketplace
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL: REPORT LISTING OR SELLER */}
+      {reportingItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                  <Flag size={16} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Report Listing / Seller</h3>
+                  <p className="text-[10px] text-slate-500 font-medium">{reportingItem.title}</p>
+                </div>
+              </div>
+              <button onClick={() => setReportingItem(null)} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+            </div>
+
+            <form onSubmit={handleSubmitReport} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Reason for Report</label>
+                <div className="space-y-1.5">
+                  {MARKETPLACE_REPORT_REASONS.map((reason) => (
+                    <label 
+                      key={reason} 
+                      className={`flex items-center gap-2.5 p-2 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                        reportReason === reason 
+                          ? 'border-rose-500 bg-rose-50 text-rose-950 font-bold' 
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="report_reason"
+                        value={reason}
+                        checked={reportReason === reason}
+                        onChange={(e) => setReportReason(e.target.value)}
+                        className="text-rose-600 focus:ring-rose-500"
+                      />
+                      <span>{reason}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Additional Details (Optional)</label>
+                <textarea
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  placeholder="Provide context on what happened or why this listing/seller is problematic..."
+                  rows={3}
+                  className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReportingItem(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+                >
+                  Submit Report
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. MODAL: BLOCK SELLER CONFIRMATION */}
+      {blockingSeller && (
+        <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
+              <Ban size={24} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-900 text-sm">Block @{blockingSeller.replace(/^@/, '')}?</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                You will no longer see items, housing listings, or posts from this seller in your feed or marketplace.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setBlockingSeller(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmBlockSeller}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+              >
+                Yes, Block Seller
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. MODAL: MARK AS SOLD CONFIRMATION */}
       {soldModalItem && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4">
@@ -1151,7 +1562,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               <div className="p-4 bg-emerald-50 text-emerald-900 rounded-2xl text-center space-y-1">
                 <CheckCircle2 size={24} className="text-emerald-600 mx-auto" />
                 <p className="font-black text-sm">Item Marked as Sold!</p>
-                <p className="text-xs text-emerald-700">Tagged as "Sold today". Will automatically purge after 7 days.</p>
+                <p className="text-xs text-emerald-700">Tagged as "Sold today".</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1181,249 +1592,53 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL: POST ITEM FORM */}
-      {showSellModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-100 space-y-4 my-8">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Post Item for Sale on Campus</h3>
-                <p className="text-[11px] text-emerald-700 font-bold">📷 Clear device photos & description required</p>
-              </div>
-              <button onClick={() => setShowSellModal(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+      {/* 10. MODAL: DELETE CONFIRMATION */}
+      {deleteConfirmItem && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
+              <Trash2 size={22} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-900 text-sm">Delete Listing?</h3>
+              <p className="text-xs text-slate-600">
+                Are you sure you want to remove <strong className="text-slate-900">"{deleteConfirmItem.title}"</strong> from the marketplace?
+              </p>
             </div>
 
-            {sellSuccessMsg ? (
-              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold text-center">
-                ✓ Item submitted successfully to FUHSI Marketplace!
-              </div>
-            ) : (
-              <form onSubmit={handleSellSubmit} className="space-y-3">
-                {formError && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                    <span>{formError}</span>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Item Title</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. TECNO Spark 8"
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      {CATEGORY_OPTIONS.filter((c) => c.id !== 'All').map((c) => (
-                        <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Asking Price (₦)</label>
-                    <input
-                      type="number"
-                      value={askingPrice}
-                      onChange={(e) => setAskingPrice(Number(e.target.value) || '')}
-                      placeholder="e.g. 10000"
-                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      required
-                    />
-                    {priceVal > 0 && (
-                      <p className="text-[11px] text-slate-500 mt-1 font-medium">
-                        Note: 10% (₦{adminFee.toLocaleString()}) will be for platform commission. You will receive ₦{netPayout.toLocaleString()}.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Condition Tag</label>
-                    <select
-                      value={conditionTag}
-                      onChange={(e) => setConditionTag(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="New">New</option>
-                      <option value="Newly used">Newly used</option>
-                      <option value="Fairly Used">Fairly Used</option>
-                      <option value="Refurbished / Working">Refurbished / Working</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Safe Meet-up Point</label>
-                    <select
-                      value={meetupPoint}
-                      onChange={(e) => setMeetupPoint(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      {meetupLocations.map((loc) => (
-                        <option key={loc} value={loc}>{loc}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Description & Specs</label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe item condition, memory, accessories, inclusions..."
-                    rows={3}
-                    className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
-
-                {/* Photos Upload Section */}
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                      <Camera size={15} className="text-emerald-600" />
-                      <span>Item Photos (1–6 Photos)</span>
-                    </label>
-                    <span className="text-[10px] font-extrabold text-slate-500">
-                      {uploadedPhotos.length} / 6 selected
-                    </span>
-                  </div>
-
-                  {uploadedPhotos.length < 6 && (
-                    <label className="flex items-center justify-center gap-2 p-3 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-100 transition-colors">
-                      <Upload size={16} className="text-emerald-700" />
-                      <span className="text-xs font-bold text-emerald-800">
-                        Select Item Photos from Device
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handlePhotosFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-
-                  {uploadedPhotos.length > 0 && (
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2">
-                      {uploadedPhotos.map((photo, idx) => (
-                        <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 aspect-square group">
-                          <img src={photo} alt={`Item ${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveUploadedPhoto(idx)}
-                            className="absolute top-1 right-1 w-5 h-5 bg-rose-600 text-white rounded-full flex items-center justify-center text-xs font-bold hover:bg-rose-700"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl bg-[#0a6627] hover:bg-[#08521f] text-white font-extrabold text-xs transition-colors cursor-pointer shadow-md"
-                >
-                  Submit Item Listing
-                </button>
-              </form>
-            )}
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setDeleteConfirmItem(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: IN-APP BUY INTENT PLEDGE & ESCROW */}
-      {buyModalItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
-                <ShieldCheck size={16} className="text-emerald-600" />
-                <span>FUHSI Safe Escrow Trade Request</span>
-              </h3>
-              <button onClick={() => setBuyModalItem(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-            </div>
-
-            {buyIntentSuccess ? (
-              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold text-center">
-                ✓ Trade request opened with Admin Escrow Desk!
-              </div>
-            ) : (
-              <div className="space-y-3 text-xs">
-                <p className="text-slate-600 leading-relaxed">
-                  You are opening a protected escrow purchase for <strong className="text-slate-900">{buyModalItem.title}</strong> listed by <strong className="text-slate-900">{buyModalItem.sellerNickname}</strong> at <strong className="text-[#0a6627]">₦{(buyModalItem.adminApprovedPrice ?? buyModalItem.askingPrice).toLocaleString()}</strong>.
-                </p>
-
-                <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 space-y-1 text-slate-700">
-                  <p className="font-bold text-emerald-950">🛡️ Campus Safety Guarantees:</p>
-                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-emerald-900">
-                    <li>Designated campus meetup: <strong>{buyModalItem.meetupPoint?.startsWith('📍') ? buyModalItem.meetupPoint : `📍 ${buyModalItem.meetupPoint}`}</strong></li>
-                    <li>Inspect the item in broad daylight before payout release</li>
-                    <li>10% platform protection covers fraud prevention & disputes</li>
-                  </ul>
-                </div>
-
-                <label className="flex items-start gap-2 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={pledgeChecked}
-                    onChange={(e) => setPledgeChecked(e.target.checked)}
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <span className="text-[11px] text-slate-600 font-medium">
-                    I agree to meet safely on campus, inspect the item thoroughly, and abide by FUHSI trade guidelines.
-                  </span>
-                </label>
-
-                <button
-                  disabled={!pledgeChecked}
-                  onClick={handleConfirmPledgeAndOpenDM}
-                  className={`w-full py-3 rounded-xl font-bold text-xs transition-colors shadow-md ${
-                    pledgeChecked 
-                      ? 'bg-[#0a6627] hover:bg-[#08521f] text-white cursor-pointer'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  }`}
-                >
-                  Confirm Escrow Purchase Ticket
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: VERIFICATION LOCK */}
+      {/* 11. MODAL: VERIFICATION LOCK */}
       {showMarketplaceLockModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-3 text-center">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-3 text-center">
             <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
               <Lock size={22} />
             </div>
             <h3 className="font-extrabold text-slate-900 text-base">Verification Required</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              To keep the marketplace secure and scam-free, only verified FUHSI students can post items for sale.
+              To keep the marketplace secure and scam-free, only verified FUHSI students can post items for sale or rooms for rent.
             </p>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setShowMarketplaceLockModal(false)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
@@ -1432,7 +1647,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   setShowMarketplaceLockModal(false);
                   setShowVerificationModal(true);
                 }}
-                className="flex-1 py-2.5 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs rounded-xl"
+                className="flex-1 py-2.5 bg-[#0a6627] hover:bg-[#08521f] text-white font-bold text-xs rounded-xl cursor-pointer"
               >
                 Apply
               </button>
