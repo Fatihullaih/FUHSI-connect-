@@ -39,6 +39,8 @@ export interface UserProfile {
   privacyMode?: PrivacyMode;
   password?: string;
   savedPassword?: string;
+  lastActiveAt?: string;
+  isOnline?: boolean;
 }
 
 export interface Comment {

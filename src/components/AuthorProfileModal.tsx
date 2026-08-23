@@ -13,7 +13,6 @@ import {
   UserCheck, 
   FileText, 
   MessageSquare,
-  MessageCircle,
   Lock,
   ArrowRight
 } from 'lucide-react';
@@ -197,58 +196,61 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
             <X size={18} />
           </button>
 
-          <div className="flex items-center gap-4">
-            {/* Clickable Profile Picture for Full-size View & Download */}
-            <div 
-              className="relative shrink-0 cursor-pointer"
-              onClick={() => setShowPictureModal(true)}
-              title="Click to view full size profile picture"
-            >
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/10 backdrop-blur-xs flex items-center justify-center border-2 border-teal-300/80 shadow-md overflow-hidden hover:scale-105 transition-transform">
-                <AvatarIcon
-                  avatarKey={authorAvatarKey}
-                  avatarUrl={authorAvatarUrl}
-                  sizeClassName="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg sm:text-xl font-black text-white truncate">{authorNickname}</h2>
-                <VerificationBadge 
-                  isVerified={isVerifiedAuthor} 
-                  badgeType={authorBadgeType}
-                  title={authorBadgeTitle}
-                  showTitle 
-                />
-              </div>
-
-              <p className="text-xs text-teal-200 font-bold mt-0.5">{username}</p>
-
-              <p className="text-xs text-teal-100 font-medium mt-1 flex items-center gap-1.5">
-                <Calendar size={13} className="text-teal-300 shrink-0" />
-                <span>Joined {authorJoinedDate}</span>
-              </p>
-
-              {/* 💬 Start / Open Chat Button */}
-              {!isViewingSelf && (
-                <div className="mt-2.5">
-                  <button
-                    id={`btn-chat-with-${normAuthor}`}
-                    onClick={() => {
-                      if (onStartChat) {
-                        onStartChat(authorNickname, authorAvatarKey, authorAvatarUrl);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-teal-900 hover:bg-teal-50 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border border-teal-200 cursor-pointer"
-                  >
-                    <MessageCircle size={14} className="text-teal-700" />
-                    <span>💬 Chat</span>
-                  </button>
+          <div className="flex items-center justify-between gap-3 pr-8 sm:pr-10">
+            {/* Left Column: Avatar + Handle / Username / Join Date */}
+            <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+              {/* Clickable Profile Picture for Full-size View & Download */}
+              <div 
+                className="relative shrink-0 cursor-pointer"
+                onClick={() => setShowPictureModal(true)}
+                title="Click to view full size profile picture"
+              >
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/10 backdrop-blur-xs flex items-center justify-center border-2 border-teal-300/80 shadow-md overflow-hidden hover:scale-105 transition-transform">
+                  <AvatarIcon
+                    avatarKey={authorAvatarKey}
+                    avatarUrl={authorAvatarUrl}
+                    sizeClassName="w-full h-full object-cover"
+                  />
                 </div>
-              )}
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg sm:text-xl font-black text-white truncate">{authorNickname}</h2>
+                  <VerificationBadge 
+                    isVerified={isVerifiedAuthor} 
+                    badgeType={authorBadgeType}
+                    title={authorBadgeTitle}
+                    showTitle 
+                  />
+                </div>
+
+                <p className="text-xs text-teal-200 font-bold mt-0.5">{username}</p>
+
+                <p className="text-xs text-teal-100 font-medium mt-1 flex items-center gap-1.5">
+                  <Calendar size={13} className="text-teal-300 shrink-0" />
+                  <span>Joined {authorJoinedDate}</span>
+                </p>
+              </div>
             </div>
+
+            {/* Right Column: 💬 Chat Button positioned on opposite side */}
+            {!isViewingSelf && (
+              <div className="shrink-0 self-center">
+                <button
+                  id={`btn-chat-with-${normAuthor}`}
+                  onClick={() => {
+                    if (onStartChat) {
+                      onStartChat(authorNickname, authorAvatarKey, authorAvatarUrl);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center px-3.5 py-1.5 bg-white text-teal-900 hover:bg-teal-50 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border border-teal-200 cursor-pointer hover:shadow-md"
+                  title={`Chat with ${authorNickname}`}
+                >
+                  <span>💬 Chat</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

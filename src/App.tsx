@@ -1917,6 +1917,9 @@ export const App: React.FC = () => {
                 onDeletePost={handleDeletePost}
                 onAuthorClick={openAuthorProfile}
                 onCommentClick={openPostDetail}
+                onStartChat={(recipientNickname, avatarKey, avatarUrl) => {
+                  handleStartChat(recipientNickname, avatarKey, avatarUrl);
+                }}
               />
             );
           }

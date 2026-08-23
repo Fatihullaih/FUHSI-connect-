@@ -93,6 +93,32 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     return checkUserChatRestriction(cleanMyNickname);
   }, [cleanMyNickname, conversations]);
 
+  // Check if recipient is online / active
+  const isRecipientOnline = useMemo(() => {
+    if (!activeRecipient) return true;
+    const cleanTarget = normalizeNickname(activeRecipient.nickname);
+    const match = allUsers.find(
+      (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget
+    );
+    if (match) {
+      if (match.isBanned) return false;
+      return (match as any).isOnline !== false;
+    }
+    return true;
+  }, [activeRecipient, allUsers]);
+
+  // Derive conversation handle
+  const recipientConvHandle = useMemo(() => {
+    if (activeConvId) {
+      return activeConvId.startsWith('@') ? activeConvId : `@${activeConvId}`;
+    }
+    if (activeRecipient) {
+      const nick = normalizeNickname(activeRecipient.nickname);
+      return `@${getConversationId(myNickname, nick)}`;
+    }
+    return '';
+  }, [activeConvId, activeRecipient, myNickname]);
+
   // Load conversations
   const refreshConversations = () => {
     if (!myNickname) return;
@@ -155,19 +181,30 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
         badgeTitle: conv.otherUserBadgeTitle,
         isVerified: conv.otherUserIsVerified,
       });
-    } else if (initialRecipientNickname) {
-      // Find from allUsers
-      const cleanTarget = normalizeNickname(initialRecipientNickname);
+    } else {
+      // Resolve for new conversations with no existing message records
+      const parts = activeConvId.split('__');
+      const cleanMe = normalizeNickname(myNickname);
+      const otherClean = (parts[0] === cleanMe ? parts[1] : parts[0]) || '';
+      
+      const targetNick = initialRecipient?.nickname || initialRecipientNickname || otherClean;
+      const cleanTarget = normalizeNickname(targetNick);
       const userMatch = allUsers.find(
-        (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === initialRecipientNickname
+        (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget || u.studentEmail?.toLowerCase() === cleanTarget
       );
-      setActiveRecipient({
-        nickname: initialRecipientNickname.startsWith('@') ? initialRecipientNickname : `@${initialRecipientNickname}`,
-        avatarKey: userMatch?.avatarKey || '1',
-        avatarUrl: userMatch?.avatarUrl,
-        badgeType: userMatch?.badgeType || 'GREEN',
-        badgeTitle: userMatch?.badgeTitle || 'FUHSI Student',
-        isVerified: Boolean(userMatch?.isVerified || userMatch?.verificationStatus === 'approved'),
+
+      setActiveRecipient((prev) => {
+        if (prev && normalizeNickname(prev.nickname) === cleanTarget && prev.avatarKey) {
+          return prev;
+        }
+        return {
+          nickname: targetNick.startsWith('@') ? targetNick : `@${targetNick}`,
+          avatarKey: initialRecipient?.avatarKey || userMatch?.avatarKey || '1',
+          avatarUrl: initialRecipient?.avatarUrl || userMatch?.avatarUrl,
+          badgeType: userMatch?.badgeType || 'GREEN',
+          badgeTitle: userMatch?.badgeTitle || 'FUHSI Student',
+          isVerified: Boolean(userMatch?.isVerified || userMatch?.verificationStatus === 'approved'),
+        };
       });
     }
 
@@ -426,11 +463,9 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
           </div>
 
           {/* Safety & Privacy Notice */}
-          <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200/80 text-[11px] text-slate-600 flex items-start gap-2">
-            <Lock size={13} className="text-teal-700 shrink-0 mt-0.5" />
-            <p className="text-[10px] leading-relaxed">
-              <strong className="text-slate-800">Private & Protected:</strong> Real names, phone numbers, and emails are never displayed. Phone numbers and external contact details cannot be shared.
-            </p>
+          <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-200/80 text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5 select-none">
+            <Lock size={13} className="text-teal-700 shrink-0" />
+            <span>Private & Protected</span>
           </div>
 
           {/* Restriction Banner (If User is Restricted) */}
@@ -596,14 +631,15 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                     />
                   </div>
 
-                  {/* Recipient Username (Privacy guaranteed: Nickname only) */}
+                  {/* Recipient Username & Metadata */}
                   <div className="min-w-0">
+                    {/* Line 1: @deji (verified badge if verified) */}
                     <div 
                       onClick={() => onOpenProfile && onOpenProfile(activeRecipient.nickname)}
-                      className="flex items-center gap-1.5 cursor-pointer group"
+                      className="flex items-center gap-1.5 cursor-pointer group leading-tight"
                     >
                       <h2 className="text-xs sm:text-sm font-black text-slate-900 truncate group-hover:text-teal-700 transition-colors">
-                        {activeRecipient.nickname}
+                        {activeRecipient.nickname.startsWith('@') ? activeRecipient.nickname : `@${activeRecipient.nickname}`}
                       </h2>
                       <VerificationBadge
                         isVerified={Boolean(activeRecipient.isVerified)}
@@ -611,9 +647,25 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         size={13}
                       />
                     </div>
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-teal-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-                      <span>Online • Student Chat</span>
+                    
+                    {/* Line 2: @conv_admin_deji or conversation identifier */}
+                    <p className="text-[10px] font-semibold text-slate-500 truncate leading-tight">
+                      {recipientConvHandle}
+                    </p>
+
+                    {/* Line 3: • Online / Offline */}
+                    <div className="flex items-center gap-1 text-[10px] font-bold mt-0.5 leading-tight">
+                      {isRecipientOnline ? (
+                        <span className="flex items-center gap-1 text-emerald-600">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 inline-block" />
+                          <span>• Online</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-slate-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0 inline-block" />
+                          <span>• Offline</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -632,23 +684,18 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                 </div>
               </div>
 
+              {/* Permanent Protected conversation banner (Fixed, does not scroll with message stream) */}
+              <div className="px-3.5 py-1.5 bg-teal-50 border-b border-teal-100/90 flex items-center gap-1.5 text-[11px] font-extrabold text-teal-800 shrink-0 select-none">
+                <ShieldCheck size={13} className="text-teal-600 shrink-0" />
+                <span>Protected conversation</span>
+              </div>
+
               {/* Chat Message Stream */}
               <div 
                 ref={chatContainerRef}
                 onScroll={handleScroll}
                 className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 relative"
               >
-                {/* Security Advisory Pill */}
-                <div className="p-3 bg-teal-50/70 border border-teal-100 rounded-2xl text-[11px] text-teal-900 space-y-1">
-                  <div className="flex items-center gap-1.5 font-black text-teal-800">
-                    <ShieldCheck size={14} className="text-teal-600" />
-                    <span>Protected Student Conversation</span>
-                  </div>
-                  <p className="text-[10px] text-teal-700 leading-relaxed font-medium">
-                    This chat is protected by FUHSI Connect automatic safety moderation. Bullying, harassment, and sharing external phone numbers or emails are prohibited.
-                  </p>
-                </div>
-
                 {activeMessages.length === 0 ? (
                   <div className="py-12 text-center space-y-2">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mx-auto border border-slate-200 text-teal-700 shadow-2xs">
@@ -656,7 +703,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                     </div>
                     <h4 className="text-xs font-black text-slate-800">No Messages Yet</h4>
                     <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                      Say hello to {activeRecipient.nickname}! Academic discussions and campus questions are welcome.
+                      Say hello to {activeRecipient.nickname.startsWith('@') ? activeRecipient.nickname : `@${activeRecipient.nickname}`}!
                     </p>
                   </div>
                 ) : (
