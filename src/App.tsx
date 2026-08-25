@@ -1250,7 +1250,7 @@ export const App: React.FC = () => {
   };
 
   // Handlers for Marketplace
-  const handleSubmitMarketplaceItem = (itemData: {
+  const handleSubmitMarketplaceItem = async (itemData: {
     title: string;
     category: string;
     askingPrice: number;
@@ -1259,12 +1259,16 @@ export const App: React.FC = () => {
     sellerPhone: string;
     meetupPoint: string;
     imageUrls: string[];
+    isHousing?: boolean;
+    propertyLocation?: string;
+    rentDuration?: string;
+    roomType?: string;
   }) => {
     const newItem: MarketplaceItem = {
-      id: `item_${Date.now()}`,
+      id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title: itemData.title,
       category: itemData.category,
-      sellerNickname: userProfile.nickname,
+      sellerNickname: userProfile.nickname || 'Student',
       sellerPhone: itemData.sellerPhone,
       askingPrice: itemData.askingPrice,
       adminApprovedPrice: itemData.askingPrice,
@@ -1272,12 +1276,42 @@ export const App: React.FC = () => {
       description: itemData.description,
       meetupPoint: itemData.meetupPoint,
       imageUrls: itemData.imageUrls,
+      isHousing: itemData.isHousing,
+      propertyLocation: itemData.propertyLocation,
+      rentDuration: itemData.rentDuration,
+      roomType: itemData.roomType,
       viewCount: 1,
-      status: 'PENDING',
+      status: 'APPROVED',
+      createdAt: new Date().toISOString(),
       buyerDmIntentsCount: 0,
     };
 
-    setPendingMarketplaceItems((prev) => [newItem, ...prev]);
+    // 1. Immediately insert into approved marketplace items state & local storage
+    setMarketplaceItems((prev) => {
+      const updated = [newItem, ...prev.filter((i) => i.id !== newItem.id)];
+      try {
+        localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(updated));
+        localStorage.setItem('fuhsi_marketplace_db', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 2. Persist directly to Cloud Firestore
+    saveMarketplaceApprovedToFirestore(newItem).catch((err) =>
+      console.error('Error saving new marketplace item to Firestore:', err)
+    );
+
+    // 3. Sync to central server db
+    try {
+      pushServerDbSync({ marketplaceItems: [newItem] });
+    } catch (e) {
+      console.error('Error syncing new marketplace item to server:', e);
+    }
+
+    // 4. Notify components and listeners
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fuhsi_marketplace_updated'));
+    }
   };
 
   const handleRecordDmBuyIntent = (itemId: string) => {

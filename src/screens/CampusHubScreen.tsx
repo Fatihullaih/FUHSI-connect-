@@ -538,13 +538,18 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     }
   };
 
+  // Normalized clean user nickname for comparison
+  const cleanUserNick = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '').trim();
+
   // My items
-  const myItems = approvedMarketplaceItems.filter(
-    (item) => item.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase()
-  );
-  const myPending = (pendingMarketplaceItems || []).filter(
-    (item) => item.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase()
-  );
+  const myItems = approvedMarketplaceItems.filter((item) => {
+    const sNick = (item.sellerNickname || '').toLowerCase().replace(/^@/, '').trim();
+    return Boolean(cleanUserNick && sNick === cleanUserNick);
+  });
+  const myPending = (pendingMarketplaceItems || []).filter((item) => {
+    const sNick = (item.sellerNickname || '').toLowerCase().replace(/^@/, '').trim();
+    return Boolean(cleanUserNick && sNick === cleanUserNick);
+  });
 
   return (
     <div className="max-w-2xl mx-auto pb-28 px-3 sm:px-4 pt-2 space-y-4">
@@ -667,7 +672,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               {filteredListings.map((item) => {
                 const soldInfo = getSoldStatusInfo(item);
                 const isSold = soldInfo.isSold;
-                const isOwner = item.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase();
+                const isOwner = Boolean(cleanUserNick && (item.sellerNickname || '').toLowerCase().replace(/^@/, '').trim() === cleanUserNick);
                 const mainPhoto = item.imageUrls?.[0] || 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=400';
                 const priceVal = item.adminApprovedPrice ?? item.askingPrice ?? 0;
                 const priceFormatted = formatPriceShort(priceVal);
@@ -1003,7 +1008,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         const soldInfo = getSoldStatusInfo(detailsModalItem);
         const isSold = soldInfo.isSold;
         const itemPrice = detailsModalItem.adminApprovedPrice ?? detailsModalItem.askingPrice ?? 0;
-        const isOwner = detailsModalItem.sellerNickname?.toLowerCase() === userProfile?.nickname?.toLowerCase();
+        const isOwner = Boolean(cleanUserNick && (detailsModalItem.sellerNickname || '').toLowerCase().replace(/^@/, '').trim() === cleanUserNick);
         const isHousing = detailsModalItem.isHousing || detailsModalItem.category?.toLowerCase().includes('housing') || detailsModalItem.category?.toLowerCase().includes('room');
 
         return (
