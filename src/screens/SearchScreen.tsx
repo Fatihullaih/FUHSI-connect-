@@ -28,11 +28,14 @@ interface SearchScreenProps {
   userProfile: UserProfile;
   posts: Post[];
   marketplaceItems: MarketplaceItem[];
+  currentUserNickname?: string;
   onSelectPost: (post: Post) => void;
   onLikeClick: (post: Post) => void;
   onBookmarkClick: (post: Post) => void;
   onCommentClick: (post: Post) => void;
   onAuthorClick?: (post: Post) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
+  onDeletePost?: (postId: string) => void;
 }
 
 interface CampusAccount {
@@ -85,11 +88,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   userProfile,
   posts,
   marketplaceItems,
+  currentUserNickname,
   onSelectPost,
   onLikeClick,
   onBookmarkClick,
   onCommentClick,
   onAuthorClick,
+  onEditPost,
+  onDeletePost,
 }) => {
   const [query, setQuery] = useState('');
   
@@ -469,7 +475,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="shrink-0">
-                        <AvatarIcon avatarKey={acc.avatarKey} avatarUrl={acc.avatarUrl} size={40} sizeClassName="w-10 h-10 text-teal-700 rounded-full" />
+                        <AvatarIcon avatarKey={acc.avatarKey} avatarUrl={acc.avatarUrl} size={40} sizeClassName="w-10 h-10 text-teal-700 rounded-full object-cover" />
                       </div>
 
                       <div className="min-w-0 leading-snug">
@@ -529,9 +535,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                 <PostCard
                   key={post.id || `search_post_${idx}`}
                   post={post}
+                  userProfile={userProfile}
+                  currentUserNickname={currentUserNickname || userProfile?.nickname}
                   onLikeClick={() => onLikeClick(post)}
                   onBookmarkClick={() => onBookmarkClick(post)}
                   onCommentClick={() => onCommentClick(post)}
+                  onAuthorClick={onAuthorClick}
+                  onEditPost={onEditPost}
+                  onDeletePost={onDeletePost}
                 />
               ))}
 

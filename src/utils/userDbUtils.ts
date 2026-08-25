@@ -84,6 +84,16 @@ export function saveStoredUsers(users: UserProfile[]): void {
 
 
 /**
+ * Find user by nickname
+ */
+export function findUserByNickname(nickname: string): UserProfile | undefined {
+  if (!nickname) return undefined;
+  const clean = nickname.trim().toLowerCase().replace(/^@/, '');
+  const users = getStoredUsers();
+  return users.find((u) => (u.nickname || '').trim().toLowerCase().replace(/^@/, '') === clean);
+}
+
+/**
  * Calculate the total count of approved, active community members
  */
 export function getApprovedMembersCount(): number {

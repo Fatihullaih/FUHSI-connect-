@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType, DirectMessage } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
 import { pushServerDbSync } from '../utils/apiSync';
-import { deleteUserFromFirestore } from '../lib/firestoreSync';
+import { deleteUserFromFirestore, subscribeVerificationFee, saveVerificationFeeToFirestore } from '../lib/firestoreSync';
 import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AdminTradeDesk } from '../components/AdminTradeDesk';
@@ -91,10 +91,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     }
   }, [verifCandidates]);
 
-  // Toggles state
-  const [antiDoxxing, setAntiDoxxing] = useState(true);
-  const [profanityShield, setProfanityShield] = useState(true);
-
   // Identity Lookup State
   const [lookupQuery, setLookupQuery] = useState('');
   const [lookupResult, setLookupResult] = useState<UserProfile | null>(null);
@@ -126,6 +122,32 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     return 1500;
   });
   const [feeSaveToast, setFeeSaveToast] = useState(false);
+  const [isSavingFee, setIsSavingFee] = useState(false);
+
+  // Subscribe to real-time verification fee updates across all devices
+  useEffect(() => {
+    const unsubscribe = subscribeVerificationFee((newFee) => {
+      if (typeof newFee === 'number' && !isNaN(newFee) && newFee >= 0) {
+        setAdminVerificationFee(newFee);
+        try {
+          localStorage.setItem('fuhsi_verification_fee', newFee.toString());
+        } catch (e) {}
+      }
+    });
+
+    const handleFeeEvent = (e: any) => {
+      const fee = e.detail;
+      if (typeof fee === 'number' && !isNaN(fee)) {
+        setAdminVerificationFee(fee);
+      }
+    };
+    window.addEventListener('fuhsi_verification_fee_updated', handleFeeEvent);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('fuhsi_verification_fee_updated', handleFeeEvent);
+    };
+  }, []);
 
   // Per-request color badge & title assignment state
   const [selectedReqColors, setSelectedReqColors] = useState<Record<string, BadgeType>>({});
@@ -432,53 +454,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             <p className="text-xs text-indigo-200">
               Admin Trade Desk, Student Verification Vault & Content Moderation Console
             </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Safety Toggles Section */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <h2 className="font-bold text-slate-900 text-sm">Automated Safety Engines</h2>
-
-        <div className="space-y-2 text-xs">
-          {/* Toggle 1: Anti-Doxxing */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-            <div>
-              <p className="font-bold text-slate-800">Automated Anti-Doxxing Phone/Link Filter</p>
-              <p className="text-slate-500">Automatically redacts leaked phone numbers & external web links.</p>
-            </div>
-            <button
-              onClick={() => {
-                const next = !antiDoxxing;
-                setAntiDoxxing(next);
-                onToggleAntiDoxxing?.(next);
-              }}
-              className={`px-3 py-1.5 rounded-full font-bold text-xs transition-colors ${
-                antiDoxxing ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'
-              }`}
-            >
-              {antiDoxxing ? 'ACTIVE' : 'OFF'}
-            </button>
-          </div>
-
-          {/* Toggle 2: Profanity Shield */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-            <div>
-              <p className="font-bold text-slate-800">Profanity & Defamation Shield</p>
-              <p className="text-slate-500">Filters abusive language and unverified harassment claims.</p>
-            </div>
-            <button
-              onClick={() => {
-                const next = !profanityShield;
-                setProfanityShield(next);
-                onToggleProfanityShield?.(next);
-              }}
-              className={`px-3 py-1.5 rounded-full font-bold text-xs transition-colors ${
-                profanityShield ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'
-              }`}
-            >
-              {profanityShield ? 'ACTIVE' : 'OFF'}
-            </button>
           </div>
         </div>
       </div>
@@ -837,25 +812,41 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
               />
             </div>
             <button
-              onClick={() => {
+              disabled={isSavingFee}
+              onClick={async () => {
+                setIsSavingFee(true);
                 try {
                   localStorage.setItem('fuhsi_verification_fee', adminVerificationFee.toString());
+                  await saveVerificationFeeToFirestore(adminVerificationFee);
+                  await pushServerDbSync({ verificationFee: adminVerificationFee });
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('fuhsi_verification_fee_updated', { detail: adminVerificationFee }));
+                  }
                   setFeeSaveToast(true);
-                  setTimeout(() => setFeeSaveToast(false), 2500);
+                  setTimeout(() => setFeeSaveToast(false), 3500);
                 } catch (e) {
-                  console.error(e);
+                  console.error('Error saving verification fee:', e);
+                } finally {
+                  setIsSavingFee(false);
                 }
               }}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-xs shrink-0 cursor-pointer"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl transition-all shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
             >
-              Save Fee
+              {isSavingFee ? (
+                <span>Updating...</span>
+              ) : (
+                <>
+                  <Check size={13} />
+                  <span>Save Fee</span>
+                </>
+              )}
             </button>
           </div>
         </div>
 
         {feeSaveToast && (
-          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-center">
-            ✓ Verification Fee updated to ₦{adminVerificationFee.toLocaleString()}! Changes applied live on Get Verified page.
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-center animate-in fade-in">
+            ✓ Verification Fee updated to ₦{adminVerificationFee.toLocaleString()}! Synchronized immediately across the platform and all devices.
           </div>
         )}
 

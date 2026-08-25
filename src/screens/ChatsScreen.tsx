@@ -12,12 +12,14 @@ import {
   extractPreservedReportEvidence,
   getConversationId, 
   normalizeNickname,
-  formatMessageTime 
+  formatMessageTime,
+  extractPureStudentHandle
 } from '../utils/messagingUtils';
 import { 
   checkUserChatRestriction, 
   formatRestrictionRemainingTime 
 } from '../utils/safetyFilter';
+import { isUserOnline } from '../utils/presenceUtils';
 import { subscribeDirectMessagesByConversation } from '../lib/firestoreSync';
 import { 
   MessageSquare, 
@@ -81,6 +83,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
   const [reportNotes, setReportNotes] = useState('');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'info' | 'warning' | 'error' | 'success' } | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [presenceTick, setPresenceTick] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -88,36 +91,54 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
   const myNickname = userProfile?.nickname || '@Student';
   const cleanMyNickname = normalizeNickname(myNickname);
 
+  // Live presence tick & event listener
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPresenceTick((t) => t + 1);
+    }, 4000);
+
+    const handlePresenceEvent = () => setPresenceTick((t) => t + 1);
+    window.addEventListener('fuhsi_presence_updated', handlePresenceEvent);
+    window.addEventListener('fuhsi_users_updated', handlePresenceEvent);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('fuhsi_presence_updated', handlePresenceEvent);
+      window.removeEventListener('fuhsi_users_updated', handlePresenceEvent);
+    };
+  }, []);
+
   // Check if current user is restricted
   const restrictionInfo = useMemo(() => {
     return checkUserChatRestriction(cleanMyNickname);
   }, [cleanMyNickname, conversations]);
 
-  // Check if recipient is online / active
+  // Clean recipient display handle (e.g. '@deji') - strictly pure student nickname, never conv_admin_deji
+  const cleanRecipientDisplay = useMemo(() => {
+    if (!activeRecipient?.nickname) return '@Student';
+    return extractPureStudentHandle(activeRecipient.nickname, myNickname);
+  }, [activeRecipient, myNickname]);
+
+  // Check if recipient is online / active in real-time
   const isRecipientOnline = useMemo(() => {
-    if (!activeRecipient) return true;
-    const cleanTarget = normalizeNickname(activeRecipient.nickname);
-    const match = allUsers.find(
+    if (!activeRecipient) return false;
+    const cleanTarget = normalizeNickname(cleanRecipientDisplay);
+    let match = allUsers.find(
       (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget
     );
-    if (match) {
-      if (match.isBanned) return false;
-      return (match as any).isOnline !== false;
+    if (!match) {
+      try {
+        const uStr = localStorage.getItem('fuhsi_users_db');
+        if (uStr) {
+          const uList: UserProfile[] = JSON.parse(uStr);
+          match = uList.find(
+            (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget
+          );
+        }
+      } catch (e) {}
     }
-    return true;
-  }, [activeRecipient, allUsers]);
-
-  // Derive conversation handle
-  const recipientConvHandle = useMemo(() => {
-    if (activeConvId) {
-      return activeConvId.startsWith('@') ? activeConvId : `@${activeConvId}`;
-    }
-    if (activeRecipient) {
-      const nick = normalizeNickname(activeRecipient.nickname);
-      return `@${getConversationId(myNickname, nick)}`;
-    }
-    return '';
-  }, [activeConvId, activeRecipient, myNickname]);
+    return isUserOnline(match);
+  }, [activeRecipient, cleanRecipientDisplay, allUsers, presenceTick]);
 
   // Load conversations
   const refreshConversations = () => {
@@ -162,9 +183,16 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     }
 
     // 1. Populate cached local messages
-    const localMsgs = getStoredDirectMessages().filter(
-      (m) => (m.conversationId || getConversationId(m.senderNickname, m.receiverNickname)) === activeConvId
-    );
+    const localMsgs = getStoredDirectMessages()
+      .filter(
+        (m) => (m.conversationId || getConversationId(m.senderNickname, m.receiverNickname)) === activeConvId
+      )
+      .sort((a, b) => {
+        const tA = new Date(a.timestamp || 0).getTime() || 0;
+        const tB = new Date(b.timestamp || 0).getTime() || 0;
+        if (tA !== tB) return tA - tB;
+        return (a.id || '').localeCompare(b.id || '');
+      });
     setActiveMessages(localMsgs);
 
     // Mark incoming messages as read by this user
@@ -173,8 +201,9 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     // 2. Resolve recipient metadata
     const conv = conversations.find((c) => c.id === activeConvId);
     if (conv) {
+      const pureNick = extractPureStudentHandle(conv.otherUserNickname, myNickname);
       setActiveRecipient({
-        nickname: conv.otherUserNickname,
+        nickname: pureNick,
         avatarKey: conv.otherUserAvatarKey || '1',
         avatarUrl: conv.otherUserAvatarUrl,
         badgeType: conv.otherUserBadgeType,
@@ -183,12 +212,9 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
       });
     } else {
       // Resolve for new conversations with no existing message records
-      const parts = activeConvId.split('__');
-      const cleanMe = normalizeNickname(myNickname);
-      const otherClean = (parts[0] === cleanMe ? parts[1] : parts[0]) || '';
-      
-      const targetNick = initialRecipient?.nickname || initialRecipientNickname || otherClean;
-      const cleanTarget = normalizeNickname(targetNick);
+      const rawTarget = initialRecipient?.nickname || initialRecipientNickname || activeConvId;
+      const pureNick = extractPureStudentHandle(rawTarget, myNickname);
+      const cleanTarget = normalizeNickname(pureNick);
       const userMatch = allUsers.find(
         (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget || u.studentEmail?.toLowerCase() === cleanTarget
       );
@@ -198,7 +224,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
           return prev;
         }
         return {
-          nickname: targetNick.startsWith('@') ? targetNick : `@${targetNick}`,
+          nickname: pureNick,
           avatarKey: initialRecipient?.avatarKey || userMatch?.avatarKey || '1',
           avatarUrl: initialRecipient?.avatarUrl || userMatch?.avatarUrl,
           badgeType: userMatch?.badgeType || 'GREEN',
@@ -219,12 +245,21 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
             firestoreMsgs.forEach((m) => map.set(m.id, m));
             const list = Array.from(map.values());
             list.sort((a, b) => {
-              const timeA = a.id?.includes('dm_') ? Number(a.id.replace(/\D/g, '')) || 0 : 0;
-              const timeB = b.id?.includes('dm_') ? Number(b.id.replace(/\D/g, '')) || 0 : 0;
-              return timeA - timeB;
+              const tA = new Date(a.timestamp || 0).getTime() || 0;
+              const tB = new Date(b.timestamp || 0).getTime() || 0;
+              if (tA !== tB) return tA - tB;
+              return (a.id || '').localeCompare(b.id || '');
             });
             return list;
           });
+
+          // Check if any incoming message to me is unread, and mark as read
+          const hasUnreadIncoming = firestoreMsgs.some(
+            (m) => normalizeNickname(m.receiverNickname) === cleanMyNickname && !m.isRead
+          );
+          if (hasUnreadIncoming) {
+            markConversationMessagesAsRead(activeConvId, myNickname);
+          }
         }
       }
     );
@@ -251,22 +286,23 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
 
   // Select or initiate chat with a recipient
   const handleSelectRecipient = (targetNickname: string, avatarKey?: string, avatarUrl?: string) => {
-    const cleanTarget = normalizeNickname(targetNickname);
+    const pureTarget = extractPureStudentHandle(targetNickname, myNickname);
+    const cleanTarget = normalizeNickname(pureTarget);
     if (cleanTarget === cleanMyNickname) {
       showToast('You cannot start a conversation with yourself.', 'info');
       return;
     }
 
-    const convId = getConversationId(myNickname, targetNickname);
+    const convId = getConversationId(myNickname, pureTarget);
     setActiveConvId(convId);
 
     // Resolve user details
     const userMatch = allUsers.find(
-      (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === targetNickname
+      (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget || u.id === targetNickname
     );
 
     setActiveRecipient({
-      nickname: targetNickname.startsWith('@') ? targetNickname : `@${targetNickname}`,
+      nickname: pureTarget,
       avatarKey: avatarKey || userMatch?.avatarKey || '1',
       avatarUrl: avatarUrl || userMatch?.avatarUrl,
       badgeType: userMatch?.badgeType || 'GREEN',
@@ -298,7 +334,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
       id: `dm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       conversationId: activeConvId,
       senderNickname: myNickname.startsWith('@') ? myNickname : `@${myNickname}`,
-      receiverNickname: activeRecipient.nickname,
+      receiverNickname: cleanRecipientDisplay,
       text: inputText.trim(),
       timestamp: new Date().toISOString(),
     };
@@ -527,7 +563,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                     onClick={() => {
                       setActiveConvId(conv.id);
                       setActiveRecipient({
-                        nickname: conv.otherUserNickname,
+                        nickname: extractPureStudentHandle(conv.otherUserNickname, myNickname),
                         avatarKey: conv.otherUserAvatarKey || '1',
                         avatarUrl: conv.otherUserAvatarUrl,
                         badgeType: conv.otherUserBadgeType,
@@ -562,7 +598,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <div className="flex items-center gap-1.5 truncate">
                           <span className="text-xs font-black text-slate-900 truncate">
-                            {conv.otherUserNickname}
+                            {extractPureStudentHandle(conv.otherUserNickname, myNickname)}
                           </span>
                           <VerificationBadge
                             isVerified={Boolean(conv.otherUserIsVerified)}
@@ -575,9 +611,20 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         </span>
                       </div>
 
-                      <p className="text-[11px] font-medium text-slate-500 truncate leading-tight">
-                        {conv.lastMessage}
-                      </p>
+                      <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 truncate leading-tight">
+                        {conv.lastSenderNickname && normalizeNickname(conv.lastSenderNickname) === cleanMyNickname && (
+                          conv.lastMessageIsRead ? (
+                            <span title="Read" className="inline-flex shrink-0 text-sky-500">
+                              <CheckCheck size={13} className="text-sky-500 stroke-[2.5]" />
+                            </span>
+                          ) : (
+                            <span title="Sent (Delivered)" className="inline-flex shrink-0 text-slate-400">
+                              <CheckCheck size={13} className="text-slate-400 stroke-[1.75]" />
+                            </span>
+                          )
+                        )}
+                        <p className="truncate">{conv.lastMessage}</p>
+                      </div>
                     </div>
 
                     {/* Delete Conversation action */}
@@ -620,7 +667,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
 
                   {/* Recipient Avatar */}
                   <div 
-                    onClick={() => onOpenProfile && onOpenProfile(activeRecipient.nickname)}
+                    onClick={() => onOpenProfile && onOpenProfile(cleanRecipientDisplay)}
                     className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-teal-900 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer shrink-0 hover:scale-105 transition-transform"
                     title="View student profile"
                   >
@@ -635,11 +682,11 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                   <div className="min-w-0">
                     {/* Line 1: @deji (verified badge if verified) */}
                     <div 
-                      onClick={() => onOpenProfile && onOpenProfile(activeRecipient.nickname)}
+                      onClick={() => onOpenProfile && onOpenProfile(cleanRecipientDisplay)}
                       className="flex items-center gap-1.5 cursor-pointer group leading-tight"
                     >
                       <h2 className="text-xs sm:text-sm font-black text-slate-900 truncate group-hover:text-teal-700 transition-colors">
-                        {activeRecipient.nickname.startsWith('@') ? activeRecipient.nickname : `@${activeRecipient.nickname}`}
+                        {cleanRecipientDisplay}
                       </h2>
                       <VerificationBadge
                         isVerified={Boolean(activeRecipient.isVerified)}
@@ -647,21 +694,16 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         size={13}
                       />
                     </div>
-                    
-                    {/* Line 2: @conv_admin_deji or conversation identifier */}
-                    <p className="text-[10px] font-semibold text-slate-500 truncate leading-tight">
-                      {recipientConvHandle}
-                    </p>
 
-                    {/* Line 3: • Online / Offline */}
+                    {/* Status: • Online / Offline */}
                     <div className="flex items-center gap-1 text-[10px] font-bold mt-0.5 leading-tight">
                       {isRecipientOnline ? (
-                        <span className="flex items-center gap-1 text-emerald-600">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 inline-block" />
+                        <span className="flex items-center gap-1 text-emerald-600 font-extrabold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 inline-block animate-pulse" />
                           <span>• Online</span>
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-slate-400">
+                        <span className="flex items-center gap-1 text-slate-400 font-semibold">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0 inline-block" />
                           <span>• Offline</span>
                         </span>
@@ -703,7 +745,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                     </div>
                     <h4 className="text-xs font-black text-slate-800">No Messages Yet</h4>
                     <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                      Say hello to {activeRecipient.nickname.startsWith('@') ? activeRecipient.nickname : `@${activeRecipient.nickname}`}!
+                      Say hello to {cleanRecipientDisplay}!
                     </p>
                   </div>
                 ) : (
@@ -756,17 +798,17 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                             {isMe && (
                               msg.isRead ? (
                                 <span 
-                                  title="Viewed / Read by recipient" 
-                                  className="flex items-center gap-0.5 text-cyan-300 font-black cursor-help"
+                                  title="Read" 
+                                  className="flex items-center gap-0.5 text-sky-300 font-black cursor-help inline-flex drop-shadow-xs"
                                 >
-                                  <CheckCheck size={13} className="text-cyan-300 stroke-[2.5]" />
+                                  <CheckCheck size={14} className="text-sky-300 stroke-[2.5]" />
                                 </span>
                               ) : (
                                 <span 
-                                  title="Sent / Delivered (Unread)" 
-                                  className="flex items-center gap-0.5 text-teal-200/60 cursor-help"
+                                  title="Sent (Delivered)" 
+                                  className="flex items-center gap-0.5 text-slate-300/80 font-medium cursor-help inline-flex"
                                 >
-                                  <CheckCheck size={13} className="text-teal-200/60" />
+                                  <CheckCheck size={14} className="text-slate-300/80 stroke-[1.75]" />
                                 </span>
                               )
                             )}
@@ -826,7 +868,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                           handleSendMessage();
                         }
                       }}
-                      placeholder={`Message ${activeRecipient.nickname}...`}
+                      placeholder={`Message ${cleanRecipientDisplay}...`}
                       className="flex-1 text-xs bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                     />
 

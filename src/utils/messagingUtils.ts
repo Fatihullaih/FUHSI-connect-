@@ -82,6 +82,54 @@ export const normalizeNickname = (nick: string): string => {
 };
 
 /**
+ * Cleanly extracts a pure student nickname (e.g. '@deji', '@ayo', '@fadlullah') from any raw nickname,
+ * user ID, or conversation ID string (e.g. 'deji', '@deji', 'conv_admin_deji', 'conv_deji_admin', 'conv_fatih_deji', '@conv_admin_deji').
+ */
+export function extractPureStudentHandle(rawInput: string | undefined | null, currentMyNickname?: string): string {
+  if (!rawInput) return '@Student';
+  let s = String(rawInput).trim();
+
+  // Strip prefixes like author_, chat_author_, item_seller_, user_
+  s = s.replace(/^(author_|chat_author_|item_seller_|user_)/i, '');
+  
+  // Remove leading @ symbols
+  s = s.replace(/^@+/, '').trim();
+
+  const cleanMy = currentMyNickname ? normalizeNickname(currentMyNickname) : '';
+
+  // If formatted as a conversation ID with conv_ prefix
+  while (s.startsWith('conv_')) {
+    s = s.substring(5);
+  }
+
+  if (s.includes('__')) {
+    const parts = s.split('__').map((p) => normalizeNickname(p)).filter(Boolean);
+    const other = parts.find((p) => p !== cleanMy && p !== 'conv' && p !== 'admin') || parts.find((p) => p !== cleanMy) || parts[0];
+    if (other) s = other;
+  } else if (s.includes('_')) {
+    if (cleanMy && s.toLowerCase().startsWith(`${cleanMy}_`)) {
+      s = s.substring(cleanMy.length + 1);
+    } else if (cleanMy && s.toLowerCase().endsWith(`_${cleanMy}`)) {
+      s = s.substring(0, s.length - cleanMy.length - 1);
+    } else if (s.toLowerCase().startsWith('admin_')) {
+      s = s.substring(6);
+    } else if (s.toLowerCase().endsWith('_admin')) {
+      s = s.substring(0, s.length - 6);
+    } else {
+      const parts = s.split('_').filter(Boolean);
+      const other = parts.find((p) => normalizeNickname(p) !== cleanMy && normalizeNickname(p) !== 'conv' && normalizeNickname(p) !== 'admin');
+      if (other) s = other;
+    }
+  }
+
+  s = s.replace(/^@+/, '').trim();
+  if (!s || s === 'conv' || s.toLowerCase() === 'undefined' || s.toLowerCase() === 'null') {
+    return '@Student';
+  }
+  return `@${s}`;
+}
+
+/**
  * Deterministically generate a conversation ID between two usernames
  */
 export function getConversationId(userA: string, userB: string): string {
@@ -169,7 +217,8 @@ export function getUserConversations(userNickname: string): ChatConversation[] {
     const receiver = normalizeNickname(msg.receiverNickname);
 
     if (sender === cleanMe || receiver === cleanMe) {
-      const other = sender === cleanMe ? msg.receiverNickname : msg.senderNickname;
+      const rawOther = sender === cleanMe ? msg.receiverNickname : msg.senderNickname;
+      const other = extractPureStudentHandle(rawOther, userNickname);
       const convId = msg.conversationId || getConversationId(msg.senderNickname, msg.receiverNickname);
       
       const existing = convMap.get(convId);
@@ -231,6 +280,8 @@ export function getUserConversations(userNickname: string): ChatConversation[] {
       otherUserBadgeTitle: otherBadgeTitle,
       lastMessage: data.lastMsg.text,
       lastTimestamp: formatMessageTime(data.lastMsg.timestamp),
+      lastSenderNickname: data.lastMsg.senderNickname,
+      lastMessageIsRead: Boolean(data.lastMsg.isRead),
       itemId: data.lastMsg.itemId,
       itemTitle: data.lastMsg.itemTitle,
       itemPrice: data.lastMsg.itemPrice,

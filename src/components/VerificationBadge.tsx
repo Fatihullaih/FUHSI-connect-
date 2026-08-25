@@ -44,16 +44,17 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
     };
   }
 
-  const badgeTitleText = title && title.trim() ? title.trim() : '';
+  const rawTitle = title && title.trim() ? title.trim() : '';
+  const isGenericTitle = !rawTitle || ['FUHSI Student', 'Student', 'Verified', 'Verified Student', 'Member'].includes(rawTitle);
 
-  if (showTitle && badgeTitleText) {
+  if (showTitle && rawTitle && !isGenericTitle) {
     return (
       <span
         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border ${colorClasses.bg} ${className}`}
-        title={`Verified Account: ${badgeTitleText}`}
+        title={`Verified Account: ${rawTitle}`}
       >
         <CheckCircle2 size={size} className={`${colorClasses.icon} shrink-0`} />
-        <span className="truncate max-w-[120px]">{badgeTitleText}</span>
+        <span className="truncate max-w-[120px]">{rawTitle}</span>
       </span>
     );
   }
@@ -61,7 +62,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
   return (
     <span
       className={`inline-flex items-center shrink-0 ${className}`}
-      title={badgeTitleText ? `Verified Account: ${badgeTitleText}` : 'Verified Account'}
+      title={rawTitle ? `Verified Account: ${rawTitle}` : 'Verified Account'}
     >
       <CheckCircle2 size={size} className={colorClasses.icon} />
     </span>

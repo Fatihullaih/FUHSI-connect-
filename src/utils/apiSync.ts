@@ -18,6 +18,13 @@ export interface ServerDbState {
   chatReports?: ChatReport[];
   chatRestrictions?: any[];
   chatViolations?: any[];
+  replaceUsers?: boolean;
+  replacePosts?: boolean;
+  replaceComments?: boolean;
+  replaceMarketplaceItems?: boolean;
+  replacePendingMarketplaceItems?: boolean;
+  replaceVerificationRequests?: boolean;
+  replaceReports?: boolean;
 }
 
 export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserProfile[] {
@@ -91,9 +98,16 @@ export function mergePosts(a: Post[] = [], b: Post[] = []): Post[] {
       const likesCount = Math.max(existing.likesCount || existing.likes || 0, p.likesCount || p.likes || 0);
       const bookmarks = Math.max(existing.bookmarks || 0, p.bookmarks || 0);
       const commentsCount = Math.max(existing.commentsCount || 0, p.commentsCount || 0);
+
+      // Determine which version has newer edits / content
+      const existingUpdatedMs = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+      const pUpdatedMs = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+      const isPNewer = pUpdatedMs >= existingUpdatedMs;
+
+      const base = isPNewer ? { ...existing, ...p } : { ...p, ...existing };
+
       map.set(p.id, {
-        ...existing,
-        ...p,
+        ...base,
         likes: likesCount,
         likesCount,
         bookmarks,

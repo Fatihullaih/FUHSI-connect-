@@ -70,6 +70,7 @@ interface ProfileScreenProps {
   onCommentClick?: (post: Post) => void;
   onAuthorClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onLogout?: () => void;
   onClose?: () => void;
@@ -88,6 +89,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onCommentClick,
   onAuthorClick,
   onDeletePost,
+  onEditPost,
   onDeleteComment,
   onLogout,
   onClose,
@@ -876,11 +878,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       post={post}
                       comments={allComments.filter((c) => c.postId === post.id)}
                       currentUserNickname={myNickname}
+                      userProfile={userProfile}
                       onLikeClick={onLikeClick}
                       onBookmarkClick={onBookmarkClick}
                       onCommentClick={onCommentClick}
                       onAuthorClick={onAuthorClick}
                       onDeletePost={onDeletePost}
+                      onEditPost={onEditPost}
                     />
                   ))}
                 </div>
@@ -1020,11 +1024,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       post={post}
                       comments={allComments.filter((c) => c.postId === post.id)}
                       currentUserNickname={myNickname}
+                      userProfile={userProfile}
                       onLikeClick={onLikeClick}
                       onBookmarkClick={onBookmarkClick}
                       onCommentClick={onCommentClick}
                       onAuthorClick={onAuthorClick}
                       onDeletePost={onDeletePost}
+                      onEditPost={onEditPost}
                     />
                   ))}
                 </div>

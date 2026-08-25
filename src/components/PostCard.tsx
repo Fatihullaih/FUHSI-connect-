@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Post, Comment, PostCategory, BadgeType, PollOption, UserProfile } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
@@ -7,6 +7,7 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { checkIsUserVerified } from '../utils/verificationUtils';
+import { findUserByNickname } from '../utils/userDbUtils';
 import { 
   Heart, 
   MessageSquare, 
@@ -76,9 +77,13 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(post.content);
+  const [editedContent, setEditedContent] = useState(post.content || post.text || '');
   const [showEditLockModal, setShowEditLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  useEffect(() => {
+    setEditedContent(post.content || post.text || '');
+  }, [post.content, post.text]);
 
   const isMyPost = Boolean(
     (post as any).isOwner ||
@@ -94,7 +99,12 @@ export const PostCard: React.FC<PostCardProps> = ({
   const isBookmarked = post.isBookmarkedByMe !== undefined ? Boolean(post.isBookmarkedByMe) : Boolean(post.isBookmarked);
   const commentsCount = post.commentsCount ?? post.commentCount ?? comments.length;
   const department = post.department || post.authorDepartment || 'General';
-  const avatarKey = post.authorAvatarKey || post.authorAvatarId || 'caduceus';
+  const authorUser = useMemo(() => {
+    return findUserByNickname(post.authorNickname);
+  }, [post.authorNickname]);
+
+  const avatarKey = post.authorAvatarKey || post.authorAvatarId || authorUser?.avatarKey || (isMyPost ? userProfile?.avatarKey : undefined) || 'caduceus';
+  const avatarUrl = post.authorAvatarUrl || authorUser?.avatarUrl || (isMyPost ? userProfile?.avatarUrl : undefined);
   const category = post.category || 'General';
 
   const getCategoryBadge = (cat: string) => {
@@ -195,7 +205,7 @@ export const PostCard: React.FC<PostCardProps> = ({
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-teal-50 border-teal-200/80 hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-teal-500/40 overflow-hidden"
               title={`View ${post.authorNickname}'s profile details`}
             >
-              <AvatarIcon avatarKey={avatarKey} avatarUrl={post.authorAvatarUrl} size={20} sizeClassName="w-10 h-10 rounded-xl object-cover" />
+              <AvatarIcon avatarKey={avatarKey} avatarUrl={avatarUrl} size={20} sizeClassName="w-10 h-10 rounded-xl object-cover" />
             </button>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -215,7 +225,12 @@ export const PostCard: React.FC<PostCardProps> = ({
                   showTitle 
                 />
               </div>
-              <p className="text-xs text-slate-400 font-medium">{formatRelativeTime(post.timestamp)}</p>
+              <p className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                <span>{formatRelativeTime(post.timestamp)}</span>
+                {post.isEdited && (
+                  <span className="text-[10px] text-slate-400 font-normal italic">(edited)</span>
+                )}
+              </p>
             </div>
           </div>
 

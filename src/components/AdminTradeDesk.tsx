@@ -70,6 +70,16 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
   const [msgContent, setMsgContent] = useState('');
   const [msgToast, setMsgToast] = useState<string | null>(null);
 
+  // Accidental Deletion Protection Modal State
+  const [itemToDelete, setItemToDelete] = useState<{
+    id: string;
+    title: string;
+    sellerNickname?: string;
+    askingPrice?: number;
+    category?: string;
+    reportId?: string;
+  } | null>(null);
+
   // Sync reports
   useEffect(() => {
     const handleUpdate = () => {
@@ -114,12 +124,29 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
   };
 
   const handleRemoveListingFromReport = (report: MarketplaceReport) => {
-    if (report.itemId && onDeleteMarketplaceItem) {
-      onDeleteMarketplaceItem(report.itemId);
+    if (!report.itemId) {
+      handleResolveReport(report.id, `Report resolved (no active listing ID).`);
+      return;
     }
-    handleResolveReport(report.id, `Listing removed from marketplace.`);
-    setMsgToast(`Listing "${report.itemTitle}" removed and report resolved.`);
+    setItemToDelete({
+      id: report.itemId,
+      title: report.itemTitle || 'Reported Marketplace Item',
+      sellerNickname: report.sellerNickname,
+      reportId: report.id,
+    });
+  };
+
+  const handleConfirmPermanentDelete = () => {
+    if (!itemToDelete) return;
+    if (onDeleteMarketplaceItem) {
+      onDeleteMarketplaceItem(itemToDelete.id);
+    }
+    if (itemToDelete.reportId) {
+      handleResolveReport(itemToDelete.reportId, `Listing "${itemToDelete.title}" permanently deleted from marketplace by Admin.`);
+    }
+    setMsgToast(`✓ Listing "${itemToDelete.title}" permanently deleted from Marketplace across all devices.`);
     setTimeout(() => setMsgToast(null), 4000);
+    setItemToDelete(null);
   };
 
   const handleSuspendSeller = (sellerNickname: string, reportId?: string) => {
@@ -433,16 +460,19 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
 
                   <button
                     onClick={() => {
-                      if (onDeleteMarketplaceItem) {
-                        onDeleteMarketplaceItem(item.id);
-                        setMsgToast(`Listing "${item.title}" deleted.`);
-                        setTimeout(() => setMsgToast(null), 3000);
-                      }
+                      setItemToDelete({
+                        id: item.id,
+                        title: item.title,
+                        sellerNickname: item.sellerNickname,
+                        askingPrice: item.askingPrice,
+                        category: item.category,
+                      });
                     }}
-                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
-                    title="Remove Inappropriate Listing"
+                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs transition-colors cursor-pointer flex items-center gap-1"
+                    title="Delete this listed item"
                   >
                     <Trash2 size={13} />
+                    <span className="hidden sm:inline">Delete</span>
                   </button>
                 </div>
               </div>
@@ -480,6 +510,21 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
                     className="px-3 py-1.5 bg-rose-100 text-rose-800 rounded-xl font-bold text-xs cursor-pointer"
                   >
                     Reject
+                  </button>
+                  <button
+                    onClick={() => {
+                      setItemToDelete({
+                        id: item.id,
+                        title: item.title,
+                        sellerNickname: item.sellerNickname,
+                        askingPrice: item.askingPrice,
+                        category: item.category,
+                      });
+                    }}
+                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                    title="Delete listing permanently"
+                  >
+                    <Trash2 size={13} />
                   </button>
                 </div>
               </div>
@@ -545,6 +590,65 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
               <span>Send Official Inquiry</span>
             </button>
           </form>
+        </div>
+      )}
+
+      {/* CONFIRMATION PROMPT MODAL: ACCIDENTAL DELETION PROTECTION */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-rose-100 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Delete Marketplace Item?</h3>
+                <p className="text-xs text-rose-600 font-bold">Confirmation prompt to prevent accidental deletion</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <div className="text-xs text-slate-500 font-medium">Target Listing:</div>
+              <div className="font-extrabold text-slate-900 text-sm">{itemToDelete.title}</div>
+              <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
+                {itemToDelete.askingPrice !== undefined && (
+                  <span className="font-bold text-emerald-700">₦{itemToDelete.askingPrice.toLocaleString()}</span>
+                )}
+                {itemToDelete.category && (
+                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
+                    {itemToDelete.category}
+                  </span>
+                )}
+                {itemToDelete.sellerNickname && (
+                  <span className="text-slate-500">
+                    Seller: <strong className="text-slate-800">@{itemToDelete.sellerNickname.replace(/^@/, '')}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to delete this listing? Once confirmed, this item will be <strong>permanently deleted from the Marketplace across all devices and for all users</strong>.
+            </p>
+
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPermanentDelete}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={14} />
+                <span>Confirm Deletion</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

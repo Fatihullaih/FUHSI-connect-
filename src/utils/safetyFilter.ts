@@ -392,81 +392,15 @@ export function clearChatRestriction(userNickname: string) {
 
 /**
  * Comprehensive Message Safety Evaluator
- * Runs before any message is sent or displayed.
+ * Allows normal communication, links, phone numbers, and peer-to-peer discussions.
  */
 export function evaluateChatMessage(
   rawText: string,
-  senderNickname: string
+  _senderNickname: string
 ): ModerationEvaluationResult {
-  const cleanNick = senderNickname.trim().toLowerCase().replace(/^@/, '');
-
-  // 1. Check if user is restricted
-  const restriction = checkUserChatRestriction(cleanNick);
-  if (restriction.isRestricted) {
-    return {
-      isAllowed: false,
-      sanitizedText: '',
-      violationType: 'HARASSMENT',
-      reason: restriction.reason,
-      warningMessage: `Chat Restricted: Your chat access has been temporarily restricted because of repeated violations of the FUHSI Connect community rules.\nReason: ${restriction.reason}\nRestriction: ${restriction.durationDays} days.`,
-      actionTaken: 'USER_RESTRICTED',
-    };
-  }
-
-  // 2. Check for harassment, threats, or abuse (Highest Priority)
-  const abuseCheck = detectHarassmentAndAbuse(rawText);
-  if (abuseCheck.hasViolation && abuseCheck.violationType) {
-    const violationResult = recordChatViolation(cleanNick, {
-      violationType: abuseCheck.violationType,
-      reason: abuseCheck.reason || 'Harassment violation',
-      messageSnippet: rawText,
-    });
-
-    if (violationResult.isNowRestricted && violationResult.restriction) {
-      return {
-        isAllowed: false,
-        sanitizedText: '',
-        violationType: abuseCheck.violationType,
-        reason: abuseCheck.reason,
-        warningMessage: `Chat Restricted: Your chat access has been temporarily restricted because of repeated violations of the FUHSI Connect community rules.\nReason: ${abuseCheck.reason}\nRestriction: ${violationResult.restriction.durationDays} days.`,
-        actionTaken: 'USER_RESTRICTED',
-      };
-    }
-
-    return {
-      isAllowed: false,
-      sanitizedText: '',
-      violationType: abuseCheck.violationType,
-      reason: abuseCheck.reason,
-      warningMessage: `⚠️ Message Blocked: FUHSI Connect safety monitoring detected potential ${abuseCheck.violationType.toLowerCase().replace('_', ' ')}. Please maintain a respectful and safe campus environment.`,
-      actionTaken: 'BLOCKED_HARASSMENT',
-    };
-  }
-
-  // 3. Check for phone numbers & external contact information
-  const contactCheck = detectContactInformation(rawText);
-  if (contactCheck.containsContactInfo) {
-    // Record contact info violation strike
-    recordChatViolation(cleanNick, {
-      violationType: 'CONTACT_INFO',
-      reason: 'Prohibited sharing of personal phone number or direct contact details',
-      messageSnippet: rawText,
-    });
-
-    return {
-      isAllowed: true,
-      sanitizedText: '⚠️ Contact information cannot be shared.',
-      violationType: 'CONTACT_INFO',
-      reason: contactCheck.detectedReason,
-      warningMessage: '⚠️ Direct contact information (phone numbers, emails, external links) cannot be shared through Chat to protect student privacy and safety.',
-      actionTaken: 'REPLACED_CONTACT_INFO',
-    };
-  }
-
-  // 4. Clean and normal conversation (Passed)
   return {
     isAllowed: true,
-    sanitizedText: rawText.trim(),
+    sanitizedText: rawText,
     actionTaken: 'PASSED',
   };
 }

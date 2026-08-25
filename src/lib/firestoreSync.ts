@@ -23,6 +23,8 @@ const VERIFICATIONS_COL = 'verification_requests';
 const REPORTS_COL = 'reports';
 const VERIF_CANDIDATES_COL = 'verif_candidates';
 const DIRECT_MESSAGES_COL = 'direct_messages';
+const SETTINGS_COL = 'settings';
+const VERIFICATION_SETTINGS_DOC = 'verification_settings';
 
 /**
  * Subscribe to all users in Firestore in real-time
@@ -195,6 +197,16 @@ export async function saveMarketplaceApprovedToFirestore(item: MarketplaceItem):
     await setDoc(doc(db, MARKETPLACE_APPROVED_COL, item.id), sanitizeForFirestore(item), { merge: true });
   } catch (err) {
     console.error('Error saving marketplace item to Firestore:', err);
+  }
+}
+
+export async function deleteMarketplaceApprovedFromFirestore(itemId: string): Promise<void> {
+  if (!itemId) return;
+  try {
+    await deleteDoc(doc(db, MARKETPLACE_APPROVED_COL, itemId));
+    await deleteDoc(doc(db, MARKETPLACE_PENDING_COL, itemId));
+  } catch (err) {
+    console.error('Error deleting marketplace item from Firestore:', err);
   }
 }
 
@@ -377,6 +389,42 @@ export async function saveDirectMessageToFirestore(msg: DirectMessage): Promise<
 }
 
 /**
+ * Subscribe to Verification Fee from Firestore
+ */
+export function subscribeVerificationFee(onUpdate: (fee: number) => void) {
+  return onSnapshot(
+    doc(db, SETTINGS_COL, VERIFICATION_SETTINGS_DOC),
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (typeof data?.verificationFee === 'number' && !isNaN(data.verificationFee)) {
+          onUpdate(data.verificationFee);
+        }
+      }
+    },
+    (err) => {
+      console.warn('Firestore verification fee subscription warning:', err?.message || err);
+    }
+  );
+}
+
+/**
+ * Save Verification Fee to Firestore
+ */
+export async function saveVerificationFeeToFirestore(fee: number): Promise<void> {
+  if (typeof fee !== 'number' || isNaN(fee)) return;
+  try {
+    await setDoc(
+      doc(db, SETTINGS_COL, VERIFICATION_SETTINGS_DOC),
+      { verificationFee: fee, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error('Error saving verification fee to Firestore:', err);
+  }
+}
+
+/**
  * Subscribe to all direct messages
  */
 export function subscribeAllDirectMessages(onUpdate: (messages: DirectMessage[]) => void) {
@@ -394,4 +442,6 @@ export function subscribeAllDirectMessages(onUpdate: (messages: DirectMessage[])
     }
   );
 }
+
+
 

@@ -38,6 +38,7 @@ interface AuthorProfileModalProps {
   onCommentClick?: (post: Post) => void;
   onAuthorClick?: (post: Post) => void;
   onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
   onStartChat?: (recipientNickname: string, recipientAvatarKey?: string, recipientAvatarUrl?: string) => void;
 }
 
@@ -63,6 +64,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     onCommentClick,
     onAuthorClick,
     onDeletePost,
+    onEditPost,
     onStartChat,
   } = props;
 
@@ -324,6 +326,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                   }}
                   onAuthorClick={onAuthorClick}
                   onDeletePost={onDeletePost}
+                  onEditPost={onEditPost}
                 />
               ))
             )

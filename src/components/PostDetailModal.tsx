@@ -9,6 +9,7 @@ import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { compressImageFile } from '../utils/imageUtils';
 import { checkIsUserVerified } from '../utils/verificationUtils';
+import { findUserByNickname } from '../utils/userDbUtils';
 
 interface PostDetailModalProps {
   post: Post;
@@ -55,6 +56,10 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
   const [editedContent, setEditedContent] = useState(post?.content || (post as any)?.text || '');
   const [showEditLockModal, setShowEditLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  useEffect(() => {
+    setEditedContent(post?.content || (post as any)?.text || '');
+  }, [post?.content, (post as any)?.text]);
 
   // Live ticker to update relative timestamps in real-time every 15 seconds
   const [, setTimeTick] = useState(0);
@@ -144,6 +149,10 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
     const relativeTime = formatRelativeTime(comment.timestamp);
     const exactTime = formatExactDateTime(comment.timestamp) || comment.timestamp;
 
+    const commentAuthorUser = findUserByNickname(comment.authorNickname);
+    const commentAvatarKey = comment.authorAvatarKey || commentAuthorUser?.avatarKey || (isMyComment ? userProfile?.avatarKey : undefined) || '1';
+    const commentAvatarUrl = comment.authorAvatarUrl || commentAuthorUser?.avatarUrl || (isMyComment ? userProfile?.avatarUrl : undefined);
+
     return (
       <div key={comment.id} className="space-y-2">
         <div 
@@ -157,8 +166,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
             <div 
               onClick={() => onAuthorClick?.({
                 nickname: comment.authorNickname,
-                avatarKey: comment.authorAvatarKey,
-                avatarUrl: comment.authorAvatarUrl,
+                avatarKey: commentAvatarKey,
+                avatarUrl: commentAvatarUrl,
                 badgeType: comment.authorBadgeType,
                 badgeTitle: comment.authorBadgeTitle
               })}
@@ -166,8 +175,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               title={`View ${comment.authorNickname}'s profile`}
             >
               <AvatarIcon
-                avatarKey={comment.authorAvatarKey}
-                avatarUrl={comment.authorAvatarUrl}
+                avatarKey={commentAvatarKey}
+                avatarUrl={commentAvatarUrl}
                 sizeClassName="w-7 h-7 rounded-full object-cover shrink-0 group-hover/user:scale-105 transition-transform"
               />
               <span className="font-extrabold text-slate-900 text-xs group-hover/user:text-teal-700 group-hover/user:underline">
@@ -325,14 +334,18 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               post?.authorNickname &&
               post.authorNickname.toLowerCase() === userProfile.nickname.toLowerCase()
             );
+            const authorUser = findUserByNickname(post?.authorNickname);
+            const postAvatarKey = post.authorAvatarKey || authorUser?.avatarKey || (isMyPost ? userProfile?.avatarKey : undefined) || '1';
+            const postAvatarUrl = post.authorAvatarUrl || authorUser?.avatarUrl || (isMyPost ? userProfile?.avatarUrl : undefined);
+
             return (
               <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-3 shadow-2xs">
                 <div className="flex items-start justify-between gap-2">
                   <div 
                     onClick={() => onAuthorClick?.({
                       nickname: post.authorNickname,
-                      avatarKey: post.authorAvatarKey,
-                      avatarUrl: post.authorAvatarUrl,
+                      avatarKey: postAvatarKey,
+                      avatarUrl: postAvatarUrl,
                       badgeType: post.authorBadgeType,
                       badgeTitle: post.authorBadgeTitle
                     })}
@@ -340,8 +353,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                     title={`View ${post.authorNickname}'s profile`}
                   >
                     <AvatarIcon
-                      avatarKey={post.authorAvatarKey}
-                      avatarUrl={post.authorAvatarUrl}
+                      avatarKey={postAvatarKey}
+                      avatarUrl={postAvatarUrl}
                       sizeClassName="w-10 h-10 rounded-full object-cover shrink-0 ring-2 ring-teal-500/20 group-hover/author:scale-105 transition-transform"
                     />
                     <div className="min-w-0 flex-1">
@@ -367,6 +380,9 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                         >
                           {formatRelativeTime(post.timestamp)}
                         </span>
+                        {post.isEdited && (
+                          <span className="text-[10px] text-slate-400 font-normal italic">(edited)</span>
+                        )}
                       </div>
                     </div>
                   </div>

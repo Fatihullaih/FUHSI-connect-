@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { VerificationBadge } from './VerificationBadge';
+import { subscribeVerificationFee } from '../lib/firestoreSync';
 
 interface VerificationModalProps {
   userProfile: UserProfile | null;
@@ -53,6 +54,33 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     }
     return 1500;
   });
+
+  // Real-time synchronization of Verification Fee across all devices and clients
+  useEffect(() => {
+    // 1. Subscribe to Firestore settings
+    const unsubscribe = subscribeVerificationFee((newFee) => {
+      if (typeof newFee === 'number' && !isNaN(newFee) && newFee >= 0) {
+        setFeeAmount(newFee);
+        try {
+          localStorage.setItem('fuhsi_verification_fee', newFee.toString());
+        } catch (e) {}
+      }
+    });
+
+    // 2. Listen to custom window events (cross-component / sync)
+    const handleFeeEvent = (e: any) => {
+      const fee = e.detail;
+      if (typeof fee === 'number' && !isNaN(fee)) {
+        setFeeAmount(fee);
+      }
+    };
+    window.addEventListener('fuhsi_verification_fee_updated', handleFeeEvent);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('fuhsi_verification_fee_updated', handleFeeEvent);
+    };
+  }, []);
 
   const [accountType, setAccountType] = useState<'Student' | 'Executive' | 'Organization'>('Student');
   const [positionTitle, setPositionTitle] = useState('');

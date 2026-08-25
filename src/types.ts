@@ -129,6 +129,8 @@ export interface Post {
   flagReason?: string;
   isQuarantined?: boolean;
   status?: PostStatus;
+  updatedAt?: string;
+  isEdited?: boolean;
 }
 
 export interface MarketplaceItem {
@@ -222,6 +224,8 @@ export interface ChatConversation {
   participants?: string[];
   lastMessage: string;
   lastTimestamp: string;
+  lastSenderNickname?: string;
+  lastMessageIsRead?: boolean;
   itemId?: string;
   itemTitle?: string;
   itemPrice?: number;

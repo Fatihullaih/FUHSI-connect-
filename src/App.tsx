@@ -34,6 +34,7 @@ import {
   saveMarketplaceApprovedToFirestore,
   saveVerificationRequestToFirestore,
   saveUserToFirestore,
+  deleteMarketplaceApprovedFromFirestore,
   seedFirestoreInitialDataIfNeeded,
   purgeAllExceptAdminFromFirestore,
 } from './lib/firestoreSync';
@@ -57,6 +58,7 @@ import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
 import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon, MessageCircle } from 'lucide-react';
 import { getUserNotifications, getReadNotificationIds, getUserConversations } from './utils/messagingUtils';
+import { updateActiveUserPresence } from './utils/presenceUtils';
 import { isUserMatchingAudience } from './utils/audienceUtils';
 
 export const App: React.FC = () => {
@@ -224,12 +226,13 @@ export const App: React.FC = () => {
     return count;
   }, [userProfile?.nickname, userProfile?.department, posts, notifTrigger]);
 
-  // Unread Chats Count for Navigation Badge
+  // Unread Chats Count for Navigation Badge (Distinct active conversations with unread messages)
   const unreadChatsCount = useMemo(() => {
     if (!userProfile?.nickname) return 0;
     try {
       const convs = getUserConversations(userProfile.nickname);
-      return convs.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+      // Count total distinct conversations that have at least 1 unread message
+      return convs.filter((c) => (c.unreadCount || 0) > 0).length;
     } catch (e) {
       return 0;
     }
@@ -383,16 +386,17 @@ export const App: React.FC = () => {
 
     // 5. Subscribe Marketplace Approved Items
     const unsubMarketplace = subscribeMarketplaceApproved((fsItems) => {
-      if (!isMounted || !fsItems || fsItems.length === 0) return;
-      let localItems: MarketplaceItem[] = [];
+      if (!isMounted || !fsItems) return;
+      let deletedIds: string[] = [];
       try {
-        const mStr = localStorage.getItem('fuhsi_marketplace_approved_db');
-        if (mStr) localItems = JSON.parse(mStr);
+        const dStr = localStorage.getItem('fuhsi_deleted_marketplace_ids');
+        if (dStr) deletedIds = JSON.parse(dStr);
       } catch (e) {}
 
-      const merged = mergeMarketplaceItems(localItems, fsItems);
-      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(merged));
-      setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      // Authoritative Firestore items filtered against deleted IDs
+      const validItems = fsItems.filter((i) => i && i.id && !deletedIds.includes(i.id));
+      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(validItems));
+      setMarketplaceItems(validItems);
     });
 
     return () => {
@@ -486,12 +490,19 @@ export const App: React.FC = () => {
       }
 
       // 4. Sync Marketplace Approved Items
+      let deletedIds: string[] = [];
+      try {
+        const dStr = localStorage.getItem('fuhsi_deleted_marketplace_ids');
+        if (dStr) deletedIds = JSON.parse(dStr);
+      } catch (e) {}
+
       let localApproved: MarketplaceItem[] = [];
       try {
         const aStr = localStorage.getItem('fuhsi_marketplace_approved_db');
         if (aStr) localApproved = JSON.parse(aStr);
       } catch (e) {}
-      const mergedApproved = mergeMarketplaceItems(localApproved, db.marketplaceItems || []);
+      const mergedApproved = mergeMarketplaceItems(localApproved, db.marketplaceItems || [])
+        .filter((i) => i && i.id && !deletedIds.includes(i.id));
       localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(mergedApproved));
       setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedApproved) ? mergedApproved : prev));
 
@@ -501,7 +512,8 @@ export const App: React.FC = () => {
         const penStr = localStorage.getItem('fuhsi_marketplace_pending_db');
         if (penStr) localPending = JSON.parse(penStr);
       } catch (e) {}
-      const mergedPending = mergeMarketplaceItems(localPending, db.pendingMarketplaceItems || []);
+      const mergedPending = mergeMarketplaceItems(localPending, db.pendingMarketplaceItems || [])
+        .filter((i) => i && i.id && !deletedIds.includes(i.id));
       localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(mergedPending));
       setPendingMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedPending) ? mergedPending : prev));
 
@@ -561,6 +573,58 @@ export const App: React.FC = () => {
       } catch (e) { console.error(e); }
     }
   }, [userProfile]);
+
+  // Real-time Presence & Active Heartbeat Monitor
+  useEffect(() => {
+    if (!userProfile || !userProfile.nickname) return;
+
+    // 1. Send initial online presence heartbeat
+    updateActiveUserPresence(userProfile, true);
+
+    // 2. Periodic heartbeat every 20 seconds while app is active
+    const heartbeatInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        updateActiveUserPresence(userProfile, true);
+      }
+    }, 20000);
+
+    // 3. User interaction throttle
+    let lastActivityTime = 0;
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityTime > 15000) {
+        lastActivityTime = now;
+        updateActiveUserPresence(userProfile, true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        updateActiveUserPresence(userProfile, true);
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      updateActiveUserPresence(userProfile, false);
+    };
+
+    window.addEventListener('mousemove', handleUserActivity, { passive: true });
+    window.addEventListener('keydown', handleUserActivity, { passive: true });
+    window.addEventListener('touchstart', handleUserActivity, { passive: true });
+    window.addEventListener('click', handleUserActivity, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [userProfile?.nickname]);
 
   useEffect(() => {
     if (userProfile && userProfile.nickname) {
@@ -896,18 +960,58 @@ export const App: React.FC = () => {
   };
 
   const handleEditPost = (postId: string, newContent: string) => {
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const updated = { ...p, content: newContent, text: newContent };
-          savePostToFirestore(updated).catch((err) => console.error(err));
-          return updated;
+    const cleanContent = sanitizeText(newContent.trim());
+    if (!cleanContent) return;
+    const nowIso = new Date().toISOString();
+
+    const updatedPosts = posts.map((p) => {
+      if (p.id === postId) {
+        const updated: Post = {
+          ...p,
+          content: cleanContent,
+          text: cleanContent,
+          updatedAt: nowIso,
+          isEdited: true,
+        };
+        savePostToFirestore(updated).catch((err) => console.error('Error saving edited post to Firestore:', err));
+        return updated;
+      }
+      return p;
+    });
+
+    setPosts(updatedPosts);
+    try {
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
+    } catch (e) {
+      console.error(e);
+    }
+
+    pushServerDbSync({ posts: updatedPosts, replacePosts: true }).catch((err) => {
+      console.error('Error pushing edited post to server:', err);
+    });
+
+    setModalStack((prevStack) =>
+      prevStack.map((item) => {
+        if (item.type === 'postDetail' && item.post.id === postId) {
+          return {
+            ...item,
+            post: {
+              ...item.post,
+              content: cleanContent,
+              text: cleanContent,
+              updatedAt: nowIso,
+              isEdited: true,
+            },
+          };
         }
-        return p;
+        return item;
       })
     );
+
     if (selectedPost && selectedPost.id === postId) {
-      setSelectedPost((prev) => (prev ? { ...prev, content: newContent, text: newContent } : null));
+      setSelectedPost((prev) =>
+        prev ? { ...prev, content: cleanContent, text: cleanContent, updatedAt: nowIso, isEdited: true } : null
+      );
     }
   };
 
@@ -1312,14 +1416,55 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteMarketplaceItem = (id: string) => {
+    if (!id) return;
+
+    // Track permanently deleted ID so it can never resurrect across reloads or device syncs
+    try {
+      const dStr = localStorage.getItem('fuhsi_deleted_marketplace_ids');
+      const deletedIds: string[] = dStr ? JSON.parse(dStr) : [];
+      if (!deletedIds.includes(id)) {
+        deletedIds.push(id);
+        localStorage.setItem('fuhsi_deleted_marketplace_ids', JSON.stringify(deletedIds));
+      }
+    } catch (e) {}
+
+    let updatedApproved: MarketplaceItem[] = [];
     setMarketplaceItems((prev) => {
       const updated = prev.filter((i) => i.id !== id);
+      updatedApproved = updated;
       try {
         localStorage.setItem('fuhsi_marketplace_db', JSON.stringify(updated));
-        pushServerDbSync({ marketplaceItems: updated });
+        localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
+
+    let updatedPendingList: MarketplaceItem[] = [];
+    setPendingMarketplaceItems((prev) => {
+      const updatedPending = prev.filter((i) => i.id !== id);
+      updatedPendingList = updatedPending;
+      try {
+        localStorage.setItem('fuhsi_pending_marketplace_db', JSON.stringify(updatedPending));
+        localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(updatedPending));
+      } catch (e) {}
+      return updatedPending;
+    });
+
+    // Sync to Server DB (replace flag ensures server purges it immediately)
+    pushServerDbSync({
+      marketplaceItems: updatedApproved,
+      replaceMarketplaceItems: true,
+      pendingMarketplaceItems: updatedPendingList,
+      replacePendingMarketplaceItems: true,
+    } as any);
+
+    // Permanently remove from Cloud Firestore (both approved & pending collections)
+    deleteMarketplaceApprovedFromFirestore(id).catch((err) => console.error('Error deleting marketplace item from Firestore:', err));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fuhsi_marketplace_item_deleted', { detail: id }));
+      window.dispatchEvent(new CustomEvent('fuhsi_marketplace_updated'));
+    }
   };
 
   const handleSaveUserProfile = (
@@ -1549,11 +1694,14 @@ export const App: React.FC = () => {
             userProfile={userProfile}
             posts={posts}
             marketplaceItems={marketplaceItems}
+            currentUserNickname={userProfile?.nickname}
             onSelectPost={openPostDetail}
             onLikeClick={handleLikeClick}
             onBookmarkClick={handleBookmarkClick}
             onCommentClick={openPostDetail}
             onAuthorClick={openAuthorProfile}
+            onEditPost={handleEditPost}
+            onDeletePost={handleDeletePost}
           />
         )}
 
@@ -1565,6 +1713,7 @@ export const App: React.FC = () => {
             onSubmitMarketplaceItem={handleSubmitMarketplaceItem}
             onRecordDmBuyIntent={handleRecordDmBuyIntent}
             onMarkAsSold={handleMarkAsSold}
+            onDeleteMarketplaceItem={handleDeleteMarketplaceItem}
             onAuthorClick={openAuthorProfile}
             onOpenAdminConsole={() => handleNavChange(6)}
             onApplyVerificationWithFee={() =>
@@ -1915,6 +2064,7 @@ export const App: React.FC = () => {
                 onLikeClick={handleLikeClick}
                 onBookmarkClick={handleBookmarkClick}
                 onDeletePost={handleDeletePost}
+                onEditPost={handleEditPost}
                 onAuthorClick={openAuthorProfile}
                 onCommentClick={openPostDetail}
                 onStartChat={(recipientNickname, avatarKey, avatarUrl) => {
@@ -1970,6 +2120,7 @@ export const App: React.FC = () => {
                       onCommentClick={openPostDetail}
                       onAuthorClick={openAuthorProfile}
                       onDeletePost={handleDeletePost}
+                      onEditPost={handleEditPost}
                       onDeleteComment={handleDeleteComment}
                       onClose={closeModalUI}
                     />

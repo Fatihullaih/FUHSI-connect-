@@ -80,21 +80,58 @@ const CATEGORY_OPTIONS = [
 // Room / Housing Types
 const HOUSING_ROOM_TYPES = [
   'Single Room',
-  'Self-Contain Room',
-  '2-Bedroom Flat',
+  'Self Contain',
+  'Roommate (Needed)',
   'Shared Bedspace',
+  '2-Bedroom Flat',
   'Hostel Bedspace',
   'Mini Flat / Studio',
-  'Other Accommodation'
+  'Other Accommodation',
+];
+
+const ROOMMATE_CURRENT_ROOM_TYPES = [
+  'Single Room',
+  'Self Contain',
+  'Shared Bedspace',
+  '2-Bedroom Flat',
+  'Hostel Bedspace',
+  'Mini Flat / Studio',
+  'Other Accommodation',
 ];
 
 // Rent Durations
 const RENT_DURATIONS = [
-  'Per Year (Annual)',
-  'Per Semester',
   'Per Month',
-  'Per Academic Session'
+  'Per Annual',
+  'Per Academic Session',
+  'Per Semester',
 ];
+
+// Nigerian WhatsApp Phone Number Validator (11 digits, valid prefixes)
+export const validateNigerianWhatsApp = (phone: string): { isValid: boolean; error?: string; cleanPhone?: string } => {
+  if (!phone || !phone.trim()) {
+    return { isValid: false, error: 'Please enter your WhatsApp Number.' };
+  }
+  const digits = phone.replace(/\D/g, '');
+  let standard11 = '';
+  if (digits.length === 11 && digits.startsWith('0')) {
+    standard11 = digits;
+  } else if (digits.length === 13 && digits.startsWith('234')) {
+    standard11 = '0' + digits.substring(3);
+  } else if (digits.length === 10 && !digits.startsWith('0')) {
+    standard11 = '0' + digits;
+  } else {
+    return { isValid: false, error: 'WhatsApp number must be exactly 11 digits.' };
+  }
+
+  const validPrefixes = ['080', '081', '070', '090', '091', '071'];
+  const prefix = standard11.substring(0, 3);
+  if (!validPrefixes.includes(prefix)) {
+    return { isValid: false, error: `WhatsApp number must start with a valid Nigerian mobile network prefix (${validPrefixes.join(', ')}).` };
+  }
+
+  return { isValid: true, cleanPhone: standard11 };
+};
 
 // Safe Meetup Locations around FUHSI
 const MEETUP_LOCATIONS = [
@@ -186,8 +223,9 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
   // Housing specific fields
   const [roomType, setRoomType] = useState('Single Room');
-  const [rentDuration, setRentDuration] = useState('Per Year (Annual)');
-  const [propertyLocation, setPropertyLocation] = useState('Owuoluwa Junction, Ayeka');
+  const [roommateRoomType, setRoommateRoomType] = useState('Single Room');
+  const [rentDuration, setRentDuration] = useState('Per Annual');
+  const [propertyLocation, setPropertyLocation] = useState('');
 
   // Reporting Modal State
   const [reportingItem, setReportingItem] = useState<MarketplaceItem | null>(null);
@@ -350,36 +388,56 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
     setFormError('');
 
     if (!title.trim()) {
-      setFormError('Please enter a descriptive item/property title.');
+      setFormError('Please enter a descriptive title.');
       return;
     }
     const priceVal = typeof askingPrice === 'number' ? askingPrice : 0;
     if (!askingPrice || priceVal <= 0) {
-      setFormError('Please enter a valid asking price (in ₦).');
+      setFormError('Please enter a valid price (in ₦).');
       return;
     }
-    if (!sellerPhone.trim() || sellerPhone.replace(/\D/g, '').length < 8) {
-      setFormError('Please provide a valid WhatsApp contact phone number for buyers to reach you.');
+    const phoneCheck = validateNigerianWhatsApp(sellerPhone);
+    if (!phoneCheck.isValid) {
+      setFormError(phoneCheck.error || 'Please enter a valid 11-digit WhatsApp number.');
       return;
+    }
+    if (isHousingCategory) {
+      if (!propertyLocation.trim()) {
+        setFormError('Property location is required.');
+        return;
+      }
+      if (!description.trim()) {
+        setFormError('Property Features & Amenities is required.');
+        return;
+      }
+    } else {
+      if (!description.trim()) {
+        setFormError('Item description is required.');
+        return;
+      }
     }
     if (uploadedPhotos.length < 1) {
-      setFormError('Please select at least 1 clear picture/photo from your device.');
+      setFormError('Please select at least 1 clear photo from your device.');
       return;
     }
+
+    const resolvedRoomType = isHousingCategory
+      ? (roomType === 'Roommate (Needed)' ? `Roommate Needed (${roommateRoomType})` : roomType)
+      : undefined;
 
     onSubmitMarketplaceItem({
       title: title.trim(),
       category,
       askingPrice: priceVal,
-      conditionTag: isHousingCategory ? roomType : conditionTag,
+      conditionTag: isHousingCategory ? (resolvedRoomType || 'Accommodation') : conditionTag,
       description: description.trim(),
-      sellerPhone: sellerPhone.trim(),
-      meetupPoint: isHousingCategory ? propertyLocation : meetupPoint,
+      sellerPhone: phoneCheck.cleanPhone || sellerPhone.trim(),
+      meetupPoint: isHousingCategory ? propertyLocation.trim() : meetupPoint,
       imageUrls: uploadedPhotos,
       isHousing: isHousingCategory,
-      propertyLocation: isHousingCategory ? propertyLocation : undefined,
+      propertyLocation: isHousingCategory ? propertyLocation.trim() : undefined,
       rentDuration: isHousingCategory ? rentDuration : undefined,
-      roomType: isHousingCategory ? roomType : undefined,
+      roomType: resolvedRoomType,
     });
 
     setSellSuccessMsg(true);
@@ -513,13 +571,8 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               <span>FUHSI MARKETPLACE</span>
             </h1>
             <p className="text-xs sm:text-sm text-emerald-100/95 mt-0.5 font-medium">
-              Buy, sell, and rent rooms directly with verified campus peers on WhatsApp.
+              Buy, sell, and rent rooms directly with verified campus peers.
             </p>
-            {/* Zero Commission Tag */}
-            <div className="inline-flex items-center gap-1.5 mt-2 bg-emerald-800/80 border border-emerald-500/40 text-emerald-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
-              <Sparkles size={12} className="text-amber-300" />
-              <span>0% Commission • Direct WhatsApp Negotiations</span>
-            </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -759,10 +812,10 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                               <button
                                 onClick={() => handleContactOnWhatsApp(item)}
                                 className="px-3.5 py-1.5 bg-[#25D366] hover:bg-[#1ebd5a] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                                title="Open Direct WhatsApp Chat"
+                                title="Chat on WhatsApp"
                               >
                                 <MessageCircle size={14} className="fill-white/20" />
-                                <span>💬 Contact on WhatsApp</span>
+                                <span>WhatsApp</span>
                               </button>
                             ) : (
                               <div className="flex items-center gap-1.5">
@@ -783,9 +836,20 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                             )}
                           </>
                         ) : (
-                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
-                            <CheckCircle2 size={13} />
-                            <span>{soldInfo.soldBadgeText}</span>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                              <CheckCircle2 size={13} />
+                              <span>{soldInfo.soldBadgeText}</span>
+                            </div>
+                            {isOwner && (
+                              <button
+                                onClick={() => setDeleteConfirmItem(item)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Listing Permanently"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -930,11 +994,11 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       >
         <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
         <span className="font-extrabold text-xs sm:text-sm tracking-wide hidden sm:inline">
-          Post Listing
+          Post Item
         </span>
       </button>
 
-      {/* 5. "VIEW DETAILS" MODAL WITH DIRECT WHATSAPP BUTTON */}
+      {/* 5. "VIEW DETAILS" MODAL */}
       {detailsModalItem && (() => {
         const soldInfo = getSoldStatusInfo(detailsModalItem);
         const isSold = soldInfo.isSold;
@@ -1100,31 +1164,19 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                 </p>
               </div>
 
-              {/* Zero Commission & Privacy Shield Notice */}
-              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3 text-[11px] space-y-1 text-emerald-950">
-                <p className="font-extrabold flex items-center gap-1.5">
-                  <Sparkles size={13} className="text-amber-600" />
-                  <span>Direct WhatsApp Trade (0% Commission)</span>
-                </p>
-                <p className="text-emerald-900/90 leading-relaxed font-medium">
-                  • Deal directly with the seller on WhatsApp without middleman fees.<br />
-                  • Seller's phone number is securely protected from web crawlers.
-                </p>
-              </div>
-
               {/* Primary Action Buttons */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 {!isSold ? (
                   <>
                     {!isOwner ? (
                       <div className="space-y-2">
-                        {/* 💬 Contact Seller on WhatsApp */}
+                        {/* WhatsApp Button */}
                         <button
                           onClick={() => handleContactOnWhatsApp(detailsModalItem)}
                           className="w-full py-3.5 bg-[#25D366] hover:bg-[#1ebd5a] text-white font-extrabold text-xs sm:text-sm rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
                         >
                           <MessageCircle className="w-5 h-5 fill-white/20" />
-                          <span>💬 Contact Seller on WhatsApp</span>
+                          <span>WhatsApp</span>
                         </button>
 
                         {/* Safety Actions: Report & Block */}
@@ -1177,6 +1229,15 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                     >
                       <span>✓ Item Sold ({soldInfo.soldBadgeText})</span>
                     </button>
+                    {isOwner && (
+                      <button
+                        onClick={() => setDeleteConfirmItem(detailsModalItem)}
+                        className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2 border border-rose-200"
+                      >
+                        <Trash2 size={15} />
+                        <span>Delete Listing Permanently</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1185,15 +1246,15 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         );
       })()}
 
-      {/* 6. MODAL: POST ITEM / HOUSING FORM */}
+      {/* 6. MODAL: POST ITEM FORM */}
       {showSellModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-8 max-h-[92vh] overflow-y-auto no-scrollbar">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Create Marketplace Listing</h3>
-                <p className="text-[11px] text-emerald-700 font-bold">
-                  ⚡ Direct WhatsApp Trade • 0% Commission
+                <h3 className="font-extrabold text-slate-900 text-base">Post Item</h3>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  List an item or accommodation for verified campus students
                 </p>
               </div>
               <button 
@@ -1209,7 +1270,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                 <CheckCircle2 size={32} className="text-emerald-600 mx-auto" />
                 <h4 className="font-extrabold text-sm">Listing Published!</h4>
                 <p className="text-xs text-emerald-700">
-                  Your listing is now live on the FUHSI Marketplace. Interested buyers will contact you directly on WhatsApp.
+                  Your listing is now live on the FUHSI Marketplace. Interested buyers can reach you directly on WhatsApp.
                 </p>
               </div>
             ) : (
@@ -1223,13 +1284,13 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isHousingCategory ? 'Property / Room Title' : 'Item / Product Title'}
+                    {isHousingCategory ? 'Property / Room Title' : 'Item / Product Title'} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder={isHousingCategory ? "e.g. Spacious Self-Contain Room at Owuoluwa" : "e.g. TECNO Spark 8 (64GB) / Macleod Clinical Examination"}
+                    placeholder={isHousingCategory ? "e.g. Spacious Self Contain Room at Owuoluwa" : "e.g. TECNO Spark 8 (64GB) / Macleod Clinical Examination"}
                     className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                     required
                   />
@@ -1251,13 +1312,13 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      {isHousingCategory ? 'Rent Amount (₦)' : 'Asking Price (₦)'}
+                      {isHousingCategory ? 'Rent Amount (₦)' : 'Asking Price (₦)'} <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="number"
                       value={askingPrice}
                       onChange={(e) => setAskingPrice(Number(e.target.value) || '')}
-                      placeholder={isHousingCategory ? "e.g. 120000" : "e.g. 15000"}
+                      placeholder={isHousingCategory ? "120000" : "15000"}
                       className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       required
                     />
@@ -1299,14 +1360,33 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                       </div>
                     </div>
 
+                    {/* Roommate prompt if Roommate (Needed) is selected */}
+                    {roomType === 'Roommate (Needed)' && (
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Current Room / Apartment Type</label>
+                        <select
+                          value={roommateRoomType}
+                          onChange={(e) => setRoommateRoomType(e.target.value)}
+                          className="w-full text-xs rounded-xl border border-slate-200 p-2 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {ROOMMATE_CURRENT_ROOM_TYPES.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Property Location / Area</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Property Location <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={propertyLocation}
                         onChange={(e) => setPropertyLocation(e.target.value)}
-                        placeholder="e.g. Owuoluwa Junction, Ayeka (Near Just-Love)"
+                        placeholder="e.g. Owuoluwa Junction, Ayeka"
                         className="w-full text-xs rounded-xl border border-slate-200 p-2 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
                       />
                     </div>
                   </div>
@@ -1341,11 +1421,10 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   </div>
                 )}
 
-                {/* WhatsApp Contact Number */}
+                {/* WhatsApp Number */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Seller's WhatsApp Contact Number</span>
-                    <span className="text-[10px] text-emerald-700 font-semibold">🔒 Protected from web scraping</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    WhatsApp Number <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <MessageCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
@@ -1353,19 +1432,16 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                       type="tel"
                       value={sellerPhone}
                       onChange={(e) => setSellerPhone(e.target.value)}
-                      placeholder="e.g. 08012345678 or +2348012345678"
+                      placeholder="08012345678"
                       className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-slate-200 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       required
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Buyers will click the <strong>"💬 Contact on WhatsApp"</strong> button to message you directly.
-                  </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isHousingCategory ? 'Property Features & Amenities' : 'Description & Specs'}
+                    {isHousingCategory ? 'Property Features & Amenities' : 'Description & Specs'} <span className="text-rose-500">*</span>
                   </label>
                   <textarea
                     value={description}
@@ -1386,7 +1462,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   <div className="flex justify-between items-center">
                     <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
                       <Camera size={15} className="text-emerald-600" />
-                      <span>{isHousingCategory ? 'Property Pictures (1–6 Photos)' : 'Item Pictures (1–6 Photos)'}</span>
+                      <span>{isHousingCategory ? 'Property Pictures (1–6 Clear Photos)' : 'Item Pictures (1–6 Clear Photos)'}</span>
                     </label>
                     <span className="text-[10px] font-extrabold text-slate-500">
                       {uploadedPhotos.length} / 6 selected
@@ -1600,9 +1676,9 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
               <Trash2 size={22} />
             </div>
             <div className="space-y-1">
-              <h3 className="font-extrabold text-slate-900 text-sm">Delete Listing?</h3>
+              <h3 className="font-extrabold text-slate-900 text-sm">Delete Listing Permanently?</h3>
               <p className="text-xs text-slate-600">
-                Are you sure you want to remove <strong className="text-slate-900">"{deleteConfirmItem.title}"</strong> from the marketplace?
+                Are you sure you want to permanently remove <strong className="text-slate-900">"{deleteConfirmItem.title}"</strong>? This will permanently delete it across all devices, the marketplace feed, and the admin directory.
               </p>
             </div>
 
