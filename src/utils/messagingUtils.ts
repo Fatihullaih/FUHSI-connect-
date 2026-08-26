@@ -300,6 +300,50 @@ export function getUserConversations(userNickname: string): ChatConversation[] {
 }
 
 /**
+ * Returns the exact count of distinct active conversations/senders that have at least 1 unread message for the current user.
+ * - 1 sender with 10 unread messages -> count = 1
+ * - 2 different senders each with unread messages -> count = 2
+ * - 3 different senders with unread messages -> count = 3
+ */
+export function getDistinctUnreadSendersCount(userNickname: string): number {
+  if (!userNickname) return 0;
+  const cleanMe = normalizeNickname(userNickname);
+  if (!cleanMe) return 0;
+
+  try {
+    const allMessages = getStoredDirectMessages();
+    const storedConvs = getStoredConversations();
+
+    const distinctSendersOrConvs = new Set<string>();
+
+    allMessages.forEach((msg) => {
+      if (!msg || msg.isRead) return;
+
+      const receiverClean = normalizeNickname(msg.receiverNickname);
+      if (receiverClean !== cleanMe) return;
+
+      const senderClean = normalizeNickname(msg.senderNickname);
+      if (!senderClean || senderClean === cleanMe) return;
+
+      const convId = msg.conversationId || getConversationId(msg.senderNickname, msg.receiverNickname);
+
+      // Check if user has explicitly deleted this conversation
+      const storedConv = storedConvs.find((c) => c.id === convId);
+      if (storedConv && storedConv.isDeletedBy && storedConv.isDeletedBy.includes(cleanMe)) {
+        return;
+      }
+
+      distinctSendersOrConvs.add(convId || senderClean);
+    });
+
+    return distinctSendersOrConvs.size;
+  } catch (err) {
+    console.error('Error calculating distinct unread senders count:', err);
+    return 0;
+  }
+}
+
+/**
  * Delete / Remove conversation for a user
  */
 export function deleteConversationForUser(conversationId: string, userNickname: string): void {

@@ -21,6 +21,7 @@ import {
   mergeVerificationRequests,
   mergeReports,
   mergeVerifCandidates,
+  mergeDirectMessages,
 } from './utils/apiSync';
 import {
   subscribeUsers,
@@ -28,6 +29,7 @@ import {
   subscribeComments,
   subscribeVerificationRequests,
   subscribeMarketplaceApproved,
+  subscribeAllDirectMessages,
   savePostToFirestore,
   deletePostFromFirestore,
   saveCommentToFirestore,
@@ -39,7 +41,7 @@ import {
   purgeAllExceptAdminFromFirestore,
 } from './lib/firestoreSync';
 import { initTheme, getStoredTheme, setStoredTheme, ThemeMode } from './utils/themeUtils';
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption } from './types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption, DirectMessage } from './types';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { CampusHubScreen } from './screens/CampusHubScreen';
@@ -57,7 +59,7 @@ import { VerificationBadge } from './components/VerificationBadge';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
 import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon, MessageCircle } from 'lucide-react';
-import { getUserNotifications, getReadNotificationIds, getUserConversations } from './utils/messagingUtils';
+import { getUserNotifications, getReadNotificationIds, getUserConversations, getDistinctUnreadSendersCount } from './utils/messagingUtils';
 import { updateActiveUserPresence } from './utils/presenceUtils';
 import { isUserMatchingAudience } from './utils/audienceUtils';
 
@@ -186,7 +188,7 @@ export const App: React.FC = () => {
   const activeUserKey = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
   const myBookmarkedPostIds = userBookmarksMap[activeUserKey] || [];
 
-  // Unread notifications tracker
+  // Unread notifications and chat messages counter tracker
   const [notifTrigger, setNotifTrigger] = useState(0);
 
   useEffect(() => {
@@ -196,10 +198,19 @@ export const App: React.FC = () => {
     window.addEventListener('fuhsi_notification_received', handleNotifUpdate);
     window.addEventListener('fuhsi_notification_read_updated', handleNotifUpdate);
     window.addEventListener('fuhsi_direct_message_updated', handleNotifUpdate);
+    window.addEventListener('fuhsi_conversation_deleted', handleNotifUpdate);
+    window.addEventListener('storage', handleNotifUpdate);
+
+    // Heartbeat to guarantee instant update of active unread conversations
+    const timer = setInterval(handleNotifUpdate, 2000);
+
     return () => {
       window.removeEventListener('fuhsi_notification_received', handleNotifUpdate);
       window.removeEventListener('fuhsi_notification_read_updated', handleNotifUpdate);
       window.removeEventListener('fuhsi_direct_message_updated', handleNotifUpdate);
+      window.removeEventListener('fuhsi_conversation_deleted', handleNotifUpdate);
+      window.removeEventListener('storage', handleNotifUpdate);
+      clearInterval(timer);
     };
   }, []);
 
@@ -226,13 +237,14 @@ export const App: React.FC = () => {
     return count;
   }, [userProfile?.nickname, userProfile?.department, posts, notifTrigger]);
 
-  // Unread Chats Count for Navigation Badge (Distinct active conversations with unread messages)
+  // Unread Chats Count for Navigation Badge (Distinct active conversations / senders with unread incoming messages)
+  // - 1 user sending multiple unread messages = 1
+  // - 2 different users sending unread messages = 2
+  // - 3 different users = 3
   const unreadChatsCount = useMemo(() => {
     if (!userProfile?.nickname) return 0;
     try {
-      const convs = getUserConversations(userProfile.nickname);
-      // Count total distinct conversations that have at least 1 unread message
-      return convs.filter((c) => (c.unreadCount || 0) > 0).length;
+      return getDistinctUnreadSendersCount(userProfile.nickname);
     } catch (e) {
       return 0;
     }
@@ -399,6 +411,23 @@ export const App: React.FC = () => {
       setMarketplaceItems(validItems);
     });
 
+    // 6. Subscribe Direct Messages in real-time
+    const unsubDirectMessages = subscribeAllDirectMessages((fsDirectMessages) => {
+      if (!isMounted || !fsDirectMessages) return;
+      let localMsgs: DirectMessage[] = [];
+      try {
+        const dStr = localStorage.getItem('fuhsi_direct_messages_db');
+        if (dStr) localMsgs = JSON.parse(dStr);
+      } catch (e) {}
+
+      const merged = mergeDirectMessages(localMsgs, fsDirectMessages);
+      localStorage.setItem('fuhsi_direct_messages_db', JSON.stringify(merged));
+      setNotifTrigger((prev) => prev + 1);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated'));
+      }
+    });
+
     return () => {
       isMounted = false;
       unsubUsers();
@@ -406,6 +435,7 @@ export const App: React.FC = () => {
       unsubComments();
       unsubVerifs();
       unsubMarketplace();
+      unsubDirectMessages();
     };
   }, []);
 
@@ -545,6 +575,21 @@ export const App: React.FC = () => {
       } catch (e) {}
       const mergedCands = mergeVerifCandidates(localCands, db.verifCandidates || []);
       localStorage.setItem('fuhsi_verif_candidates_db', JSON.stringify(mergedCands));
+
+      // 9. Sync Direct Messages
+      if (Array.isArray(db.directMessages)) {
+        let localMsgs: DirectMessage[] = [];
+        try {
+          const dStr = localStorage.getItem('fuhsi_direct_messages_db');
+          if (dStr) localMsgs = JSON.parse(dStr);
+        } catch (e) {}
+        const mergedMsgs = mergeDirectMessages(localMsgs, db.directMessages);
+        localStorage.setItem('fuhsi_direct_messages_db', JSON.stringify(mergedMsgs));
+        setNotifTrigger((prev) => prev + 1);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated'));
+        }
+      }
     };
 
     // Initial sync immediately on mount

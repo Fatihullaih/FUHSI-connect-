@@ -154,11 +154,17 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     window.addEventListener('fuhsi_direct_message_updated', handleUpdate);
     window.addEventListener('fuhsi_conversation_deleted', handleUpdate);
     window.addEventListener('fuhsi_chat_restriction_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    // Heartbeat to guarantee instant update of active unread messages
+    const timer = setInterval(handleUpdate, 2000);
 
     return () => {
       window.removeEventListener('fuhsi_direct_message_updated', handleUpdate);
       window.removeEventListener('fuhsi_conversation_deleted', handleUpdate);
       window.removeEventListener('fuhsi_chat_restriction_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+      clearInterval(timer);
     };
   }, [myNickname]);
 
@@ -556,6 +562,11 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
             ) : (
               filteredConversations.map((conv) => {
                 const isSelected = conv.id === activeConvId;
+                const hasUnread = (conv.unreadCount || 0) > 0;
+                const isLastMsgFromMe = Boolean(
+                  conv.lastSenderNickname && normalizeNickname(conv.lastSenderNickname) === cleanMyNickname
+                );
+
                 return (
                   <div
                     key={conv.id}
@@ -571,33 +582,45 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         isVerified: conv.otherUserIsVerified,
                       });
                     }}
-                    className={`p-3 sm:px-4 flex items-center gap-3 cursor-pointer transition-colors group relative ${
+                    className={`p-3 sm:px-4 flex items-center gap-3 cursor-pointer transition-all group relative border-b border-slate-100 ${
                       isSelected
-                        ? 'bg-teal-50/80 border-l-4 border-teal-600'
-                        : 'hover:bg-slate-50/90'
+                        ? 'bg-teal-50 border-l-4 border-l-teal-600'
+                        : hasUnread
+                        ? 'bg-teal-50/60 hover:bg-teal-100/60 border-l-4 border-l-teal-500'
+                        : 'bg-white hover:bg-slate-50 border-l-4 border-l-transparent'
                     }`}
                   >
                     {/* Avatar */}
                     <div className="relative shrink-0">
-                      <div className="w-11 h-11 rounded-2xl bg-teal-900 flex items-center justify-center overflow-hidden border border-slate-200">
+                      <div
+                        className={`w-11 h-11 rounded-2xl bg-teal-900 flex items-center justify-center overflow-hidden border ${
+                          hasUnread
+                            ? 'border-teal-500 ring-2 ring-teal-500/40 shadow-xs'
+                            : 'border-slate-200'
+                        }`}
+                      >
                         <AvatarIcon
                           avatarKey={conv.otherUserAvatarKey}
                           avatarUrl={conv.otherUserAvatarUrl}
                           sizeClassName="w-full h-full object-cover"
                         />
                       </div>
-                      {conv.unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-teal-600 text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white">
+                      {hasUnread && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-teal-600 text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
                           {conv.unreadCount}
                         </span>
                       )}
                     </div>
 
-                    {/* Meta info: ONLY username & nickname, never real name or private info */}
+                    {/* Meta info: username & nickname, last message, unread status */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="text-xs font-black text-slate-900 truncate">
+                          <span
+                            className={`text-xs truncate ${
+                              hasUnread ? 'font-black text-slate-950 text-sm' : 'font-bold text-slate-700'
+                            }`}
+                          >
                             {extractPureStudentHandle(conv.otherUserNickname, myNickname)}
                           </span>
                           <VerificationBadge
@@ -606,31 +629,51 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                             size={12}
                           />
                         </div>
-                        <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                        <span
+                          className={`text-[10px] shrink-0 ${
+                            hasUnread ? 'font-black text-teal-700' : 'font-medium text-slate-400'
+                          }`}
+                        >
                           {conv.lastTimestamp}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 truncate leading-tight">
-                        {conv.lastSenderNickname && normalizeNickname(conv.lastSenderNickname) === cleanMyNickname && (
-                          conv.lastMessageIsRead ? (
-                            <span title="Read" className="inline-flex shrink-0 text-sky-500">
-                              <CheckCheck size={13} className="text-sky-500 stroke-[2.5]" />
-                            </span>
-                          ) : (
-                            <span title="Sent (Delivered)" className="inline-flex shrink-0 text-slate-400">
-                              <CheckCheck size={13} className="text-slate-400 stroke-[1.75]" />
-                            </span>
-                          )
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[11px] truncate leading-tight min-w-0 flex-1">
+                          {isLastMsgFromMe ? (
+                            conv.lastMessageIsRead ? (
+                              <span title="Read" className="inline-flex shrink-0 text-sky-500">
+                                <CheckCheck size={13} className="text-sky-500 stroke-[2.5]" />
+                              </span>
+                            ) : (
+                              <span title="Sent (Delivered)" className="inline-flex shrink-0 text-slate-400">
+                                <CheckCheck size={13} className="text-slate-400 stroke-[1.75]" />
+                              </span>
+                            )
+                          ) : hasUnread ? (
+                            <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0 inline-block shadow-xs animate-pulse" />
+                          ) : null}
+                          <p
+                            className={`truncate ${
+                              hasUnread ? 'font-extrabold text-slate-900 text-xs' : 'font-normal text-slate-500'
+                            }`}
+                          >
+                            {conv.lastMessage}
+                          </p>
+                        </div>
+
+                        {hasUnread && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-teal-600 text-white text-[10px] font-black leading-tight flex items-center justify-center shadow-xs">
+                            {conv.unreadCount} new
+                          </span>
                         )}
-                        <p className="truncate">{conv.lastMessage}</p>
                       </div>
                     </div>
 
                     {/* Delete Conversation action */}
                     <button
                       onClick={(e) => handleDeleteConversation(e, conv.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer shrink-0 ml-1"
                       title="Delete conversation"
                     >
                       <Trash2 size={13} />
