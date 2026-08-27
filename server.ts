@@ -17,6 +17,15 @@ import {
   mergeChatReports,
   mergeChatRestrictions,
 } from './src/utils/apiSync';
+import {
+  isDemoUser,
+  isDemoPost,
+  isDemoComment,
+  isDemoVerificationRequest,
+  isDemoMarketplaceItem,
+  isDemoDirectMessage,
+  isDemoNickname,
+} from './src/utils/postGenerator';
 
 const app = express();
 const PORT = 3000;
@@ -27,6 +36,29 @@ app.use(express.json({ limit: '10mb' }));
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 let activeDb: typeof DEFAULT_SERVER_DB = { ...DEFAULT_SERVER_DB };
 
+function sanitizeServerDb(dbObj: typeof DEFAULT_SERVER_DB): typeof DEFAULT_SERVER_DB {
+  return {
+    ...dbObj,
+    users: (dbObj.users || []).filter((u: any) => !isDemoUser(u) && !isDemoNickname(u.nickname)),
+    posts: (dbObj.posts || []).filter((p: any) => !isDemoPost(p)),
+    comments: (dbObj.comments || []).filter((c: any) => !isDemoComment(c)),
+    marketplaceItems: (dbObj.marketplaceItems || []).filter((m: any) => !isDemoMarketplaceItem(m)),
+    pendingMarketplaceItems: (dbObj.pendingMarketplaceItems || []).filter((m: any) => !isDemoMarketplaceItem(m)),
+    verificationRequests: (dbObj.verificationRequests || []).filter((v: any) => !isDemoVerificationRequest(v)),
+    reports: (dbObj.reports || []).filter((r: any) => !isDemoNickname(r.authorNickname) && !isDemoNickname(r.reportedNickname)),
+    verifCandidates: (dbObj.verifCandidates || []).filter((vc: any) => !isDemoNickname(vc.nickname)),
+    directMessages: (dbObj.directMessages || []).filter((d: any) => !isDemoDirectMessage(d)),
+    chatConversations: (dbObj.chatConversations || []).filter((conv: any) => {
+      const p1 = conv.participant1Nickname || (conv.participants && conv.participants[0]);
+      const p2 = conv.participant2Nickname || (conv.participants && conv.participants[1]);
+      const other = conv.otherUserNickname;
+      return !isDemoNickname(p1) && !isDemoNickname(p2) && !isDemoNickname(other);
+    }),
+    chatReports: (dbObj.chatReports || []).filter((cr: any) => !isDemoNickname(cr.reportedNickname) && !isDemoNickname(cr.reporterNickname)),
+    chatRestrictions: (dbObj.chatRestrictions || []).filter((cr: any) => !isDemoNickname(cr.nickname) && !isDemoNickname(cr.userNickname)),
+  };
+}
+
 function initAndLoadServerDb() {
   try {
     const dataDir = path.dirname(DB_FILE);
@@ -35,14 +67,14 @@ function initAndLoadServerDb() {
     }
 
     if (!fs.existsSync(DB_FILE)) {
-      activeDb = { ...DEFAULT_SERVER_DB };
+      activeDb = sanitizeServerDb({ ...DEFAULT_SERVER_DB });
       persistServerDb();
       console.log('[DB Init] Created initial data/db.json on server disk.');
     } else {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
 
-      activeDb = {
+      activeDb = sanitizeServerDb({
         ...DEFAULT_SERVER_DB,
         ...parsed,
         users: mergeUsers(DEFAULT_SERVER_DB.users, parsed.users || []),
@@ -58,13 +90,14 @@ function initAndLoadServerDb() {
         chatConversations: mergeChatConversations([], parsed.chatConversations || []),
         chatReports: mergeChatReports([], parsed.chatReports || []),
         chatRestrictions: mergeChatRestrictions([], parsed.chatRestrictions || []),
-      };
+      });
       persistServerDb();
-      console.log('[DB Init] Loaded central database from data/db.json on server disk.');
+      console.log('[DB Init] Loaded and sanitized central database from data/db.json on server disk.');
     }
   } catch (err) {
     console.error('[DB Error] Failed to initialize server DB file:', err);
-    activeDb = { ...DEFAULT_SERVER_DB };
+    activeDb = sanitizeServerDb({ ...DEFAULT_SERVER_DB });
+    persistServerDb();
   }
 }
 
@@ -74,6 +107,7 @@ function persistServerDb() {
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
+    activeDb = sanitizeServerDb(activeDb);
     fs.writeFileSync(DB_FILE, JSON.stringify(activeDb, null, 2), 'utf-8');
   } catch (err) {
     console.error('[DB Error] Failed to persist DB to file:', err);

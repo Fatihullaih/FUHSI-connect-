@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType, DirectMessage } from '../types';
+import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType, DirectMessage, HelpDeskInquiry } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
 import { pushServerDbSync } from '../utils/apiSync';
-import { deleteUserFromFirestore, subscribeVerificationFee, saveVerificationFeeToFirestore } from '../lib/firestoreSync';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info } from 'lucide-react';
+import { deleteUserFromFirestore, subscribeVerificationFee, saveVerificationFeeToFirestore, subscribeHelpDeskInquiries, updateHelpDeskInquiryStatus } from '../lib/firestoreSync';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info, LifeBuoy } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AdminTradeDesk } from '../components/AdminTradeDesk';
 import { AdminChatReportsDesk } from '../components/AdminChatReportsDesk';
@@ -355,6 +355,50 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     setTimeout(() => setApprovalToast(null), 3000);
   };
 
+  // Help Desk Inquiries State
+  const [helpDeskInquiries, setHelpDeskInquiries] = useState<HelpDeskInquiry[]>(() => {
+    try {
+      const stored = localStorage.getItem('fuhsi_helpdesk_inquiries_db');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    const unsub = subscribeHelpDeskInquiries((inquiries) => {
+      if (Array.isArray(inquiries)) {
+        setHelpDeskInquiries(inquiries);
+        try {
+          localStorage.setItem('fuhsi_helpdesk_inquiries_db', JSON.stringify(inquiries));
+        } catch (e) {}
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleUpdateInquiryStatus = async (inquiryId: string, status: HelpDeskInquiry['status'], replyText?: string) => {
+    const updated = helpDeskInquiries.map((inq) => {
+      if (inq.id === inquiryId) {
+        return {
+          ...inq,
+          status,
+          adminReply: replyText || inq.adminReply,
+          resolvedAt: status === 'RESOLVED' ? new Date().toISOString() : inq.resolvedAt,
+        };
+      }
+      return inq;
+    });
+    setHelpDeskInquiries(updated);
+    try {
+      localStorage.setItem('fuhsi_helpdesk_inquiries_db', JSON.stringify(updated));
+    } catch (e) {}
+    await updateHelpDeskInquiryStatus(inquiryId, status, replyText);
+    setApprovalToast(`Help Desk Ticket updated to ${status}.`);
+    setTimeout(() => setApprovalToast(null), 3000);
+  };
+
   // Price Advisory Modal State
   const [advisoryItem, setAdvisoryItem] = useState<MarketplaceItem | null>(null);
   const [suggestedPrice, setSuggestedPrice] = useState<number>(0);
@@ -631,6 +675,140 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             </div>
           );
         })()}
+      </div>
+
+      {/* HELP DESK & REGISTRATION APPEALS DESK */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
+          <div>
+            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
+              <LifeBuoy className="w-4 h-4 text-teal-600" /> Help Desk Inquiries & Student Appeals ({helpDeskInquiries.length})
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Inquiries and account appeals submitted directly by students from the login screen or support portal.
+            </p>
+          </div>
+          <span className="text-[10px] font-extrabold bg-teal-50 text-teal-800 px-2.5 py-1 rounded-full border border-teal-200">
+            {helpDeskInquiries.filter(i => i.status === 'PENDING').length} Pending Review
+          </span>
+        </div>
+
+        {helpDeskInquiries.length === 0 ? (
+          <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+            <CheckCircle2 size={24} className="mx-auto text-teal-600 mb-1" />
+            <p className="font-bold text-slate-800">No support tickets or appeals currently pending!</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              When students submit a ticket or appeal from the login help desk, it will show up here instantly.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {helpDeskInquiries.map((inq) => {
+              const matchedUser = allUsersList.find(
+                (u) =>
+                  (inq.nickname && u.nickname.toLowerCase() === inq.nickname.toLowerCase()) ||
+                  (inq.email && u.studentEmail && u.studentEmail.toLowerCase() === inq.email.toLowerCase())
+              );
+
+              return (
+                <div
+                  key={inq.id}
+                  className={`p-3.5 rounded-xl border space-y-2 text-xs transition-all ${
+                    inq.status === 'RESOLVED'
+                      ? 'bg-slate-50/70 border-slate-200 opacity-80'
+                      : inq.status === 'UNDER_REVIEW'
+                      ? 'bg-amber-50/50 border-amber-200'
+                      : 'bg-teal-50/40 border-teal-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between flex-wrap gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-teal-900 bg-teal-100 px-2 py-0.5 rounded text-[11px]">
+                          {inq.ticketId}
+                        </span>
+                        <span className="font-extrabold text-slate-900 text-sm">{inq.fullName}</span>
+                        {inq.nickname && (
+                          <span className="font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md text-[10px]">
+                            {inq.nickname}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        📧 Email: <a href={`mailto:${inq.email}`} className="font-bold text-teal-800 hover:underline">{inq.email}</a>
+                        {inq.matricNumber && <span> • Matric: <strong className="text-slate-800">{inq.matricNumber}</strong></span>}
+                        <span> • Category: <strong className="text-indigo-900">{inq.categoryLabel}</strong></span>
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                        inq.status === 'RESOLVED'
+                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                          : inq.status === 'UNDER_REVIEW'
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : 'bg-rose-100 text-rose-900 border-rose-300'
+                      }`}
+                    >
+                      {inq.status === 'RESOLVED' ? '✅ RESOLVED' : inq.status === 'UNDER_REVIEW' ? '⏳ UNDER REVIEW' : '⚠️ PENDING REVIEW'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-800 leading-relaxed font-medium">
+                    {inq.message}
+                  </div>
+
+                  <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      Submitted {new Date(inq.createdAt).toLocaleString()}
+                    </span>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {matchedUser && (!matchedUser.isApproved || matchedUser.isDeclined) && (
+                        <button
+                          onClick={() => {
+                            handleApproveRegistration(matchedUser.id, matchedUser.nickname);
+                            handleUpdateInquiryStatus(inq.id, 'RESOLVED', 'Account approved and verified successfully.');
+                          }}
+                          className="py-1 px-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
+                        >
+                          <CheckCircle2 size={12} />
+                          <span>Approve Account & Resolve Ticket</span>
+                        </button>
+                      )}
+
+                      {inq.status !== 'RESOLVED' && (
+                        <button
+                          onClick={() => handleUpdateInquiryStatus(inq.id, 'RESOLVED')}
+                          className="py-1 px-2.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-[11px] cursor-pointer"
+                        >
+                          Mark as Resolved
+                        </button>
+                      )}
+
+                      {inq.status === 'PENDING' && (
+                        <button
+                          onClick={() => handleUpdateInquiryStatus(inq.id, 'UNDER_REVIEW')}
+                          className="py-1 px-2.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] cursor-pointer"
+                        >
+                          Mark Under Review
+                        </button>
+                      )}
+
+                      <a
+                        href={`mailto:${inq.email}?subject=FUHSI%20Connect%20Support%20Ticket%20%5B${inq.ticketId}%5D%20Reply&body=Hello%20${encodeURIComponent(inq.fullName)}%2C%0A%0ARegarding%20your%20FUHSI%20Connect%20support%20inquiry%20(${inq.ticketId})%3A%0A%0A`}
+                        className="py-1 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] flex items-center gap-1"
+                      >
+                        <Mail size={12} />
+                        <span>Reply by Email</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ADMIN MARKETPLACE MANAGEMENT DESK */}

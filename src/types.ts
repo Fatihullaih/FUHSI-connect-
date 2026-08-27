@@ -424,3 +424,23 @@ export interface CampusNotification {
   itemId?: string;
 }
 
+export interface HelpDeskInquiry {
+  id: string;
+  ticketId: string;
+  fullName: string;
+  email: string;
+  nickname?: string;
+  matricNumber?: string;
+  department?: string;
+  level?: string;
+  category: 'REGISTRATION_APPEAL' | 'RE_APPROVAL' | 'LOGIN_ISSUE' | 'VERIFICATION_ASSIST' | 'GENERAL_SUPPORT';
+  categoryLabel: string;
+  message: string;
+  status: 'PENDING' | 'RESOLVED' | 'UNDER_REVIEW';
+  createdAt: string;
+  resolvedAt?: string;
+  adminNotes?: string;
+  adminReply?: string;
+}
+
+

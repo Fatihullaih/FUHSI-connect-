@@ -1,4 +1,13 @@
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, ChatConversation, ChatReport } from '../types';
+import {
+  isDemoUser,
+  isDemoPost,
+  isDemoComment,
+  isDemoVerificationRequest,
+  isDemoMarketplaceItem,
+  isDemoDirectMessage,
+  isDemoNickname,
+} from './postGenerator';
 
 export interface ServerDbState {
   users: UserProfile[];
@@ -45,20 +54,28 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
   };
 
   const processUser = (u: UserProfile) => {
-    if (!u) return;
+    if (!u || isDemoUser(u) || isDemoNickname(u.nickname)) return;
     const key = getKey(u);
     const existing = map.get(key);
     if (!existing) {
       map.set(key, { ...u });
     } else {
-      const isDeclined = Boolean(u.isDeclined || existing.isDeclined);
+      let isDeclined = false;
+      if (u.isDeclined !== undefined) {
+        isDeclined = Boolean(u.isDeclined);
+      } else if (existing.isDeclined !== undefined) {
+        isDeclined = Boolean(existing.isDeclined);
+      }
+
       let isApproved = false;
       if (isDeclined) {
         isApproved = false;
-      } else if (u.isDeclined === false) {
-        isApproved = u.isApproved !== undefined ? Boolean(u.isApproved) : Boolean(existing.isApproved);
+      } else if (u.isApproved !== undefined) {
+        isApproved = Boolean(u.isApproved);
+      } else if (existing.isApproved !== undefined) {
+        isApproved = Boolean(existing.isApproved);
       } else {
-        isApproved = Boolean(u.isApproved || existing.isApproved);
+        isApproved = true;
       }
 
       const merged: UserProfile = {
@@ -83,14 +100,14 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
   a.forEach(processUser);
   b.forEach(processUser);
 
-  return Array.from(map.values());
+  return Array.from(map.values()).filter((u) => !isDemoUser(u) && !isDemoNickname(u.nickname));
 }
 
 export function mergePosts(a: Post[] = [], b: Post[] = []): Post[] {
   const map = new Map<string, Post>();
 
   const processPost = (p: Post) => {
-    if (!p || !p.id) return;
+    if (!p || !p.id || isDemoPost(p)) return;
     const existing = map.get(p.id);
     if (!existing) {
       map.set(p.id, { ...p });
@@ -119,19 +136,21 @@ export function mergePosts(a: Post[] = [], b: Post[] = []): Post[] {
   a.forEach(processPost);
   b.forEach(processPost);
 
-  return Array.from(map.values()).sort((x, y) => {
-    const valX = x.createdAt || x.timestamp || 0;
-    const valY = y.createdAt || y.timestamp || 0;
-    const tX = isNaN(new Date(valX).getTime()) ? 0 : new Date(valX).getTime();
-    const tY = isNaN(new Date(valY).getTime()) ? 0 : new Date(valY).getTime();
-    return tY - tX;
-  });
+  return Array.from(map.values())
+    .filter((p) => !isDemoPost(p))
+    .sort((x, y) => {
+      const valX = x.createdAt || x.timestamp || 0;
+      const valY = y.createdAt || y.timestamp || 0;
+      const tX = isNaN(new Date(valX).getTime()) ? 0 : new Date(valX).getTime();
+      const tY = isNaN(new Date(valY).getTime()) ? 0 : new Date(valY).getTime();
+      return tY - tX;
+    });
 }
 
 export function mergeComments(a: Comment[] = [], b: Comment[] = []): Comment[] {
   const map = new Map<string, Comment>();
   const processComment = (c: Comment) => {
-    if (!c || !c.id) return;
+    if (!c || !c.id || isDemoComment(c)) return;
     const existing = map.get(c.id);
     if (!existing) {
       map.set(c.id, { ...c });
@@ -142,24 +161,24 @@ export function mergeComments(a: Comment[] = [], b: Comment[] = []): Comment[] {
   };
   a.forEach(processComment);
   b.forEach(processComment);
-  return Array.from(map.values());
+  return Array.from(map.values()).filter((c) => !isDemoComment(c));
 }
 
 export function mergeMarketplaceItems(a: MarketplaceItem[] = [], b: MarketplaceItem[] = []): MarketplaceItem[] {
   const map = new Map<string, MarketplaceItem>();
   const processItem = (item: MarketplaceItem) => {
-    if (!item || !item.id) return;
+    if (!item || !item.id || isDemoMarketplaceItem(item)) return;
     map.set(item.id, { ...(map.get(item.id) || {}), ...item });
   };
   a.forEach(processItem);
   b.forEach(processItem);
-  return Array.from(map.values());
+  return Array.from(map.values()).filter((m) => !isDemoMarketplaceItem(m));
 }
 
 export function mergeVerificationRequests(a: VerificationRequest[] = [], b: VerificationRequest[] = []): VerificationRequest[] {
   const map = new Map<string, VerificationRequest>();
   const processReq = (r: VerificationRequest) => {
-    if (!r || !r.id) return;
+    if (!r || !r.id || isDemoVerificationRequest(r)) return;
     const existing = map.get(r.id);
     if (!existing) {
       map.set(r.id, { ...r });
@@ -178,17 +197,19 @@ export function mergeVerificationRequests(a: VerificationRequest[] = [], b: Veri
   };
   a.forEach(processReq);
   b.forEach(processReq);
-  return Array.from(map.values()).sort((x, y) => {
-    const tX = isNaN(new Date(x.timestamp).getTime()) ? 0 : new Date(x.timestamp).getTime();
-    const tY = isNaN(new Date(y.timestamp).getTime()) ? 0 : new Date(y.timestamp).getTime();
-    return tY - tX;
-  });
+  return Array.from(map.values())
+    .filter((v) => !isDemoVerificationRequest(v))
+    .sort((x, y) => {
+      const tX = isNaN(new Date(x.timestamp).getTime()) ? 0 : new Date(x.timestamp).getTime();
+      const tY = isNaN(new Date(y.timestamp).getTime()) ? 0 : new Date(y.timestamp).getTime();
+      return tY - tX;
+    });
 }
 
 export function mergeReports(a: Report[] = [], b: Report[] = []): Report[] {
   const map = new Map<string, Report>();
-  a.forEach((r) => r?.id && map.set(r.id, { ...r }));
-  b.forEach((r) => r?.id && map.set(r.id, { ...(map.get(r.id) || {}), ...r }));
+  a.forEach((r) => r?.id && !isDemoNickname(r.reporterNickname) && !isDemoNickname((r as any).reportedNickname) && map.set(r.id, { ...r }));
+  b.forEach((r) => r?.id && !isDemoNickname(r.reporterNickname) && !isDemoNickname((r as any).reportedNickname) && map.set(r.id, { ...(map.get(r.id) || {}), ...r }));
   return Array.from(map.values());
 }
 

@@ -405,10 +405,21 @@ export const App: React.FC = () => {
         if (dStr) deletedIds = JSON.parse(dStr);
       } catch (e) {}
 
-      // Authoritative Firestore items filtered against deleted IDs
-      const validItems = fsItems.filter((i) => i && i.id && !deletedIds.includes(i.id));
-      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(validItems));
-      setMarketplaceItems(validItems);
+      let localItems: MarketplaceItem[] = [];
+      try {
+        const aStr = localStorage.getItem('fuhsi_marketplace_approved_db');
+        if (aStr) localItems = JSON.parse(aStr);
+      } catch (e) {}
+
+      const validFsItems = (fsItems || []).filter((i) => i && i.id && !deletedIds.includes(i.id));
+      const merged = mergeMarketplaceItems(localItems, validFsItems).filter((i) => i && i.id && !deletedIds.includes(i.id));
+      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(merged));
+      setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      if (merged.length > validFsItems.length) {
+        merged.forEach((item) => {
+          saveMarketplaceApprovedToFirestore(item).catch(console.error);
+        });
+      }
     });
 
     // 6. Subscribe Direct Messages in real-time

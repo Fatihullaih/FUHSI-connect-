@@ -1,16 +1,16 @@
 import { UserProfile, Post, Notice, Resource, CampusEvent, ModerationReport, DepartmentRanking, Comment } from './types';
 
 export const INITIAL_USER: UserProfile = {
-  id: 'user_001',
-  nickname: 'MedicPioneer_24',
-  realName: 'Adepoju Fatih',
-  studentId: 'FUHSI/2022/MED/089',
-  department: 'Medicine & Surgery',
-  level: '300 Level',
-  bio: 'aspiring neurosurgeon | passion for public health & medical tech 🩺🔬',
+  id: 'usr_admin_modula',
+  nickname: '@modula',
+  realName: 'Executive Admin Council Officer',
+  studentId: 'FUHSI/ADMIN/001',
+  department: 'FUHSI Administration',
+  level: 'Council',
+  bio: 'Primary Executive Admin Council Officer (@modula).',
   avatarId: 'caduceus',
-  reputationPoints: 485,
-  badge: 'Campus Scholar',
+  reputationPoints: 9999,
+  badge: 'Official Admin',
   strikes: 0,
   isBanned: false,
   privacyMode: 'Nickname'
@@ -62,7 +62,7 @@ export const INITIAL_RESOURCES: Resource[] = [
     level: '300 Level',
     fileType: 'PDF',
     fileSize: '4.8 MB',
-    uploaderNickname: 'AnatomyWizard',
+    uploaderNickname: 'Academic Desk',
     downloads: 342,
     rating: 4.9,
     dateAdded: 'July 25, 2026'
@@ -75,7 +75,7 @@ export const INITIAL_RESOURCES: Resource[] = [
     level: '300 Level',
     fileType: 'PDF',
     fileSize: '2.1 MB',
-    uploaderNickname: 'PharmaCadet',
+    uploaderNickname: 'Academic Desk',
     downloads: 215,
     rating: 4.8,
     dateAdded: 'July 22, 2026'
@@ -88,7 +88,7 @@ export const INITIAL_RESOURCES: Resource[] = [
     level: '200 Level',
     fileType: 'DOCX',
     fileSize: '1.5 MB',
-    uploaderNickname: 'StatMaster_FUHSI',
+    uploaderNickname: 'Academic Desk',
     downloads: 512,
     rating: 5.0,
     dateAdded: 'July 20, 2026'
@@ -101,7 +101,7 @@ export const INITIAL_RESOURCES: Resource[] = [
     level: '300 Level',
     fileType: 'PPTX',
     fileSize: '12.4 MB',
-    uploaderNickname: 'LabPro_Ila',
+    uploaderNickname: 'Academic Desk',
     downloads: 189,
     rating: 4.7,
     dateAdded: 'July 18, 2026'
@@ -147,30 +147,7 @@ export const INITIAL_EVENTS: CampusEvent[] = [
   }
 ];
 
-export const INITIAL_MODERATION_REPORTS: ModerationReport[] = [
-  {
-    id: 'mod_1',
-    postId: 'post_901',
-    postContent: 'Unverified exam answers leaked for tomorrow test! Pay 2k to get PDF sample!',
-    postAuthor: 'ScamTrap_007',
-    reportedBy: 'PeerGuardian',
-    reason: 'Academic Fraud / Exam Misconduct Promotion',
-    timestamp: '2 hours ago',
-    status: 'Pending',
-    notes: 'Requires immediate action as exam integrity policy violation.'
-  },
-  {
-    id: 'mod_2',
-    postId: 'post_902',
-    postContent: 'Targeted aggressive harassment post mentioning specific student in Block A.',
-    postAuthor: 'AnonHarasser',
-    reportedBy: 'HostelRep',
-    reason: 'Cyberbullying & Personal Harassment',
-    timestamp: '4 hours ago',
-    status: 'Pending',
-    notes: 'Content violates FUHSI Student Code of Conduct Section 4.2.'
-  }
-];
+export const INITIAL_MODERATION_REPORTS: ModerationReport[] = [];
 
 export const DEPARTMENT_RANKINGS: DepartmentRanking[] = [
   {
@@ -178,41 +155,41 @@ export const DEPARTMENT_RANKINGS: DepartmentRanking[] = [
     code: 'MED',
     totalPoints: 14250,
     activeStudents: 420,
-    topContributor: 'AnatomyWizard'
+    topContributor: '-'
   },
   {
     name: 'Nursing Science',
     code: 'NUR',
     totalPoints: 11800,
     activeStudents: 380,
-    topContributor: 'PharmaCadet'
+    topContributor: '-'
   },
   {
     name: 'Medical Laboratory Science',
     code: 'MLS',
     totalPoints: 9400,
     activeStudents: 290,
-    topContributor: 'LabPro_Ila'
+    topContributor: '-'
   },
   {
     name: 'Public Health',
     code: 'PBH',
     totalPoints: 8900,
     activeStudents: 260,
-    topContributor: 'StatMaster_FUHSI'
+    topContributor: '-'
   },
   {
     name: 'Physiotherapy',
     code: 'PTH',
     totalPoints: 7200,
     activeStudents: 190,
-    topContributor: 'CampusScout'
+    topContributor: '-'
   },
   {
     name: 'Nutrition & Dietetics',
     code: 'NUT',
     totalPoints: 6100,
     activeStudents: 160,
-    topContributor: 'HealthTechLead'
+    topContributor: '-'
   }
 ];

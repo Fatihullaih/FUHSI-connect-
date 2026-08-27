@@ -10,8 +10,8 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage } from '../types';
-import { isDemoUser, isDemoPost, isDemoNickname } from '../utils/postGenerator';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, HelpDeskInquiry } from '../types';
+import { isDemoUser, isDemoPost, isDemoNickname, isDemoComment, isDemoVerificationRequest, isDemoMarketplaceItem, isDemoDirectMessage } from '../utils/postGenerator';
 
 // Collection references
 const USERS_COL = 'users';
@@ -21,6 +21,7 @@ const MARKETPLACE_APPROVED_COL = 'marketplace_approved';
 const MARKETPLACE_PENDING_COL = 'marketplace_pending';
 const VERIFICATIONS_COL = 'verification_requests';
 const REPORTS_COL = 'reports';
+const HELPDESK_COL = 'helpdesk_inquiries';
 const VERIF_CANDIDATES_COL = 'verif_candidates';
 const DIRECT_MESSAGES_COL = 'direct_messages';
 const SETTINGS_COL = 'settings';
@@ -56,7 +57,7 @@ function sanitizeForFirestore<T>(data: T): T {
  * Save single user to Firestore
  */
 export async function saveUserToFirestore(user: UserProfile): Promise<void> {
-  if (!user || (!user.id && !user.nickname)) return;
+  if (!user || (!user.id && !user.nickname) || isDemoUser(user) || isDemoNickname(user.nickname)) return;
   const docId = user.id || user.nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
   const cleanUser = sanitizeForFirestore({ ...user, id: user.id || docId });
   try {
@@ -70,10 +71,11 @@ export async function saveUserToFirestore(user: UserProfile): Promise<void> {
  * Save multiple users to Firestore
  */
 export async function saveUsersBatchToFirestore(users: UserProfile[]): Promise<void> {
-  if (!users || users.length === 0) return;
+  const nonDemoUsers = (users || []).filter((u) => !isDemoUser(u) && !isDemoNickname(u.nickname));
+  if (!nonDemoUsers || nonDemoUsers.length === 0) return;
   try {
     const batch = writeBatch(db);
-    users.forEach((user) => {
+    nonDemoUsers.forEach((user) => {
       const docId = user.id || user.nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
       const cleanUser = sanitizeForFirestore({ ...user, id: user.id || docId });
       batch.set(doc(db, USERS_COL, docId), cleanUser, { merge: true });
@@ -125,7 +127,7 @@ export function subscribePosts(onUpdate: (posts: Post[]) => void) {
  * Save single post to Firestore
  */
 export async function savePostToFirestore(post: Post): Promise<void> {
-  if (!post || !post.id) return;
+  if (!post || !post.id || isDemoPost(post)) return;
   try {
     await setDoc(doc(db, POSTS_COL, post.id), sanitizeForFirestore(post), { merge: true });
   } catch (err) {
@@ -152,7 +154,10 @@ export function subscribeComments(onUpdate: (comments: Comment[]) => void) {
   return onSnapshot(collection(db, COMMENTS_COL), (snapshot) => {
     const list: Comment[] = [];
     snapshot.forEach((docSnap) => {
-      list.push(docSnap.data() as Comment);
+      const c = docSnap.data() as Comment;
+      if (!isDemoComment(c)) {
+        list.push(c);
+      }
     });
     onUpdate(list);
   }, (err) => {
@@ -164,7 +169,7 @@ export function subscribeComments(onUpdate: (comments: Comment[]) => void) {
  * Save comment to Firestore
  */
 export async function saveCommentToFirestore(comment: Comment): Promise<void> {
-  if (!comment || !comment.id) return;
+  if (!comment || !comment.id || isDemoComment(comment)) return;
   try {
     await setDoc(doc(db, COMMENTS_COL, comment.id), sanitizeForFirestore(comment), { merge: true });
   } catch (err) {
@@ -181,7 +186,10 @@ export function subscribeMarketplaceApproved(onUpdate: (items: MarketplaceItem[]
     (snapshot) => {
       const list: MarketplaceItem[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as MarketplaceItem);
+        const item = docSnap.data() as MarketplaceItem;
+        if (!isDemoMarketplaceItem(item)) {
+          list.push(item);
+        }
       });
       onUpdate(list);
     },
@@ -192,7 +200,7 @@ export function subscribeMarketplaceApproved(onUpdate: (items: MarketplaceItem[]
 }
 
 export async function saveMarketplaceApprovedToFirestore(item: MarketplaceItem): Promise<void> {
-  if (!item || !item.id) return;
+  if (!item || !item.id || isDemoMarketplaceItem(item)) return;
   try {
     await setDoc(doc(db, MARKETPLACE_APPROVED_COL, item.id), sanitizeForFirestore(item), { merge: true });
   } catch (err) {
@@ -219,7 +227,10 @@ export function subscribeVerificationRequests(onUpdate: (reqs: VerificationReque
     (snapshot) => {
       const list: VerificationRequest[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as VerificationRequest);
+        const r = docSnap.data() as VerificationRequest;
+        if (!isDemoVerificationRequest(r)) {
+          list.push(r);
+        }
       });
       // Sort descending by timestamp / creation time
       list.sort((a, b) => {
@@ -331,6 +342,73 @@ export async function purgeAllExceptAdminFromFirestore(): Promise<void> {
 }
 
 /**
+ * Purge all demo accounts and demo content from Firestore
+ */
+export async function purgeDemoAccountsFromFirestore(): Promise<void> {
+  try {
+    const usersSnap = await getDocs(collection(db, USERS_COL));
+    usersSnap.forEach((docSnap) => {
+      const data = docSnap.data() as UserProfile;
+      if (isDemoUser(data) || isDemoNickname(data.nickname) || isDemoNickname(data.realName)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const postsSnap = await getDocs(collection(db, POSTS_COL));
+    postsSnap.forEach((docSnap) => {
+      const data = docSnap.data() as Post;
+      if (isDemoPost(data) || isDemoNickname(data.authorNickname) || isDemoNickname(data.nickname)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const commentsSnap = await getDocs(collection(db, COMMENTS_COL));
+    commentsSnap.forEach((docSnap) => {
+      const data = docSnap.data() as Comment;
+      if (isDemoComment(data) || isDemoNickname(data.authorNickname) || isDemoNickname(data.replyToNickname)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const mpApprovedSnap = await getDocs(collection(db, MARKETPLACE_APPROVED_COL));
+    mpApprovedSnap.forEach((docSnap) => {
+      const data = docSnap.data() as MarketplaceItem;
+      if (isDemoMarketplaceItem(data) || isDemoNickname(data.sellerNickname)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const mpPendingSnap = await getDocs(collection(db, MARKETPLACE_PENDING_COL));
+    mpPendingSnap.forEach((docSnap) => {
+      const data = docSnap.data() as MarketplaceItem;
+      if (isDemoMarketplaceItem(data) || isDemoNickname(data.sellerNickname)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const verifsSnap = await getDocs(collection(db, VERIFICATIONS_COL));
+    verifsSnap.forEach((docSnap) => {
+      const data = docSnap.data() as VerificationRequest;
+      if (isDemoVerificationRequest(data) || isDemoNickname(data.applicantNickname)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    const dmsSnap = await getDocs(collection(db, DIRECT_MESSAGES_COL));
+    dmsSnap.forEach((docSnap) => {
+      const data = docSnap.data() as DirectMessage;
+      if (isDemoDirectMessage(data) || isDemoNickname(data.senderNickname) || isDemoNickname(data.receiverNickname)) {
+        deleteDoc(docSnap.ref).catch((err) => console.error(err));
+      }
+    });
+
+    console.log('Successfully completed Firestore cleanup of demo accounts and content.');
+  } catch (err) {
+    console.error('Error cleaning demo accounts from Firestore:', err);
+  }
+}
+
+/**
  * Subscribe to Direct Messages filtered by conversation ID in Firestore
  */
 export function subscribeDirectMessagesByConversation(
@@ -354,7 +432,10 @@ export function subscribeDirectMessagesByConversation(
       (snapshot) => {
         const list: DirectMessage[] = [];
         snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as DirectMessage);
+          const msg = docSnap.data() as DirectMessage;
+          if (!isDemoDirectMessage(msg)) {
+            list.push(msg);
+          }
         });
         // Sort chronologically
         list.sort((a, b) => {
@@ -380,7 +461,7 @@ export function subscribeDirectMessagesByConversation(
  * Save single direct message to Firestore
  */
 export async function saveDirectMessageToFirestore(msg: DirectMessage): Promise<void> {
-  if (!msg || !msg.id) return;
+  if (!msg || !msg.id || isDemoDirectMessage(msg)) return;
   try {
     await setDoc(doc(db, DIRECT_MESSAGES_COL, msg.id), sanitizeForFirestore(msg), { merge: true });
   } catch (err) {
@@ -433,7 +514,10 @@ export function subscribeAllDirectMessages(onUpdate: (messages: DirectMessage[])
     (snapshot) => {
       const list: DirectMessage[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as DirectMessage);
+        const msg = docSnap.data() as DirectMessage;
+        if (!isDemoDirectMessage(msg)) {
+          list.push(msg);
+        }
       });
       onUpdate(list);
     },
@@ -442,6 +526,63 @@ export function subscribeAllDirectMessages(onUpdate: (messages: DirectMessage[])
     }
   );
 }
+
+/**
+ * Subscribe to Help Desk Inquiries & Appeals from Firestore
+ */
+export function subscribeHelpDeskInquiries(onUpdate: (inquiries: HelpDeskInquiry[]) => void) {
+  return onSnapshot(
+    collection(db, HELPDESK_COL),
+    (snapshot) => {
+      const list: HelpDeskInquiry[] = [];
+      snapshot.forEach((docSnap) => {
+        const inq = docSnap.data() as HelpDeskInquiry;
+        if (inq && inq.id) {
+          list.push(inq);
+        }
+      });
+      // Sort descending by createdAt
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      onUpdate(list);
+    },
+    (err) => {
+      console.error('Firestore help desk inquiries subscription error:', err);
+    }
+  );
+}
+
+/**
+ * Save Help Desk inquiry or appeal to Firestore
+ */
+export async function saveHelpDeskInquiryToFirestore(inquiry: HelpDeskInquiry): Promise<void> {
+  if (!inquiry || !inquiry.id) return;
+  try {
+    await setDoc(doc(db, HELPDESK_COL, inquiry.id), sanitizeForFirestore(inquiry), { merge: true });
+  } catch (err) {
+    console.error('Error saving Help Desk inquiry to Firestore:', err);
+  }
+}
+
+/**
+ * Update Help Desk inquiry status in Firestore
+ */
+export async function updateHelpDeskInquiryStatus(inquiryId: string, status: 'PENDING' | 'RESOLVED' | 'UNDER_REVIEW', adminNotes?: string): Promise<void> {
+  if (!inquiryId) return;
+  try {
+    await setDoc(
+      doc(db, HELPDESK_COL, inquiryId),
+      sanitizeForFirestore({
+        status,
+        ...(adminNotes ? { adminNotes } : {}),
+        resolvedAt: status === 'RESOLVED' ? new Date().toISOString() : undefined,
+      }),
+      { merge: true }
+    );
+  } catch (err) {
+    console.error('Error updating Help Desk inquiry status:', err);
+  }
+}
+
 
 
 

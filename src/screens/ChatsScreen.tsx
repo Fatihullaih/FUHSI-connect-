@@ -582,20 +582,20 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         isVerified: conv.otherUserIsVerified,
                       });
                     }}
-                    className={`p-3 sm:px-4 flex items-center gap-3 cursor-pointer transition-all group relative border-b border-slate-100 ${
+                    className={`p-3.5 sm:px-4 flex items-center gap-3 cursor-pointer transition-all group relative border-b border-slate-100 ${
                       isSelected
-                        ? 'bg-teal-50 border-l-4 border-l-teal-600'
+                        ? 'bg-teal-100/70 border-l-[5px] border-l-teal-700 shadow-xs'
                         : hasUnread
-                        ? 'bg-teal-50/60 hover:bg-teal-100/60 border-l-4 border-l-teal-500'
-                        : 'bg-white hover:bg-slate-50 border-l-4 border-l-transparent'
+                        ? 'bg-emerald-50/95 hover:bg-emerald-100/80 border-l-[5px] border-l-emerald-600 shadow-2xs'
+                        : 'bg-white hover:bg-slate-50 border-l-[5px] border-l-transparent'
                     }`}
                   >
                     {/* Avatar */}
                     <div className="relative shrink-0">
                       <div
-                        className={`w-11 h-11 rounded-2xl bg-teal-900 flex items-center justify-center overflow-hidden border ${
+                        className={`w-11 h-11 rounded-2xl bg-teal-900 flex items-center justify-center overflow-hidden border transition-all ${
                           hasUnread
-                            ? 'border-teal-500 ring-2 ring-teal-500/40 shadow-xs'
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/50 shadow-xs'
                             : 'border-slate-200'
                         }`}
                       >
@@ -606,7 +606,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         />
                       </div>
                       {hasUnread && (
-                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-teal-600 text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 bg-emerald-600 text-white rounded-full text-[10px] font-black flex items-center justify-center border-2 border-white shadow-xs animate-bounce">
                           {conv.unreadCount}
                         </span>
                       )}
@@ -617,8 +617,8 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <div className="flex items-center gap-1.5 truncate">
                           <span
-                            className={`text-xs truncate ${
-                              hasUnread ? 'font-black text-slate-950 text-sm' : 'font-bold text-slate-700'
+                            className={`truncate ${
+                              hasUnread ? 'font-black text-slate-950 text-sm tracking-tight' : 'font-bold text-slate-700 text-xs'
                             }`}
                           >
                             {extractPureStudentHandle(conv.otherUserNickname, myNickname)}
@@ -630,8 +630,10 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                           />
                         </div>
                         <span
-                          className={`text-[10px] shrink-0 ${
-                            hasUnread ? 'font-black text-teal-700' : 'font-medium text-slate-400'
+                          className={`shrink-0 ${
+                            hasUnread
+                              ? 'text-[10px] font-black text-emerald-800 bg-emerald-200/70 px-2 py-0.5 rounded-full'
+                              : 'text-[10px] font-medium text-slate-400'
                           }`}
                         >
                           {conv.lastTimestamp}
@@ -651,11 +653,11 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                               </span>
                             )
                           ) : hasUnread ? (
-                            <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0 inline-block shadow-xs animate-pulse" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0 inline-block shadow-xs animate-pulse" />
                           ) : null}
                           <p
                             className={`truncate ${
-                              hasUnread ? 'font-extrabold text-slate-900 text-xs' : 'font-normal text-slate-500'
+                              hasUnread ? 'font-black text-slate-950 text-xs' : 'font-normal text-slate-500 text-[11px]'
                             }`}
                           >
                             {conv.lastMessage}
@@ -663,8 +665,9 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                         </div>
 
                         {hasUnread && (
-                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-teal-600 text-white text-[10px] font-black leading-tight flex items-center justify-center shadow-xs">
-                            {conv.unreadCount} new
+                          <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black leading-tight flex items-center gap-1 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-ping shrink-0" />
+                            <span>{conv.unreadCount} NEW</span>
                           </span>
                         )}
                       </div>

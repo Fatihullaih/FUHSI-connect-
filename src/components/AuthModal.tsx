@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import fuhsiLogo from '../assets/images/fuhsi_logo_1785485694958.jpg';
-import { UserProfile } from '../types';
+import { UserProfile, HelpDeskInquiry } from '../types';
 import { getStoredUsers, upsertUser, updateUserPassword } from '../utils/userDbUtils';
 import { fetchServerDb, mergeUsers, pushServerDbSync } from '../utils/apiSync';
+import { saveHelpDeskInquiryToFirestore } from '../lib/firestoreSync';
 import { AvatarIcon } from './AvatarIcon';
 import { 
   ShieldCheck, 
@@ -26,7 +27,8 @@ import {
   Smartphone,
   RefreshCw,
   Send,
-  KeyRound
+  KeyRound,
+  LifeBuoy
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -71,8 +73,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   existingUsers = [],
   canClose = false,
 }) => {
-  const [mode, setMode] = useState<'REGISTER' | 'LOGIN' | 'FORGOT_PASSWORD'>('LOGIN');
+  const [mode, setMode] = useState<'REGISTER' | 'LOGIN' | 'FORGOT_PASSWORD' | 'SUPPORT_DESK'>('LOGIN');
   const [pendingUserNotice, setPendingUserNotice] = useState<UserProfile | null>(null);
+  const [accountNoticeType, setAccountNoticeType] = useState<'DECLINED' | 'PENDING' | null>(null);
+
+  // Help Desk / Support Ticket Form State
+  const [supportFullName, setSupportFullName] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [supportNickname, setSupportNickname] = useState('');
+  const [supportMatric, setSupportMatric] = useState('');
+  const [supportCategory, setSupportCategory] = useState<HelpDeskInquiry['category']>('REGISTRATION_APPEAL');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportSubmittedTicket, setSupportSubmittedTicket] = useState<HelpDeskInquiry | null>(null);
+  const [supportSubmitting, setSupportSubmitting] = useState(false);
 
   // Register Form State
   const [nickname, setNickname] = useState('');
@@ -148,6 +161,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(code);
     return code;
+  };
+
+  const handleSupportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportFullName.trim() || !supportEmail.trim() || !supportMessage.trim()) {
+      setErrorMessage('Please fill in your Full Real Name, Email Address, and Message.');
+      return;
+    }
+
+    setSupportSubmitting(true);
+    const ticketCode = `HD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const categoryMap: Record<string, string> = {
+      REGISTRATION_APPEAL: 'Account Registration Appeal',
+      RE_APPROVAL: 'Account Re-approval Request',
+      LOGIN_ISSUE: 'Login & Access Assistance',
+      VERIFICATION_ASSIST: 'Matriculation / Verification Assistance',
+      GENERAL_SUPPORT: 'General Support Inquiry',
+    };
+
+    const newTicket: HelpDeskInquiry = {
+      id: `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      ticketId: ticketCode,
+      fullName: supportFullName.trim(),
+      email: supportEmail.trim().toLowerCase(),
+      nickname: supportNickname.trim() ? (supportNickname.trim().startsWith('@') ? supportNickname.trim() : `@${supportNickname.trim()}`) : undefined,
+      matricNumber: supportMatric.trim() ? supportMatric.trim().toUpperCase() : undefined,
+      category: supportCategory,
+      categoryLabel: categoryMap[supportCategory] || 'Support Request',
+      message: supportMessage.trim(),
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const stored = localStorage.getItem('fuhsi_helpdesk_inquiries_db');
+      const list = stored ? JSON.parse(stored) : [];
+      localStorage.setItem('fuhsi_helpdesk_inquiries_db', JSON.stringify([newTicket, ...list]));
+    } catch (err) {
+      console.error('Error saving helpdesk ticket locally:', err);
+    }
+
+    try {
+      await saveHelpDeskInquiryToFirestore(newTicket);
+    } catch (err) {
+      console.error('Error saving helpdesk ticket to Firestore:', err);
+    }
+
+    setSupportSubmittedTicket(newTicket);
+    setSupportSubmitting(false);
+    setErrorMessage('');
   };
 
   const handleRegister = (e: React.FormEvent) => {
@@ -470,8 +533,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       matchedUser = null;
     }
 
-    // If not found in local cache, query server central database immediately
-    if (!matchedUser) {
+    // Always fetch latest authoritative data if user not found, or if cached user is marked as declined or pending
+    if (!matchedUser || matchedUser.isDeclined || matchedUser.isApproved === false) {
       try {
         const serverDb = await fetchServerDb();
         if (serverDb && Array.isArray(serverDb.users)) {
@@ -480,13 +543,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           const merged = mergeUsers(localUsers, serverDb.users);
           localStorage.setItem('fuhsi_users_db', JSON.stringify(merged));
 
-          matchedUser = merged.find(
+          const refreshedUser = merged.find(
             (u) =>
               u.nickname?.toLowerCase() === searchKey ||
               u.nickname?.toLowerCase() === `@${searchKey}` ||
               `@${u.nickname?.toLowerCase()}` === searchKey ||
               (u.studentEmail && u.studentEmail.toLowerCase() === searchKey)
-          ) || null;
+          );
+          if (refreshedUser) {
+            matchedUser = refreshedUser;
+          }
         }
       } catch (err) {
         console.error('Failed to query server DB during login:', err);
@@ -502,12 +568,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       if (matchedUser.isDeclined === true) {
-        setErrorMessage('❌ Account Registration Declined by Admin. You do not have access to FUHSI Connect. Please contact Admin Desk if you believe this is an error.');
+        setAccountNoticeType('DECLINED');
+        setErrorMessage('Account Status: Your registration is currently declined or restricted. If you believe this is an error or wish to submit an appeal, please reach out to the Help Desk below.');
         return;
       }
 
       if (matchedUser.isApproved === false && !matchedUser.isAdmin) {
-        setErrorMessage('⏳ Account Registration Pending Admin Approval. Please check back once Admin approves your account.');
+        setAccountNoticeType('PENDING');
+        setErrorMessage('Registration Status: Your account credentials are currently undergoing verification review. Please check back shortly, or reach out to the Help Desk below for updates.');
         return;
       }
 
@@ -697,9 +765,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Scrollable Form Body */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
-              <Info size={16} className="text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold space-y-2">
+              <div className="flex items-start gap-2">
+                <Info size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{errorMessage}</span>
+              </div>
+              {(accountNoticeType === 'DECLINED' || accountNoticeType === 'PENDING' || errorMessage.includes('Help Desk') || errorMessage.includes('Registration')) && (
+                <div className="pt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupportNickname(loginIdentifier || '');
+                      setSupportCategory(accountNoticeType === 'DECLINED' ? 'REGISTRATION_APPEAL' : 'RE_APPROVAL');
+                      setSupportMessage(
+                        accountNoticeType === 'DECLINED'
+                          ? `Hello FUHSI Support Desk, my registration (@${loginIdentifier || 'student'}) was declined. I would like to request an appeal and credentials review.`
+                          : `Hello FUHSI Support Desk, my registration (@${loginIdentifier || 'student'}) is currently under review. I would like to request an update on my account status.`
+                      );
+                      setErrorMessage('');
+                      setMode('SUPPORT_DESK');
+                    }}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <LifeBuoy size={14} />
+                    <span>Contact Help Desk / Submit Appeal</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -884,6 +976,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 >
                   Sign In
                 </button>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      setMode('SUPPORT_DESK');
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-teal-700 hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
+                  >
+                    <LifeBuoy size={13} />
+                    <span>Need help? Contact Campus Help Desk</span>
+                  </button>
+                </div>
               </div>
             </form>
           ) : mode === 'LOGIN' ? (
@@ -895,7 +1000,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>Account Registration Submitted!</span>
                   </div>
                   <p className="text-emerald-900 font-medium leading-relaxed">
-                    Your account (<strong className="text-emerald-950 font-bold">{pendingUserNotice.nickname}</strong>) has been registered. Please wait for internal Admin review. The Admin will confirm your studentship credentials and notify you via your email (<strong className="font-mono text-emerald-950 font-bold">{pendingUserNotice.studentEmail}</strong>).
+                    Your registration details for (<strong className="text-emerald-950 font-bold">{pendingUserNotice.nickname}</strong>) have been submitted for verification review. Once confirmed, you will receive an update at your email (<strong className="font-mono text-emerald-950 font-bold">{pendingUserNotice.studentEmail}</strong>).
                   </p>
                 </div>
               )}
@@ -986,23 +1091,224 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <span>Sign In</span>
               </button>
 
-              <div className="text-center pt-2 border-t border-slate-100">
-                <span className="text-xs text-slate-500 font-medium">Don't have an account? </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMessage('');
-                    setResetSuccessMessage('');
-                    setMode('REGISTER');
-                  }}
-                  className="text-xs font-extrabold text-teal-700 hover:text-teal-900 hover:underline cursor-pointer"
-                >
-                  Sign Up
-                </button>
+              <div className="text-center pt-2 border-t border-slate-100 space-y-2">
+                <div>
+                  <span className="text-xs text-slate-500 font-medium">Don't have an account? </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      setResetSuccessMessage('');
+                      setMode('REGISTER');
+                    }}
+                    className="text-xs font-extrabold text-teal-700 hover:text-teal-900 hover:underline cursor-pointer"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage('');
+                      setMode('SUPPORT_DESK');
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-teal-700 hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
+                  >
+                    <LifeBuoy size={13} />
+                    <span>Need help? Contact Campus Help Desk</span>
+                  </button>
+                </div>
               </div>
-
-
             </form>
+          ) : mode === 'SUPPORT_DESK' ? (
+            <div className="space-y-4">
+              {supportSubmittedTicket ? (
+                <div className="p-4 sm:p-5 rounded-2xl bg-teal-50 border border-teal-200 text-teal-950 space-y-3.5 animate-in fade-in">
+                  <div className="flex items-center gap-2 text-teal-900 font-black text-sm">
+                    <CheckCircle2 size={20} className="text-teal-600 shrink-0" />
+                    <span>Support Ticket Dispatched Successfully!</span>
+                  </div>
+                  <p className="text-xs text-teal-900 leading-relaxed font-medium">
+                    Your inquiry has been logged with the FUHSI Verification and Support Desk. You can track this request using your Ticket ID or email us directly.
+                  </p>
+
+                  <div className="bg-white p-3.5 rounded-xl border border-teal-100 space-y-2 shadow-xs">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-semibold">Ticket ID:</span>
+                      <span className="font-mono font-black text-teal-900 bg-teal-100/80 px-2.5 py-0.5 rounded text-xs select-all">
+                        {supportSubmittedTicket.ticketId}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-semibold">Category:</span>
+                      <span className="font-bold text-slate-800">
+                        {supportSubmittedTicket.categoryLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-semibold">Current Status:</span>
+                      <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[11px]">
+                        ⏳ Under Review
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-1.5">
+                      <span className="text-slate-500 font-semibold">Official Support Email:</span>
+                      <span className="font-bold text-teal-800 text-xs">fuhsiconnectsupport@gmail.com</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={`mailto:fuhsiconnectsupport@gmail.com?subject=FUHSI%20Connect%20Ticket%20%5B${supportSubmittedTicket.ticketId}%5D%20-%20${encodeURIComponent(supportSubmittedTicket.categoryLabel)}&body=Hello%20FUHSI%20Support%20Desk%2C%0A%0ATicket%20ID%3A%20${supportSubmittedTicket.ticketId}%0AName%3A%20${encodeURIComponent(supportSubmittedTicket.fullName)}%0AUsername%3A%20${encodeURIComponent(supportSubmittedTicket.nickname || 'N/A')}%0AMatric%3A%20${encodeURIComponent(supportSubmittedTicket.matricNumber || 'N/A')}%0A%0AMessage%3A%0A${encodeURIComponent(supportSubmittedTicket.message)}`}
+                      className="flex-1 py-2.5 px-3 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <Mail size={14} />
+                      <span>Open in Email App</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSupportSubmittedTicket(null);
+                        setErrorMessage('');
+                        setMode('LOGIN');
+                      }}
+                      className="flex-1 py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      Return to Sign In
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSupportSubmit} className="space-y-3.5">
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-950 space-y-1">
+                    <div className="font-extrabold flex items-center gap-1.5 text-teal-900">
+                      <LifeBuoy size={16} className="text-teal-700 shrink-0" />
+                      <span>FUHSI Help & Support Desk</span>
+                    </div>
+                    <p className="text-[11px] text-teal-800 leading-relaxed">
+                      Need help accessing your account, submitting an appeal, or resolving a registration issue? Send your inquiry directly to the support desk.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      Full Real Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={supportFullName}
+                      onChange={(e) => setSupportFullName(e.target.value)}
+                      placeholder="Enter your full real name"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Email Address <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={supportEmail}
+                        onChange={(e) => setSupportEmail(e.target.value)}
+                        placeholder="e.g. name@fuhsi.edu.ng"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Student Handle / Username (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={supportNickname}
+                        onChange={(e) => setSupportNickname(e.target.value)}
+                        placeholder="@username"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Matric Number (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={supportMatric}
+                        onChange={(e) => setSupportMatric(e.target.value)}
+                        placeholder="e.g. FUHSI/2023/1234"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Inquiry Category <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={supportCategory}
+                        onChange={(e) => setSupportCategory(e.target.value as any)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                        required
+                      >
+                        <option value="REGISTRATION_APPEAL">Account Registration Appeal / Review</option>
+                        <option value="RE_APPROVAL">Account Re-approval Request</option>
+                        <option value="LOGIN_ISSUE">Login & Access Assistance</option>
+                        <option value="VERIFICATION_ASSIST">Matriculation / Verification Assistance</option>
+                        <option value="GENERAL_SUPPORT">General Support Inquiry</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      Detailed Message / Explanation <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      value={supportMessage}
+                      onChange={(e) => setSupportMessage(e.target.value)}
+                      rows={4}
+                      placeholder="Please explain the issue or provide details for your appeal/request..."
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none resize-none"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={supportSubmitting}
+                    className="w-full py-3 px-4 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Send size={15} />
+                    <span>{supportSubmitting ? 'Submitting...' : 'Submit Support Inquiry'}</span>
+                  </button>
+
+                  <div className="text-center pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setErrorMessage('');
+                        setMode('LOGIN');
+                      }}
+                      className="font-bold text-slate-600 hover:underline cursor-pointer"
+                    >
+                      ← Return to Sign In
+                    </button>
+                    <a
+                      href="mailto:fuhsiconnectsupport@gmail.com"
+                      className="text-teal-700 font-bold hover:underline"
+                    >
+                      Direct: fuhsiconnectsupport@gmail.com
+                    </a>
+                  </div>
+                </form>
+              )}
+            </div>
           ) : (
             <div className="space-y-4">
               {forgotStep === 'EMAIL' && (

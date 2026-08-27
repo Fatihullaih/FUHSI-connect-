@@ -440,6 +440,11 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
       roomType: resolvedRoomType,
     });
 
+    // Reset filters so the newly posted item is immediately visible
+    setSelectedCategory('All');
+    setSearchQuery('');
+    setActiveView('listings');
+
     setSellSuccessMsg(true);
     setTimeout(() => {
       setSellSuccessMsg(false);
