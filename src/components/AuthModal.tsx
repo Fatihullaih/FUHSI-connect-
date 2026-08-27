@@ -28,7 +28,10 @@ import {
   RefreshCw,
   Send,
   KeyRound,
-  LifeBuoy
+  LifeBuoy,
+  Copy,
+  Check,
+  ExternalLink
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -78,6 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [accountNoticeType, setAccountNoticeType] = useState<'DECLINED' | 'PENDING' | null>(null);
 
   // Help Desk / Support Ticket Form State
+  const [emailCopied, setEmailCopied] = useState(false);
   const [supportFullName, setSupportFullName] = useState('');
   const [supportEmail, setSupportEmail] = useState('');
   const [supportNickname, setSupportNickname] = useState('');
@@ -775,20 +779,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setSupportNickname(loginIdentifier || '');
-                      setSupportCategory(accountNoticeType === 'DECLINED' ? 'REGISTRATION_APPEAL' : 'RE_APPROVAL');
-                      setSupportMessage(
-                        accountNoticeType === 'DECLINED'
-                          ? `Hello FUHSI Support Desk, my registration (@${loginIdentifier || 'student'}) was declined. I would like to request an appeal and credentials review.`
-                          : `Hello FUHSI Support Desk, my registration (@${loginIdentifier || 'student'}) is currently under review. I would like to request an update on my account status.`
-                      );
                       setErrorMessage('');
                       setMode('SUPPORT_DESK');
                     }}
                     className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <LifeBuoy size={14} />
-                    <span>Contact Help Desk / Submit Appeal</span>
+                    <span>(Need help? Contact Help Desk?)</span>
                   </button>
                 </div>
               )}
@@ -986,7 +983,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="text-[11px] font-bold text-slate-500 hover:text-teal-700 hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
                   >
                     <LifeBuoy size={13} />
-                    <span>Need help? Contact Campus Help Desk</span>
+                    <span>(Need help? Contact Help Desk?)</span>
                   </button>
                 </div>
               </div>
@@ -1116,198 +1113,108 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="text-[11px] font-bold text-slate-500 hover:text-teal-700 hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
                   >
                     <LifeBuoy size={13} />
-                    <span>Need help? Contact Campus Help Desk</span>
+                    <span>(Need help? Contact Help Desk?)</span>
                   </button>
                 </div>
               </div>
             </form>
           ) : mode === 'SUPPORT_DESK' ? (
-            <div className="space-y-4">
-              {supportSubmittedTicket ? (
-                <div className="p-4 sm:p-5 rounded-2xl bg-teal-50 border border-teal-200 text-teal-950 space-y-3.5 animate-in fade-in">
-                  <div className="flex items-center gap-2 text-teal-900 font-black text-sm">
-                    <CheckCircle2 size={20} className="text-teal-600 shrink-0" />
-                    <span>Support Ticket Dispatched Successfully!</span>
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2.5 text-teal-950 font-black text-sm">
+                  <div className="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <LifeBuoy size={17} />
                   </div>
-                  <p className="text-xs text-teal-900 leading-relaxed font-medium">
-                    Your inquiry has been logged with the FUHSI Verification and Support Desk. You can track this request using your Ticket ID or email us directly.
-                  </p>
-
-                  <div className="bg-white p-3.5 rounded-xl border border-teal-100 space-y-2 shadow-xs">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-semibold">Ticket ID:</span>
-                      <span className="font-mono font-black text-teal-900 bg-teal-100/80 px-2.5 py-0.5 rounded text-xs select-all">
-                        {supportSubmittedTicket.ticketId}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-semibold">Category:</span>
-                      <span className="font-bold text-slate-800">
-                        {supportSubmittedTicket.categoryLabel}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-semibold">Current Status:</span>
-                      <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[11px]">
-                        ⏳ Under Review
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-1.5">
-                      <span className="text-slate-500 font-semibold">Official Support Email:</span>
-                      <span className="font-bold text-teal-800 text-xs">fuhsiconnectsupport@gmail.com</span>
-                    </div>
+                  <div>
+                    <h3 className="font-extrabold text-teal-950 text-sm">Help Desk Support</h3>
+                    <p className="text-[11px] font-semibold text-teal-700">(Need help? Contact Help Desk?)</p>
                   </div>
+                </div>
 
-                  <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                    <a
-                      href={`mailto:fuhsiconnectsupport@gmail.com?subject=FUHSI%20Connect%20Ticket%20%5B${supportSubmittedTicket.ticketId}%5D%20-%20${encodeURIComponent(supportSubmittedTicket.categoryLabel)}&body=Hello%20FUHSI%20Support%20Desk%2C%0A%0ATicket%20ID%3A%20${supportSubmittedTicket.ticketId}%0AName%3A%20${encodeURIComponent(supportSubmittedTicket.fullName)}%0AUsername%3A%20${encodeURIComponent(supportSubmittedTicket.nickname || 'N/A')}%0AMatric%3A%20${encodeURIComponent(supportSubmittedTicket.matricNumber || 'N/A')}%0A%0AMessage%3A%0A${encodeURIComponent(supportSubmittedTicket.message)}`}
-                      className="flex-1 py-2.5 px-3 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-                    >
-                      <Mail size={14} />
-                      <span>Open in Email App</span>
-                    </a>
+                <p className="text-xs text-teal-900 leading-relaxed font-medium">
+                  To lodge your complaint, resolve an account issue, or appeal a registration decision, please send an email directly to our official support address:
+                </p>
+
+                {/* Email Display Card */}
+                <div className="bg-white p-3.5 rounded-xl border border-teal-200/80 shadow-xs space-y-2.5">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Official Support Email
+                  </div>
+                  <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="font-mono font-bold text-xs sm:text-sm text-teal-900 select-all break-all">
+                      fuhsiconnectsupport@gmail.com
+                    </span>
                     <button
                       type="button"
                       onClick={() => {
-                        setSupportSubmittedTicket(null);
-                        setErrorMessage('');
-                        setMode('LOGIN');
+                        navigator.clipboard.writeText('fuhsiconnectsupport@gmail.com');
+                        setEmailCopied(true);
+                        setTimeout(() => setEmailCopied(false), 2500);
                       }}
-                      className="flex-1 py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                      className="px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs active:scale-95"
+                      title="Copy Email Address"
                     >
-                      Return to Sign In
+                      {emailCopied ? (
+                        <>
+                          <Check size={13} className="text-emerald-300" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} />
+                          <span>Copy</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
-              ) : (
-                <form onSubmit={handleSupportSubmit} className="space-y-3.5">
-                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-950 space-y-1">
-                    <div className="font-extrabold flex items-center gap-1.5 text-teal-900">
-                      <LifeBuoy size={16} className="text-teal-700 shrink-0" />
-                      <span>FUHSI Help & Support Desk</span>
-                    </div>
-                    <p className="text-[11px] text-teal-800 leading-relaxed">
-                      Need help accessing your account, submitting an appeal, or resolving a registration issue? Send your inquiry directly to the support desk.
-                    </p>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Full Real Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={supportFullName}
-                      onChange={(e) => setSupportFullName(e.target.value)}
-                      placeholder="Enter your full real name"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                      required
-                    />
+                {/* Username Requirement Notice */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                  <div className="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                    <span>⚠️ Required in your email:</span>
                   </div>
+                  <p className="text-[11px] text-amber-950 leading-relaxed font-semibold">
+                    You <span className="underline decoration-amber-500 font-black">must state the username</span> you have an issue with in your email so we can look up your account and assist you promptly.
+                  </p>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-800 mb-1">
-                        Email Address <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        value={supportEmail}
-                        onChange={(e) => setSupportEmail(e.target.value)}
-                        placeholder="e.g. name@fuhsi.edu.ng"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-800 mb-1">
-                        Student Handle / Username (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={supportNickname}
-                        onChange={(e) => setSupportNickname(e.target.value)}
-                        placeholder="@username"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-800 mb-1">
-                        Matric Number (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={supportMatric}
-                        onChange={(e) => setSupportMatric(e.target.value)}
-                        placeholder="e.g. FUHSI/2023/1234"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-800 mb-1">
-                        Inquiry Category <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={supportCategory}
-                        onChange={(e) => setSupportCategory(e.target.value as any)}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                        required
-                      >
-                        <option value="REGISTRATION_APPEAL">Account Registration Appeal / Review</option>
-                        <option value="RE_APPROVAL">Account Re-approval Request</option>
-                        <option value="LOGIN_ISSUE">Login & Access Assistance</option>
-                        <option value="VERIFICATION_ASSIST">Matriculation / Verification Assistance</option>
-                        <option value="GENERAL_SUPPORT">General Support Inquiry</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Detailed Message / Explanation <span className="text-rose-500">*</span>
-                    </label>
-                    <textarea
-                      value={supportMessage}
-                      onChange={(e) => setSupportMessage(e.target.value)}
-                      rows={4}
-                      placeholder="Please explain the issue or provide details for your appeal/request..."
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none resize-none"
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={supportSubmitting}
-                    className="w-full py-3 px-4 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                {/* Launch Email App Button */}
+                <div className="pt-1">
+                  <a
+                    href={`mailto:fuhsiconnectsupport@gmail.com?subject=FUHSI%20Connect%20Support%20%2F%20Complaint&body=Hello%20Help%20Desk%2C%0A%0AMy%20Username%20is%3A%20%0A%0AMy%20Issue%20%2F%20Complaint%20details%3A%0A`}
+                    className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Send size={15} />
-                    <span>{supportSubmitting ? 'Submitting...' : 'Submit Support Inquiry'}</span>
-                  </button>
+                    <Mail size={15} />
+                    <span>Open in Email App</span>
+                  </a>
+                </div>
+              </div>
 
-                  <div className="text-center pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setErrorMessage('');
-                        setMode('LOGIN');
-                      }}
-                      className="font-bold text-slate-600 hover:underline cursor-pointer"
-                    >
-                      ← Return to Sign In
-                    </button>
-                    <a
-                      href="mailto:fuhsiconnectsupport@gmail.com"
-                      className="text-teal-700 font-bold hover:underline"
-                    >
-                      Direct: fuhsiconnectsupport@gmail.com
-                    </a>
-                  </div>
-                </form>
-              )}
+              {/* Navigation Actions */}
+              <div className="text-center pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage('');
+                    setMode('LOGIN');
+                  }}
+                  className="font-bold text-teal-700 hover:text-teal-900 hover:underline cursor-pointer"
+                >
+                  ← Return to Sign In
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage('');
+                    setMode('REGISTER');
+                  }}
+                  className="font-bold text-slate-600 hover:text-teal-700 hover:underline cursor-pointer"
+                >
+                  Sign Up for New Account
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">

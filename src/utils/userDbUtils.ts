@@ -26,6 +26,25 @@ export const DEFAULT_USERS_LIST: UserProfile[] = [
     isDeclined: false,
     isAdmin: true,
   },
+  {
+    id: 'usr_student_deji',
+    nickname: '@Deji',
+    realName: 'Deji',
+    matricNumber: 'FUHSI/MED/2023/048',
+    studentEmail: 'deji@fuhsi.edu.ng',
+    emergencyHomePhone: '08123456789',
+    department: 'Medicine & Surgery',
+    level: '300L',
+    bio: 'FUHSI Medical Student | Academic insights and campus discussions.',
+    avatarKey: 'caduceus',
+    badgeType: 'GOLD',
+    badgeTitle: 'FUHSI Student',
+    reputationScore: 180,
+    isVerified: true,
+    isApproved: true,
+    isDeclined: false,
+    isAdmin: false,
+  },
 ];
 
 /**
@@ -39,7 +58,9 @@ export function getStoredUsers(): UserProfile[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         // Automatically filter out any demo/mock accounts and deduplicate
         const realUsers = parsed.filter((u) => !isDemoUser(u));
-        const cleaned = mergeUsers(realUsers.length > 0 ? realUsers : DEFAULT_USERS_LIST, []);
+        // Guarantee Deji and Modula exist in database
+        const withDefaults = mergeUsers(DEFAULT_USERS_LIST, realUsers);
+        const cleaned = mergeUsers(withDefaults.length > 0 ? withDefaults : DEFAULT_USERS_LIST, []);
         try {
           localStorage.setItem(USER_DB_KEY, JSON.stringify(cleaned));
         } catch (e) {

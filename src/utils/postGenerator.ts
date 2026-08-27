@@ -16,10 +16,10 @@ export const DEMO_NICKNAMES = new Set([
   'fuhsi_sug_official',
   'fuhsisug_official',
   'fuhsisugofficial',
+  'yi',
+  'y_i',
 
-  // Prior demo seeds & placeholder handles
-  'adedeji_ayo',
-  'adedeji ayo',
+  // Prior demo seeds & placeholder handles (excluding real student Deji)
   'samuel obafemi',
   'samuel_obafemi',
   'dr_chidi',
@@ -66,6 +66,22 @@ export function isDemoNickname(nick?: string | null): boolean {
   const clean = raw.replace(/^@+/, '').replace(/\s+/g, '_');
   const cleanNoUnderscore = clean.replace(/_/g, '');
 
+  // Real student whitelist - NEVER treat Deji or admin as demo
+  if (
+    clean === 'deji' ||
+    clean === 'adedeji' ||
+    clean.startsWith('deji') ||
+    clean === 'modula' ||
+    clean === 'fatih'
+  ) {
+    return false;
+  }
+
+  // Ghost handle - strictly removed
+  if (clean === 'yi' || cleanNoUnderscore === 'yi' || clean === 'y_i') {
+    return true;
+  }
+
   if (DEMO_NICKNAMES.has(clean) || DEMO_NICKNAMES.has(cleanNoUnderscore) || DEMO_NICKNAMES.has(raw)) {
     return true;
   }
@@ -93,12 +109,25 @@ export function isDemoUser(u: Partial<UserProfile> | null | undefined): boolean 
   if (!u) return false;
   if (u.isAdmin || u.nickname === '@modula' || u.id === 'usr_admin_modula') return false;
   
+  const cleanNick = (u.nickname || '').trim().toLowerCase().replace(/^@+/, '');
+  // Real user Deji whitelist
+  if (cleanNick === 'deji' || cleanNick === 'adedeji' || cleanNick.startsWith('deji')) {
+    return false;
+  }
+
+  // Ghost user @Yi
+  if (cleanNick === 'yi' || cleanNick === 'y_i') {
+    return true;
+  }
+
   if (isDemoNickname(u.nickname) || isDemoNickname(u.realName)) return true;
 
   if (u.studentEmail) {
     const emailLower = u.studentEmail.toLowerCase();
+    if (emailLower.includes('deji')) {
+      return false;
+    }
     if (
-      emailLower.includes('ayo') ||
       emailLower.includes('ekuru') ||
       emailLower.includes('ilacampusprints') ||
       emailLower.includes('labpro') ||
