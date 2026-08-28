@@ -108,10 +108,35 @@ export function isDemoNickname(nick?: string | null): boolean {
 export function isDemoUser(u: Partial<UserProfile> | null | undefined): boolean {
   if (!u) return false;
   if (u.isAdmin || u.nickname === '@modula' || u.id === 'usr_admin_modula') return false;
-  
+
+  const emailLower = (u.studentEmail || '').toLowerCase();
+  const matricUpper = (u.matricNumber || '').toUpperCase();
+  const realNameLower = (u.realName || '').toLowerCase();
+  const deptLower = (u.department || '').toLowerCase();
+
+  // REAL Main Account Whitelist: Adedeji Ayo (24/PRT/007, Prosthetics and Orthotics, faithlucas.co@gmail.com)
+  if (
+    emailLower === 'faithlucas.co@gmail.com' ||
+    matricUpper === '24/PRT/007' ||
+    u.id === 'usr_student_adedeji_ayo_24prt007' ||
+    (realNameLower.includes('adedeji') && deptLower.includes('prosthetics'))
+  ) {
+    return false;
+  }
+
+  // Explicitly purge the fake/demo Medicine & Surgery Deji account
+  if (
+    u.id === 'usr_student_deji' ||
+    emailLower === 'deji@fuhsi.edu.ng' ||
+    matricUpper === 'FUHSI/MED/2023/048' ||
+    (realNameLower === 'deji' && deptLower.includes('medicine'))
+  ) {
+    return true;
+  }
+
   const cleanNick = (u.nickname || '').trim().toLowerCase().replace(/^@+/, '');
   // Real user Deji whitelist
-  if (cleanNick === 'deji' || cleanNick === 'adedeji' || cleanNick.startsWith('deji')) {
+  if (cleanNick === 'deji' || cleanNick === 'adedeji') {
     return false;
   }
 
@@ -123,10 +148,6 @@ export function isDemoUser(u: Partial<UserProfile> | null | undefined): boolean 
   if (isDemoNickname(u.nickname) || isDemoNickname(u.realName)) return true;
 
   if (u.studentEmail) {
-    const emailLower = u.studentEmail.toLowerCase();
-    if (emailLower.includes('deji')) {
-      return false;
-    }
     if (
       emailLower.includes('ekuru') ||
       emailLower.includes('ilacampusprints') ||

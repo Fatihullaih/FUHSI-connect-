@@ -1664,7 +1664,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <button
               onClick={openProfileModal}
-              className="group relative flex items-center gap-2 p-1 rounded-full hover:bg-teal-700/80 transition-all text-left focus:outline-none focus:ring-2 focus:ring-teal-400/50"
+              className="group relative flex items-center gap-2 p-1 rounded-full hover:bg-teal-700/80 transform-gpu transition-all duration-200 hover:scale-105 active:scale-95 text-left focus:outline-none focus:ring-2 focus:ring-teal-400/50 cursor-pointer"
               title="Click to check your Student Profile"
             >
               <div className="relative">
@@ -1693,13 +1693,13 @@ export const App: React.FC = () => {
           {/* App Title & Logo */}
           <div
             onClick={() => handleNavChange(0)}
-            className="flex items-center gap-2 cursor-pointer select-none py-0.5"
+            className="flex items-center gap-2 cursor-pointer select-none py-0.5 transform-gpu transition-all duration-200 hover:scale-105 active:scale-95"
             title="FUHSI-Connect Campus Network"
           >
             <img
               src={fuhsiLogo}
               alt="FUHSI Connect Logo"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shrink-0 border-2 border-teal-300/60 shadow-xs active:scale-95 transition-transform"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shrink-0 border-2 border-teal-300/60 shadow-xs transition-transform"
             />
             <div className="text-left leading-tight">
               <h1 className="font-black text-xs sm:text-sm tracking-tight text-white flex items-center gap-1">
@@ -1714,7 +1714,7 @@ export const App: React.FC = () => {
             {/* Dark/Light Mode Quick Toggle Button */}
             <button
               onClick={toggleQuickTheme}
-              className="p-1.5 sm:p-2 rounded-full bg-teal-800/80 hover:bg-teal-700/90 border border-teal-600/50 text-amber-300 transition-all shadow-xs flex items-center justify-center cursor-pointer active:scale-95"
+              className="p-1.5 sm:p-2 rounded-full bg-teal-800/80 hover:bg-teal-700/90 border border-teal-600/50 text-amber-300 transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 shadow-xs flex items-center justify-center cursor-pointer"
               title="Toggle Low-Light Campus Mode (Dark/Light Theme)"
             >
               {typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? (
@@ -2432,45 +2432,45 @@ export const App: React.FC = () => {
           {/* 1. Feed */}
           <button
             onClick={() => handleNavChange(0)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
-              navIndex === 0 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            className={`group flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer ${
+              navIndex === 0 ? 'text-teal-700 font-extrabold scale-105 shadow-xs bg-teal-50/70' : 'text-slate-500 hover:text-teal-800 hover:bg-slate-50'
             }`}
           >
-            <DynamicFeedIcon className="w-5 h-5" />
+            <DynamicFeedIcon className="w-5 h-5 transition-transform group-hover:scale-105" />
             <span className="text-[10px] sm:text-[11px]">Feed</span>
           </button>
 
           {/* 2. Search */}
           <button
             onClick={() => handleNavChange(1)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
-              navIndex === 1 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            className={`group flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer ${
+              navIndex === 1 ? 'text-teal-700 font-extrabold scale-105 shadow-xs bg-teal-50/70' : 'text-slate-500 hover:text-teal-800 hover:bg-slate-50'
             }`}
           >
-            <Search className="w-5 h-5" />
+            <Search className="w-5 h-5 transition-transform group-hover:scale-105" />
             <span className="text-[10px] sm:text-[11px]">Search</span>
           </button>
 
           {/* 3. Hub&Fund */}
           <button
             onClick={() => handleNavChange(2)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
-              navIndex === 2 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            className={`group flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer ${
+              navIndex === 2 ? 'text-teal-700 font-extrabold scale-105 shadow-xs bg-teal-50/70' : 'text-slate-500 hover:text-teal-800 hover:bg-slate-50'
             }`}
           >
-            <StorefrontIcon className="w-5 h-5" />
+            <StorefrontIcon className="w-5 h-5 transition-transform group-hover:scale-105" />
             <span className="text-[10px] sm:text-[11px]">Hub&Fund</span>
           </button>
 
           {/* 4. Notification */}
           <button
             onClick={() => handleNavChange(3)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors relative ${
-              navIndex === 3 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            className={`group flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer relative ${
+              navIndex === 3 ? 'text-teal-700 font-extrabold scale-105 shadow-xs bg-teal-50/70' : 'text-slate-500 hover:text-teal-800 hover:bg-slate-50'
             }`}
           >
             <div className="relative">
-              <Bell className="w-5 h-5" />
+              <Bell className="w-5 h-5 transition-transform group-hover:scale-105" />
               {unreadNotificationCount > 0 && (
                 <span className="absolute -top-1 -right-1.5 min-w-3.5 h-3.5 px-1 bg-rose-600 text-white rounded-full text-[8.5px] font-black flex items-center justify-center animate-pulse">
                   {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
@@ -2483,12 +2483,12 @@ export const App: React.FC = () => {
           {/* 5. Chats */}
           <button
             onClick={() => handleNavChange(4)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors relative ${
-              navIndex === 4 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            className={`group flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer relative ${
+              navIndex === 4 ? 'text-teal-700 font-extrabold scale-105 shadow-xs bg-teal-50/70' : 'text-slate-500 hover:text-teal-800 hover:bg-slate-50'
             }`}
           >
             <div className="relative">
-              <MessageCircle className="w-5 h-5" />
+              <MessageCircle className="w-5 h-5 transition-transform group-hover:scale-105" />
               {unreadChatsCount > 0 && (
                 <span className="absolute -top-1 -right-1.5 min-w-3.5 h-3.5 px-1 bg-teal-600 text-white rounded-full text-[8.5px] font-black flex items-center justify-center animate-pulse">
                   {unreadChatsCount > 99 ? '99+' : unreadChatsCount}
@@ -2501,11 +2501,11 @@ export const App: React.FC = () => {
           {/* 6. Ranking */}
           <button
             onClick={() => handleNavChange(5)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-colors ${
-              navIndex === 5 ? 'text-teal-700 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
+            className={`group flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transform-gpu transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer ${
+              navIndex === 5 ? 'text-teal-700 font-extrabold scale-105 shadow-xs bg-teal-50/70' : 'text-slate-500 hover:text-teal-800 hover:bg-slate-50'
             }`}
           >
-            <LeaderboardIcon className="w-5 h-5" />
+            <LeaderboardIcon className="w-5 h-5 transition-transform group-hover:scale-105" />
             <span className="text-[10px] sm:text-[11px]">Ranking</span>
           </button>
         </div>

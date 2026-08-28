@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserProfile, ChatConversation, DirectMessage, ChatReport } from '../types';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
+import { isDemoUser, isDemoNickname } from '../utils/postGenerator';
+import { getUserBadgeInfo } from '../utils/verificationUtils';
 import { 
   getStoredDirectMessages, 
   getUserConversations, 
@@ -423,8 +425,11 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
     const q = newChatSearch.toLowerCase().replace(/^@/, '');
     return allUsers
       .filter((u) => {
+        if (!u || isDemoUser(u) || isDemoNickname(u.nickname)) return false;
+        if (u.isDeclined || u.verificationStatus === 'declined') return false;
         const nick = normalizeNickname(u.nickname);
         if (!nick || nick === cleanMyNickname) return false;
+        if (nick === 'yi' || nick === '@yi') return false;
         if (!q) return true;
         return nick.includes(q);
       })
@@ -623,11 +628,16 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                           >
                             {extractPureStudentHandle(conv.otherUserNickname, myNickname)}
                           </span>
-                          <VerificationBadge
-                            isVerified={Boolean(conv.otherUserIsVerified)}
-                            badgeType={conv.otherUserBadgeType as any}
-                            size={12}
-                          />
+                          {(() => {
+                            const bInfo = getUserBadgeInfo(conv.otherUserNickname);
+                            return (
+                              <VerificationBadge
+                                isVerified={bInfo.isVerified}
+                                badgeType={bInfo.badgeType as any}
+                                size={12}
+                              />
+                            );
+                          })()}
                         </div>
                         <span
                           className={`shrink-0 ${
@@ -734,11 +744,16 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                       <h2 className="text-xs sm:text-sm font-black text-slate-900 truncate group-hover:text-teal-700 transition-colors">
                         {cleanRecipientDisplay}
                       </h2>
-                      <VerificationBadge
-                        isVerified={Boolean(activeRecipient.isVerified)}
-                        badgeType={activeRecipient.badgeType as any}
-                        size={13}
-                      />
+                      {(() => {
+                        const bInfo = getUserBadgeInfo(cleanRecipientDisplay);
+                        return (
+                          <VerificationBadge
+                            isVerified={bInfo.isVerified}
+                            badgeType={bInfo.badgeType as any}
+                            size={13}
+                          />
+                        );
+                      })()}
                     </div>
 
                     {/* Status: • Online / Offline */}
@@ -1013,11 +1028,16 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                           <span className="text-xs font-black text-slate-900 group-hover:text-teal-800">
                             {student.nickname}
                           </span>
-                          <VerificationBadge
-                            isVerified={Boolean(student.isVerified || student.verificationStatus === 'approved')}
-                            badgeType={student.badgeType as any}
-                            size={12}
-                          />
+                          {(() => {
+                            const bInfo = getUserBadgeInfo(student.nickname, student);
+                            return (
+                              <VerificationBadge
+                                isVerified={bInfo.isVerified}
+                                badgeType={bInfo.badgeType as any}
+                                size={12}
+                              />
+                            );
+                          })()}
                         </div>
                         <p className="text-[10px] font-bold text-slate-400">
                           {student.badgeTitle || 'FUHSI Student'}

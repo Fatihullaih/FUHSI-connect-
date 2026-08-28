@@ -8,7 +8,7 @@ import { formatRelativeTime, formatExactDateTime, getTimestampMs } from '../util
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { compressImageFile } from '../utils/imageUtils';
-import { checkIsUserVerified } from '../utils/verificationUtils';
+import { checkIsUserVerified, getUserBadgeInfo } from '../utils/verificationUtils';
 import { findUserByNickname } from '../utils/userDbUtils';
 
 interface PostDetailModalProps {
@@ -153,6 +153,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
     const commentAvatarKey = comment.authorAvatarKey || commentAuthorUser?.avatarKey || (isMyComment ? userProfile?.avatarKey : undefined) || '1';
     const commentAvatarUrl = comment.authorAvatarUrl || commentAuthorUser?.avatarUrl || (isMyComment ? userProfile?.avatarUrl : undefined);
 
+    const commentBadgeInfo = getUserBadgeInfo(comment.authorNickname, commentAuthorUser || (isMyComment ? userProfile : null));
+
     return (
       <div key={comment.id} className="space-y-2">
         <div 
@@ -168,8 +170,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                 nickname: comment.authorNickname,
                 avatarKey: commentAvatarKey,
                 avatarUrl: commentAvatarUrl,
-                badgeType: comment.authorBadgeType,
-                badgeTitle: comment.authorBadgeTitle
+                badgeType: commentBadgeInfo.badgeType,
+                badgeTitle: commentBadgeInfo.badgeTitle
               })}
               className="flex items-center gap-2 flex-wrap cursor-pointer group/user"
               title={`View ${comment.authorNickname}'s profile`}
@@ -183,9 +185,9 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                 {comment.authorNickname}
               </span>
               <VerificationBadge 
-                isVerified={Boolean((comment as any).isVerified || (comment as any).authorIsVerified)} 
-                badgeType={comment.authorBadgeType}
-                title={comment.authorBadgeTitle}
+                isVerified={commentBadgeInfo.isVerified} 
+                badgeType={commentBadgeInfo.badgeType}
+                title={commentBadgeInfo.badgeTitle}
               />
               {comment.replyToNickname && (
                 <button
@@ -338,6 +340,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
             const postAvatarKey = post.authorAvatarKey || authorUser?.avatarKey || (isMyPost ? userProfile?.avatarKey : undefined) || '1';
             const postAvatarUrl = post.authorAvatarUrl || authorUser?.avatarUrl || (isMyPost ? userProfile?.avatarUrl : undefined);
 
+            const authorBadgeInfo = getUserBadgeInfo(post?.authorNickname, authorUser || (isMyPost ? userProfile : null));
+
             return (
               <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-3 shadow-2xs">
                 <div className="flex items-start justify-between gap-2">
@@ -346,8 +350,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                       nickname: post.authorNickname,
                       avatarKey: postAvatarKey,
                       avatarUrl: postAvatarUrl,
-                      badgeType: post.authorBadgeType,
-                      badgeTitle: post.authorBadgeTitle
+                      badgeType: authorBadgeInfo.badgeType,
+                      badgeTitle: authorBadgeInfo.badgeTitle
                     })}
                     className="flex items-center gap-3 cursor-pointer group/author flex-1 min-w-0"
                     title={`View ${post.authorNickname}'s profile`}
@@ -363,9 +367,9 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                           {post.authorNickname}
                         </span>
                         <VerificationBadge 
-                          isVerified={Boolean(post.isVerified || (post as any).authorIsVerified || isVerifiedUser)} 
-                          badgeType={post.authorBadgeType}
-                          title={post.authorBadgeTitle}
+                          isVerified={authorBadgeInfo.isVerified} 
+                          badgeType={authorBadgeInfo.badgeType}
+                          title={authorBadgeInfo.badgeTitle}
                           showTitle 
                         />
                       </div>

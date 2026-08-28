@@ -39,6 +39,7 @@ import { PostCard } from '../components/PostCard';
 import { ProfilePictureModal } from '../components/ProfilePictureModal';
 import { VerificationModal } from '../components/VerificationModal';
 import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
+import { getUserBadgeInfo } from '../utils/verificationUtils';
 
 interface ProfileScreenProps {
   userProfile: UserProfile | null;
@@ -346,12 +347,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 {userProfile?.nickname || '@Student'}
               </h1>
-              <VerificationBadge
-                isVerified={Boolean(userProfile?.isVerified || userProfile?.verificationStatus === 'approved')}
-                badgeType={userProfile?.badgeType}
-                title={userProfile?.badgeTitle}
-                showTitle
-              />
+              {(() => {
+                const badgeInfo = getUserBadgeInfo(userProfile?.nickname, userProfile);
+                return (
+                  <VerificationBadge
+                    isVerified={badgeInfo.isVerified}
+                    badgeType={badgeInfo.badgeType}
+                    title={badgeInfo.badgeTitle}
+                    showTitle
+                  />
+                );
+              })()}
             </div>
           </div>
 

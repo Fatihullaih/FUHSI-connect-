@@ -6,7 +6,7 @@ import { VerificationModal } from './VerificationModal';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
-import { checkIsUserVerified } from '../utils/verificationUtils';
+import { checkIsUserVerified, getUserBadgeInfo } from '../utils/verificationUtils';
 import { findUserByNickname } from '../utils/userDbUtils';
 import { 
   Heart, 
@@ -27,7 +27,9 @@ import {
   Trash2,
   Edit3,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface PostCardProps {
@@ -80,9 +82,11 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [editedContent, setEditedContent] = useState(post.content || post.text || '');
   const [showEditLockModal, setShowEditLockModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     setEditedContent(post.content || post.text || '');
+    setIsExpanded(false);
   }, [post.content, post.text]);
 
   const isMyPost = Boolean(
@@ -90,22 +94,50 @@ export const PostCard: React.FC<PostCardProps> = ({
     (currentUserNickname && post.authorNickname?.toLowerCase() === currentUserNickname.toLowerCase())
   );
 
-  const isVerifiedUser = useMemo(() => {
-    return checkIsUserVerified(post.authorNickname || currentUserNickname, userProfile);
-  }, [post.authorNickname, currentUserNickname, userProfile]);
+  const authorUser = useMemo(() => {
+    return findUserByNickname(post.authorNickname);
+  }, [post.authorNickname]);
 
+  const authorBadgeInfo = useMemo(() => {
+    return getUserBadgeInfo(post.authorNickname || currentUserNickname, authorUser || (isMyPost ? userProfile : null));
+  }, [post.authorNickname, currentUserNickname, authorUser, isMyPost, userProfile]);
+
+  const isVerifiedUser = authorBadgeInfo.isVerified;
   const likesCount = post.likesCount ?? post.upvotes ?? 0;
   const isLiked = post.isLikedByMe || post.userVote === 'up';
   const isBookmarked = post.isBookmarkedByMe !== undefined ? Boolean(post.isBookmarkedByMe) : Boolean(post.isBookmarked);
   const commentsCount = post.commentsCount ?? post.commentCount ?? comments.length;
   const department = post.department || post.authorDepartment || 'General';
-  const authorUser = useMemo(() => {
-    return findUserByNickname(post.authorNickname);
-  }, [post.authorNickname]);
 
   const avatarKey = post.authorAvatarKey || post.authorAvatarId || authorUser?.avatarKey || (isMyPost ? userProfile?.avatarKey : undefined) || 'caduceus';
   const avatarUrl = post.authorAvatarUrl || authorUser?.avatarUrl || (isMyPost ? userProfile?.avatarUrl : undefined);
   const category = post.category || 'General';
+
+  const postRawContent = post.content || post.text || '';
+  const isLongContent = useMemo(() => {
+    if (!postRawContent) return false;
+    const lines = postRawContent.split('\n');
+    return postRawContent.length > 280 || lines.length > 4;
+  }, [postRawContent]);
+
+  const displayContent = useMemo(() => {
+    if (!postRawContent) return '';
+    if (!isLongContent || isExpanded) {
+      return postRawContent;
+    }
+    const lines = postRawContent.split('\n');
+    if (lines.length > 4) {
+      const truncatedByLines = lines.slice(0, 4).join('\n');
+      if (truncatedByLines.length > 260) {
+        return truncatedByLines.slice(0, 260).trim() + '...';
+      }
+      return truncatedByLines + '...';
+    }
+    if (postRawContent.length > 280) {
+      return postRawContent.slice(0, 280).trim() + '...';
+    }
+    return postRawContent;
+  }, [postRawContent, isLongContent, isExpanded]);
 
   const getCategoryBadge = (cat: string) => {
     switch (cat) {
@@ -194,7 +226,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   }, [optionsList]);
 
   return (
-    <article className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-slate-300 transition-all overflow-hidden mb-4">
+    <article className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-slate-300 hover:shadow-md transform-gpu hover:scale-[1.012] transition-all duration-200 overflow-hidden mb-4">
       <div className="p-4 sm:p-5">
         {/* Post Header */}
         <div className="flex items-start justify-between gap-3">
@@ -219,9 +251,9 @@ export const PostCard: React.FC<PostCardProps> = ({
                 </button>
 
                 <VerificationBadge 
-                  isVerified={Boolean(post.isVerified || (post as any).authorIsVerified || isVerifiedUser)} 
-                  badgeType={post.authorBadgeType}
-                  title={post.authorBadgeTitle}
+                  isVerified={authorBadgeInfo.isVerified} 
+                  badgeType={authorBadgeInfo.badgeType}
+                  title={authorBadgeInfo.badgeTitle}
                   showTitle 
                 />
               </div>
@@ -342,13 +374,28 @@ export const PostCard: React.FC<PostCardProps> = ({
             </div>
           </div>
         ) : (
-          <p 
-            onClick={() => onCommentClick?.(post)}
-            className="mt-2 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal cursor-pointer hover:text-teal-950 transition-colors"
-            title="Click to view full thread, comments & replies"
-          >
-            {post.content}
-          </p>
+          <div className="mt-2">
+            <p 
+              onClick={() => onCommentClick?.(post)}
+              className="text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal cursor-pointer hover:text-teal-950 transition-colors"
+              title="Click to view full thread, comments & replies"
+            >
+              {displayContent}
+            </p>
+            {isLongContent && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+                className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50/80 hover:bg-teal-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-teal-200/50"
+              >
+                <span>{isExpanded ? 'Read Less' : 'Read More'}</span>
+                {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Attached Images (Supports up to 2 images) */}

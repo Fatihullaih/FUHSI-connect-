@@ -6,6 +6,7 @@ import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { calculateUserPoints } from '../utils/reputationUtils';
 import { isDemoUser, isDemoNickname, isDemoPost } from '../utils/postGenerator';
+import { getUserBadgeInfo } from '../utils/verificationUtils';
 import {
   Search,
   Sparkles,
@@ -45,7 +46,7 @@ interface CampusAccount {
   department: string;
   level: string;
   bio: string;
-  badgeType: 'GREEN' | 'BLUE' | 'GOLD' | 'PURPLE' | 'NONE';
+  badgeType: 'GREEN' | 'BLUE' | 'GOLD' | 'PURPLE' | 'NONE' | string;
   badgeTitle: string;
   avatarKey: string;
   avatarUrl?: string;
@@ -140,26 +141,6 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       console.error(e);
     }
 
-    const checkVerif = (nick: string, defaultVerified = false, defaultType = 'NONE', defaultTitle = '') => {
-      const clean = (nick || '').toLowerCase().replace(/^@/, '');
-      const v = verifsList.find((req: any) => 
-        req.status === 'APPROVED' && 
-        (req.applicantNickname?.toLowerCase().replace(/^@/, '') === clean || req.applicantNickname?.toLowerCase() === nick.toLowerCase())
-      );
-      if (v) {
-        return {
-          isVerified: true,
-          badgeType: v.assignedBadgeType || 'GREEN',
-          badgeTitle: v.assignedBadgeTitle || 'Verified'
-        };
-      }
-      return {
-        isVerified: defaultVerified,
-        badgeType: defaultType,
-        badgeTitle: defaultTitle
-      };
-    };
-
     // Add registered users from local storage if available
     try {
       const storedUsers = localStorage.getItem('fuhsi_users_db');
@@ -170,7 +151,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             const key = normalize(u.nickname);
             if (!accMap.has(key)) {
               const exactScore = calculateUserPoints(u.nickname, u, posts, []);
-              const verifInfo = checkVerif(u.nickname, Boolean(u.isVerified), u.badgeType, u.badgeTitle);
+              const verifInfo = getUserBadgeInfo(u.nickname, u);
               accMap.set(key, {
                 id: u.id || `usr_${key}`,
                 nickname: u.nickname.startsWith('@') ? u.nickname : `@${u.nickname}`,
@@ -198,7 +179,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       const key = normalize(userProfile.nickname);
       if (!accMap.has(key)) {
         const exactScore = calculateUserPoints(userProfile.nickname, userProfile, posts, []);
-        const verifInfo = checkVerif(userProfile.nickname, Boolean(userProfile.isVerified), userProfile.badgeType, userProfile.badgeTitle);
+        const verifInfo = getUserBadgeInfo(userProfile.nickname, userProfile);
         accMap.set(key, {
           id: userProfile.id || `usr_${key}`,
           nickname: userProfile.nickname.startsWith('@') ? userProfile.nickname : `@${userProfile.nickname}`,
@@ -224,7 +205,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         const key = normalize(nick);
         if (!accMap.has(key)) {
           const exactScore = calculateUserPoints(nick, { nickname: nick }, posts, []);
-          const verifInfo = checkVerif(nick, Boolean(p.isVerified || (p as any).authorIsVerified), p.authorBadgeType, p.authorBadgeTitle);
+          const verifInfo = getUserBadgeInfo(nick);
           accMap.set(key, {
             id: `post_author_${key}`,
             nickname: nick.startsWith('@') ? nick : `@${nick}`,
@@ -366,7 +347,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         department: acc.department,
         level: acc.level,
         bio: acc.bio,
-        badgeType: acc.badgeType,
+        badgeType: acc.badgeType as any,
         badgeTitle: acc.badgeTitle,
         avatarKey: acc.avatarKey,
         reputationScore: acc.reputationScore,

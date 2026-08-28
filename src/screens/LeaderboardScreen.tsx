@@ -4,6 +4,7 @@ import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { isDemoUser, isDemoNickname, isDemoPost } from '../utils/postGenerator';
+import { getUserBadgeInfo } from '../utils/verificationUtils';
 import { 
   Trophy, 
   Award, 
@@ -355,7 +356,16 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                             >
                               {user.nickname}
                             </button>
-                            <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
+                            {(() => {
+                              const bInfo = getUserBadgeInfo(user.nickname);
+                              return (
+                                <VerificationBadge
+                                  isVerified={bInfo.isVerified}
+                                  badgeType={bInfo.badgeType}
+                                  title={bInfo.badgeTitle}
+                                />
+                              );
+                            })()}
                           </div>
                           <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
                         </div>
@@ -422,7 +432,16 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                             >
                               {user.nickname}
                             </button>
-                            <VerificationBadge isVerified={checkIsVerified(user.nickname) || Boolean((user as any).isVerified)} />
+                            {(() => {
+                              const bInfo = getUserBadgeInfo(user.nickname);
+                              return (
+                                <VerificationBadge
+                                  isVerified={bInfo.isVerified}
+                                  badgeType={bInfo.badgeType}
+                                  title={bInfo.badgeTitle}
+                                />
+                              );
+                            })()}
                           </div>
                           <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
                         </div>
@@ -532,7 +551,17 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                           <span className="font-extrabold text-slate-900 text-sm sm:text-base">
                             {student.nickname}
                           </span>
-                          <VerificationBadge isVerified={checkIsVerified(student.nickname) || Boolean((student as any).isVerified)} showTitle />
+                          {(() => {
+                            const bInfo = getUserBadgeInfo(student.nickname);
+                            return (
+                              <VerificationBadge
+                                isVerified={bInfo.isVerified}
+                                badgeType={bInfo.badgeType}
+                                title={bInfo.badgeTitle}
+                                showTitle
+                              />
+                            );
+                          })()}
                           {isCurrentUser && (
                             <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
                               YOU

@@ -22,17 +22,13 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
 
   const normalizedType = (badgeType || 'BLUE').toUpperCase();
 
+  // Consistent, standardized badge colors across entire platform
   let colorClasses = {
     icon: 'text-sky-500 fill-sky-500 text-white',
     bg: 'bg-sky-50 text-sky-800 border-sky-200',
   };
 
-  if (normalizedType === 'GREEN') {
-    colorClasses = {
-      icon: 'text-emerald-500 fill-emerald-500 text-white',
-      bg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-    };
-  } else if (normalizedType === 'GOLD' || normalizedType === 'ORANGE') {
+  if (normalizedType === 'GOLD' || normalizedType === 'ORANGE') {
     colorClasses = {
       icon: 'text-amber-500 fill-amber-500 text-white',
       bg: 'bg-amber-50 text-amber-900 border-amber-200',
@@ -45,7 +41,15 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
   }
 
   const rawTitle = title && title.trim() ? title.trim() : '';
-  const isGenericTitle = !rawTitle || ['FUHSI Student', 'Student', 'Verified', 'Verified Student', 'Member'].includes(rawTitle);
+  const isDeclinedOrInternal =
+    rawTitle.toLowerCase().includes('decline') ||
+    rawTitle.toLowerCase().includes('pending') ||
+    rawTitle.toLowerCase().includes('reject');
+
+  const isGenericTitle =
+    !rawTitle ||
+    isDeclinedOrInternal ||
+    ['FUHSI Student', 'Student', 'Verified', 'Verified Student', 'Member'].includes(rawTitle);
 
   if (showTitle && rawTitle && !isGenericTitle) {
     return (
@@ -62,9 +66,10 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
   return (
     <span
       className={`inline-flex items-center shrink-0 ${className}`}
-      title={rawTitle ? `Verified Account: ${rawTitle}` : 'Verified Account'}
+      title={rawTitle && !isDeclinedOrInternal ? `Verified Account: ${rawTitle}` : 'Verified Account'}
     >
       <CheckCircle2 size={size} className={colorClasses.icon} />
     </span>
   );
 };
+

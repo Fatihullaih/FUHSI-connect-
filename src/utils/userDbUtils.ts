@@ -3,6 +3,9 @@ import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { pushServerDbSync, mergeUsers } from './apiSync';
 import { saveUserToFirestore, saveUsersBatchToFirestore } from '../lib/firestoreSync';
 import { isDemoUser } from './postGenerator';
+import { getUserBadgeInfo } from './verificationUtils';
+
+export { getUserBadgeInfo };
 
 export const USER_DB_KEY = 'fuhsi_users_db';
 
@@ -27,17 +30,17 @@ export const DEFAULT_USERS_LIST: UserProfile[] = [
     isAdmin: true,
   },
   {
-    id: 'usr_student_deji',
+    id: 'usr_student_adedeji_ayo_24prt007',
     nickname: '@Deji',
-    realName: 'Deji',
-    matricNumber: 'FUHSI/MED/2023/048',
-    studentEmail: 'deji@fuhsi.edu.ng',
-    emergencyHomePhone: '08123456789',
-    department: 'Medicine & Surgery',
-    level: '300L',
-    bio: 'FUHSI Medical Student | Academic insights and campus discussions.',
+    realName: 'Adedeji Ayo',
+    matricNumber: '24/PRT/007',
+    studentEmail: 'faithlucas.co@gmail.com',
+    emergencyHomePhone: '091562232018',
+    department: 'Prosthetics and Orthotics',
+    level: '200L',
+    bio: 'FUHSI Student | Prosthetics and Orthotics (200L)',
     avatarKey: 'caduceus',
-    badgeType: 'GOLD',
+    badgeType: 'BLUE',
     badgeTitle: 'FUHSI Student',
     reputationScore: 180,
     isVerified: true,
@@ -132,7 +135,7 @@ export function upsertUser(user: UserProfile): UserProfile[] {
   const normEmail = (user.studentEmail || '').trim().toLowerCase();
 
   const index = users.findIndex((u) => {
-    if (u.id && user.id && u.id === user.id) return true;
+    if (u.id && user.id) return u.id === user.id;
     if (normNick && (u.nickname || '').trim().toLowerCase().replace(/^@/, '') === normNick) return true;
     if (normEmail && normEmail !== 'admin@fuhsi.edu.ng' && (u.studentEmail || '').trim().toLowerCase() === normEmail) return true;
     return false;

@@ -83,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <nav className="hidden md:flex items-center gap-1">
             <button
               onClick={() => setActiveTab('feed')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transform-gpu transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
                 activeTab === 'feed'
                   ? 'bg-teal-50 text-teal-700 border border-teal-200/60'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -95,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('hub')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transform-gpu transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
                 activeTab === 'hub'
                   ? 'bg-teal-50 text-teal-700 border border-teal-200/60'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -107,7 +107,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('leaderboard')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transform-gpu transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
                 activeTab === 'leaderboard'
                   ? 'bg-teal-50 text-teal-700 border border-teal-200/60'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -120,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {user.isAdmin && (
               <button
                 onClick={() => setActiveTab('moderation')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors relative ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transform-gpu transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer relative ${
                   activeTab === 'moderation'
                     ? 'bg-teal-50 text-teal-700 border border-teal-200/60'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -177,8 +177,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 px-2 py-1.5 flex justify-around shadow-lg">
         <button
           onClick={() => setActiveTab('feed')}
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium ${
-            activeTab === 'feed' ? 'text-teal-700 font-bold' : 'text-slate-500'
+          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium transform-gpu transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${
+            activeTab === 'feed' ? 'text-teal-700 font-bold scale-105' : 'text-slate-500 hover:text-slate-900'
           }`}
         >
           <MessageSquare size={20} />
@@ -187,8 +187,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('hub')}
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium ${
-            activeTab === 'hub' ? 'text-teal-700 font-bold' : 'text-slate-500'
+          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium transform-gpu transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${
+            activeTab === 'hub' ? 'text-teal-700 font-bold scale-105' : 'text-slate-500 hover:text-slate-900'
           }`}
         >
           <Building2 size={20} />
@@ -197,8 +197,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium ${
-            activeTab === 'leaderboard' ? 'text-teal-700 font-bold' : 'text-slate-500'
+          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium transform-gpu transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${
+            activeTab === 'leaderboard' ? 'text-teal-700 font-bold scale-105' : 'text-slate-500 hover:text-slate-900'
           }`}
         >
           <Trophy size={20} />
@@ -208,8 +208,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         {user.isAdmin && (
           <button
             onClick={() => setActiveTab('moderation')}
-            className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium relative ${
-              activeTab === 'moderation' ? 'text-teal-700 font-bold' : 'text-slate-500'
+            className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium transform-gpu transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer relative ${
+              activeTab === 'moderation' ? 'text-teal-700 font-bold scale-105' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <ShieldCheck size={20} />
@@ -224,8 +224,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium ${
-            activeTab === 'profile' ? 'text-teal-700 font-bold' : 'text-slate-500'
+          className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs font-medium transform-gpu transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${
+            activeTab === 'profile' ? 'text-teal-700 font-bold scale-105' : 'text-slate-500 hover:text-slate-900'
           }`}
         >
           <User size={20} />

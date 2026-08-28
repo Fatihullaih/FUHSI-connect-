@@ -93,7 +93,7 @@ export const VerificationApplyModal: React.FC<VerificationApplyModalProps> = ({
                   <span>Verification Application Fee: ₦1,500</span>
                 </p>
                 <p className="text-[11px] leading-relaxed">
-                  ⚠️ <span className="font-extrabold">Notice:</span> The ₦1,500 fee covers the manual identity & academic credential review process—it is <span className="underline">not</span> buying a badge. If an account does not satisfy guidelines or is found submitting falsified details, the application may be declined.
+                  ⚠️ <span className="font-extrabold">Notice:</span> The ₦1,500 fee covers the manual identity & academic credential review process—it is <span className="underline">not</span> buying a badge. If an account does not satisfy guidelines or is found submitting falsified details, the application cannot be approved.
                 </p>
               </div>
 

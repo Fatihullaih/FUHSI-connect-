@@ -41,14 +41,14 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
 
   const getKey = (u: UserProfile): string => {
     if (!u) return '';
+    if (u.id && u.id.trim()) {
+      return `id:${u.id.trim()}`;
+    }
     if (u.studentEmail && u.studentEmail.trim() && !u.studentEmail.includes('admin@fuhsi.edu.ng')) {
       return `email:${u.studentEmail.trim().toLowerCase()}`;
     }
     if (u.nickname && u.nickname.trim()) {
       return `nick:${u.nickname.trim().toLowerCase().replace(/^@/, '')}`;
-    }
-    if (u.id && u.id.trim()) {
-      return `id:${u.id.trim()}`;
     }
     return '';
   };
@@ -56,9 +56,14 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
   const processUser = (u: UserProfile) => {
     if (!u || isDemoUser(u) || isDemoNickname(u.nickname)) return;
     const key = getKey(u);
+    if (!key) return;
     const existing = map.get(key);
     if (!existing) {
-      map.set(key, { ...u });
+      const sanitizedBadgeTitle =
+        u.badgeTitle && !u.badgeTitle.toLowerCase().includes('decline') && !u.badgeTitle.toLowerCase().includes('pending')
+          ? u.badgeTitle
+          : 'FUHSI Student';
+      map.set(key, { ...u, badgeTitle: sanitizedBadgeTitle });
     } else {
       let isDeclined = false;
       if (u.isDeclined !== undefined) {
@@ -78,6 +83,11 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
         isApproved = true;
       }
 
+      let badgeTitle = u.badgeTitle || existing.badgeTitle || 'FUHSI Student';
+      if (badgeTitle.toLowerCase().includes('decline') || badgeTitle.toLowerCase().includes('pending')) {
+        badgeTitle = 'FUHSI Student';
+      }
+
       const merged: UserProfile = {
         ...existing,
         ...u,
@@ -87,8 +97,8 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
         verificationStatus: u.verificationStatus || existing.verificationStatus,
         isAdmin: Boolean(existing.isAdmin || u.isAdmin),
         reputationScore: Math.max(existing.reputationScore || 0, u.reputationScore || 0),
-        badgeType: u.badgeType ? u.badgeType : existing.badgeType || 'GREEN',
-        badgeTitle: u.badgeTitle ? u.badgeTitle : existing.badgeTitle || 'FUHSI Student',
+        badgeType: u.badgeType && u.badgeType !== 'NONE' ? u.badgeType : existing.badgeType || 'BLUE',
+        badgeTitle,
         studentEmail: u.studentEmail || existing.studentEmail,
         savedPassword: (u as any).savedPassword || (u as any).password || (existing as any).savedPassword || (existing as any).password,
         password: (u as any).savedPassword || (u as any).password || (existing as any).savedPassword || (existing as any).password,

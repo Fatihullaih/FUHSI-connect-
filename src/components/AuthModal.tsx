@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import fuhsiLogo from '../assets/images/fuhsi_logo_1785485694958.jpg';
-import { UserProfile, HelpDeskInquiry } from '../types';
+import { UserProfile } from '../types';
 import { getStoredUsers, upsertUser, updateUserPassword } from '../utils/userDbUtils';
 import { fetchServerDb, mergeUsers, pushServerDbSync } from '../utils/apiSync';
-import { saveHelpDeskInquiryToFirestore } from '../lib/firestoreSync';
 import { AvatarIcon } from './AvatarIcon';
 import { 
   ShieldCheck, 
@@ -82,14 +81,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Help Desk / Support Ticket Form State
   const [emailCopied, setEmailCopied] = useState(false);
-  const [supportFullName, setSupportFullName] = useState('');
-  const [supportEmail, setSupportEmail] = useState('');
-  const [supportNickname, setSupportNickname] = useState('');
-  const [supportMatric, setSupportMatric] = useState('');
-  const [supportCategory, setSupportCategory] = useState<HelpDeskInquiry['category']>('REGISTRATION_APPEAL');
-  const [supportMessage, setSupportMessage] = useState('');
-  const [supportSubmittedTicket, setSupportSubmittedTicket] = useState<HelpDeskInquiry | null>(null);
-  const [supportSubmitting, setSupportSubmitting] = useState(false);
 
   // Register Form State
   const [nickname, setNickname] = useState('');
@@ -165,56 +156,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(code);
     return code;
-  };
-
-  const handleSupportSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supportFullName.trim() || !supportEmail.trim() || !supportMessage.trim()) {
-      setErrorMessage('Please fill in your Full Real Name, Email Address, and Message.');
-      return;
-    }
-
-    setSupportSubmitting(true);
-    const ticketCode = `HD-${Math.floor(100000 + Math.random() * 900000)}`;
-    const categoryMap: Record<string, string> = {
-      REGISTRATION_APPEAL: 'Account Registration Appeal',
-      RE_APPROVAL: 'Account Re-approval Request',
-      LOGIN_ISSUE: 'Login & Access Assistance',
-      VERIFICATION_ASSIST: 'Matriculation / Verification Assistance',
-      GENERAL_SUPPORT: 'General Support Inquiry',
-    };
-
-    const newTicket: HelpDeskInquiry = {
-      id: `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      ticketId: ticketCode,
-      fullName: supportFullName.trim(),
-      email: supportEmail.trim().toLowerCase(),
-      nickname: supportNickname.trim() ? (supportNickname.trim().startsWith('@') ? supportNickname.trim() : `@${supportNickname.trim()}`) : undefined,
-      matricNumber: supportMatric.trim() ? supportMatric.trim().toUpperCase() : undefined,
-      category: supportCategory,
-      categoryLabel: categoryMap[supportCategory] || 'Support Request',
-      message: supportMessage.trim(),
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      const stored = localStorage.getItem('fuhsi_helpdesk_inquiries_db');
-      const list = stored ? JSON.parse(stored) : [];
-      localStorage.setItem('fuhsi_helpdesk_inquiries_db', JSON.stringify([newTicket, ...list]));
-    } catch (err) {
-      console.error('Error saving helpdesk ticket locally:', err);
-    }
-
-    try {
-      await saveHelpDeskInquiryToFirestore(newTicket);
-    } catch (err) {
-      console.error('Error saving helpdesk ticket to Firestore:', err);
-    }
-
-    setSupportSubmittedTicket(newTicket);
-    setSupportSubmitting(false);
-    setErrorMessage('');
   };
 
   const handleRegister = (e: React.FormEvent) => {
@@ -571,15 +512,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      if (matchedUser.isDeclined === true) {
-        setAccountNoticeType('DECLINED');
-        setErrorMessage('Account Status: Your registration is currently declined or restricted. If you believe this is an error or wish to submit an appeal, please reach out to the Help Desk below.');
-        return;
-      }
-
       if (matchedUser.isApproved === false && !matchedUser.isAdmin) {
         setAccountNoticeType('PENDING');
-        setErrorMessage('Registration Status: Your account credentials are currently undergoing verification review. Please check back shortly, or reach out to the Help Desk below for updates.');
+        setErrorMessage('Registration Status: Your account credentials are currently undergoing review. Please check back shortly, or reach out to the Help Desk below for assistance.');
         return;
       }
 

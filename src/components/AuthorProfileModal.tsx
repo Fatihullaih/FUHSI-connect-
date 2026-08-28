@@ -6,6 +6,7 @@ import { PostCard } from './PostCard';
 import { ProfilePictureModal } from './ProfilePictureModal';
 import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
 import { calculateUserPoints } from '../utils/reputationUtils';
+import { getUserBadgeInfo } from '../utils/verificationUtils';
 import { 
   X, 
   Award, 
@@ -71,36 +72,11 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
   const [activeTab, setActiveTab] = useState<'threads' | 'replies'>('threads');
   const [showPictureModal, setShowPictureModal] = useState(false);
 
-  const isVerifiedAuthor = useMemo(() => {
-    if (authorIsVerified) return true;
-    try {
-      const cleanNick = (authorNickname || '').toLowerCase().replace(/^@/, '');
-      const vStr = localStorage.getItem('fuhsi_verifications_db');
-      if (vStr) {
-        const vList: any[] = JSON.parse(vStr);
-        const foundVerif = vList.find(
-          (req) =>
-            req.status === 'APPROVED' &&
-            (req.applicantNickname?.toLowerCase().replace(/^@/, '') === cleanNick ||
-              req.applicantNickname?.toLowerCase() === authorNickname.toLowerCase())
-        );
-        if (foundVerif) return true;
-      }
-      const uStr = localStorage.getItem('fuhsi_users_db');
-      if (uStr) {
-        const uList: any[] = JSON.parse(uStr);
-        const foundUser = uList.find(
-          (usr) =>
-            (usr.nickname || '').toLowerCase().replace(/^@/, '') === cleanNick ||
-            usr.id === authorNickname
-        );
-        if (foundUser && (foundUser.isVerified || foundUser.verificationStatus === 'approved')) return true;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return false;
-  }, [authorNickname, authorIsVerified]);
+  const badgeInfo = useMemo(() => {
+    return getUserBadgeInfo(authorNickname, userProfile);
+  }, [authorNickname, userProfile]);
+
+  const isVerifiedAuthor = badgeInfo.isVerified;
 
   React.useEffect(() => {
     const handlePopState = () => {
@@ -220,9 +196,9 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-lg sm:text-xl font-black text-white truncate">{authorNickname}</h2>
                   <VerificationBadge 
-                    isVerified={isVerifiedAuthor} 
-                    badgeType={authorBadgeType}
-                    title={authorBadgeTitle}
+                    isVerified={badgeInfo.isVerified} 
+                    badgeType={badgeInfo.badgeType}
+                    title={badgeInfo.badgeTitle}
                     showTitle 
                   />
                 </div>

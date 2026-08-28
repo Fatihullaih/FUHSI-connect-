@@ -93,8 +93,7 @@ export async function deleteUserFromFirestore(userId: string, nickname?: string)
   try {
     if (userId) {
       await deleteDoc(doc(db, USERS_COL, userId));
-    }
-    if (nickname) {
+    } else if (nickname) {
       const docId = nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
       await deleteDoc(doc(db, USERS_COL, docId));
     }

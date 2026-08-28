@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType, DirectMessage, HelpDeskInquiry } from '../types';
+import { Post, Report, VerificationRequest, MarketplaceItem, UserProfile, BadgeType, DirectMessage } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../utils/userDbUtils';
 import { pushServerDbSync } from '../utils/apiSync';
-import { deleteUserFromFirestore, subscribeVerificationFee, saveVerificationFeeToFirestore, subscribeHelpDeskInquiries, updateHelpDeskInquiryStatus } from '../lib/firestoreSync';
-import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info, LifeBuoy } from 'lucide-react';
+import { deleteUserFromFirestore, subscribeVerificationFee, saveVerificationFeeToFirestore } from '../lib/firestoreSync';
+import { Shield, Lock, Search, Eye, CheckCircle2, XCircle, AlertTriangle, MessageSquare, Send, Award, RefreshCw, Key, Check, UserCheck, ShoppingBag, PhoneCall, AlertCircle, Mail, ShieldAlert, Info } from 'lucide-react';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { AdminTradeDesk } from '../components/AdminTradeDesk';
 import { AdminChatReportsDesk } from '../components/AdminChatReportsDesk';
@@ -155,7 +155,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   // Pending Student Registrations Approval State
   const [allUsersList, setAllUsersList] = useState<UserProfile[]>([]);
-  const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'APPROVED' | 'DECLINED' | 'ALL'>('PENDING');
+  const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'APPROVED' | 'ALL'>('PENDING');
 
   // Direct Admin User Query / Message State
   const [queryModalUser, setQueryModalUser] = useState<{ nickname: string; realName?: string; email?: string } | null>(null);
@@ -218,16 +218,17 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     try {
       const storedList = getStoredUsers();
       const updatedList = storedList.map((u) => {
-        if (u.id === userId || u.nickname.toLowerCase() === nick.toLowerCase()) {
-          targetEmail = u.studentEmail || `${u.nickname.replace(/^@/, '')}@fuhsi.edu.ng`;
-          targetRealName = u.realName || u.nickname;
+        const isMatch = userId ? u.id === userId : Boolean(nick && u.nickname && u.nickname.toLowerCase() === nick.toLowerCase());
+        if (isMatch) {
+          targetEmail = u.studentEmail || `${(u.nickname || nick).replace(/^@/, '')}@fuhsi.edu.ng`;
+          targetRealName = u.realName || u.nickname || nick;
           return {
             ...u,
             isApproved: true,
             isDeclined: false,
-            badgeType: u.badgeType && u.badgeType !== 'NONE' ? u.badgeType : 'GREEN',
-            badgeTitle: u.badgeTitle && u.badgeTitle !== 'Pending Approval' ? u.badgeTitle : 'FUHSI Student',
-            isAdmin: false,
+            badgeType: u.badgeType && u.badgeType !== 'NONE' ? u.badgeType : 'BLUE',
+            badgeTitle: u.badgeTitle && !u.badgeTitle.toLowerCase().includes('decline') && !u.badgeTitle.toLowerCase().includes('pending') ? u.badgeTitle : 'FUHSI Student',
+            isAdmin: Boolean(u.isAdmin),
           };
         }
         return u;
@@ -237,7 +238,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       setAllUsersList(updatedList);
 
       // Create official automated email object sent from fuhsiconnect@gmail.com
-      const cleanNick = nick.toLowerCase().replace(/^@/, '');
+      const cleanNick = nick ? nick.toLowerCase().replace(/^@/, '') : '';
       const emailRecord = {
         id: `email_appr_${Date.now()}`,
         from: 'FUHSI Connect <fuhsiconnect@gmail.com>',
@@ -265,28 +266,31 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       }
 
       // Save notification & email copy in user's in-app inbox
-      const notifKey = `fuhsi_user_notifications_${cleanNick}`;
-      const approvalMsg = {
-        id: `appr_notif_${Date.now()}`,
-        type: 'VERIFICATION',
-        title: '📧 Email Notification Received from fuhsiconnect@gmail.com',
-        message: `From: FUHSI Connect <fuhsiconnect@gmail.com> [Do Not Reply]\nTo: ${targetEmail}\nSubject: FUHSI Connect Account Verified & Approved\n\n"Your FUHSI Connect account has been verified and approved. You can now log in and start using the platform."`,
-        timestamp: 'Just now',
-        isRead: false,
-        emailDetails: emailRecord,
-      };
-      let existingNotifs = [];
-      try {
-        const storedNotifs = localStorage.getItem(notifKey);
-        if (storedNotifs) existingNotifs = JSON.parse(storedNotifs);
-      } catch (e) { console.error(e); }
-      localStorage.setItem(notifKey, JSON.stringify([approvalMsg, ...existingNotifs]));
+      if (cleanNick) {
+        const notifKey = `fuhsi_user_notifications_${cleanNick}`;
+        const approvalMsg = {
+          id: `appr_notif_${Date.now()}`,
+          type: 'VERIFICATION',
+          title: '📧 Email Notification Received from fuhsiconnect@gmail.com',
+          message: `From: FUHSI Connect <fuhsiconnect@gmail.com> [Do Not Reply]\nTo: ${targetEmail}\nSubject: FUHSI Connect Account Verified & Approved\n\n"Your FUHSI Connect account has been verified and approved. You can now log in and start using the platform."`,
+          timestamp: 'Just now',
+          isRead: false,
+          emailDetails: emailRecord,
+        };
+        let existingNotifs = [];
+        try {
+          const storedNotifs = localStorage.getItem(notifKey);
+          if (storedNotifs) existingNotifs = JSON.parse(storedNotifs);
+        } catch (e) { console.error(e); }
+        localStorage.setItem(notifKey, JSON.stringify([approvalMsg, ...existingNotifs]));
+      }
 
       // Update active user profile in localStorage if it matches
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
-        if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
+        const matchActive = userId ? activeUser.id === userId : (nick && activeUser.nickname?.toLowerCase() === nick.toLowerCase());
+        if (activeUser && matchActive) {
           const updatedActive = { ...activeUser, isApproved: true, isDeclined: false, badgeTitle: 'FUHSI Student' };
           localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
         }
@@ -295,7 +299,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       console.error(err);
     }
 
-    setApprovalToast(`✅ Account Approved & Active for ${nick}! Total Member Counter updated.`);
+    setApprovalToast(`✅ Account Approved & Active for ${nick || userId}! Total Member Counter updated.`);
     setTimeout(() => setApprovalToast(null), 5000);
   };
 
@@ -303,12 +307,13 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
     try {
       const storedList = getStoredUsers();
       const updatedList = storedList.map((u) => {
-        if (u.id === userId || u.nickname.toLowerCase() === nick.toLowerCase()) {
+        const isMatch = userId ? u.id === userId : Boolean(nick && u.nickname && u.nickname.toLowerCase() === nick.toLowerCase());
+        if (isMatch) {
           return {
             ...u,
             isApproved: false,
-            isDeclined: true,
-            badgeTitle: 'Declined',
+            isDeclined: false,
+            badgeTitle: 'FUHSI Student',
           };
         }
         return u;
@@ -320,7 +325,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
-        if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
+        const matchActive = userId ? activeUser.id === userId : (nick && activeUser.nickname?.toLowerCase() === nick.toLowerCase());
+        if (activeUser && matchActive) {
           localStorage.removeItem('fuhsi_active_user');
         }
       }
@@ -328,22 +334,27 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       console.error(err);
     }
 
-    setApprovalToast(`❌ Account declined for ${nick}. Access restricted.`);
+    setApprovalToast(`Account access updated / set to pending for ${nick || userId}.`);
     setTimeout(() => setApprovalToast(null), 4000);
   };
 
   const handleDeleteUserAccount = (userId: string, nick: string) => {
     try {
       const storedList = getStoredUsers();
-      const updatedList = storedList.filter((u) => u.id !== userId && u.nickname.toLowerCase() !== nick.toLowerCase());
+      const updatedList = storedList.filter((u) => {
+        if (userId) return u.id !== userId;
+        if (nick) return u.nickname.toLowerCase() !== nick.toLowerCase();
+        return true;
+      });
       saveStoredUsers(updatedList);
       setAllUsersList(updatedList);
-      deleteUserFromFirestore(userId, nick);
+      deleteUserFromFirestore(userId);
 
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {
         const activeUser: UserProfile = JSON.parse(activeJson);
-        if (activeUser && (activeUser.id === userId || activeUser.nickname?.toLowerCase() === nick.toLowerCase())) {
+        const matchActive = userId ? activeUser.id === userId : (nick && activeUser.nickname?.toLowerCase() === nick.toLowerCase());
+        if (activeUser && matchActive) {
           localStorage.removeItem('fuhsi_active_user');
         }
       }
@@ -351,51 +362,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       console.error(err);
     }
 
-    setApprovalToast(`🗑️ Account deleted for ${nick}.`);
-    setTimeout(() => setApprovalToast(null), 3000);
-  };
-
-  // Help Desk Inquiries State
-  const [helpDeskInquiries, setHelpDeskInquiries] = useState<HelpDeskInquiry[]>(() => {
-    try {
-      const stored = localStorage.getItem('fuhsi_helpdesk_inquiries_db');
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
-  });
-
-  useEffect(() => {
-    const unsub = subscribeHelpDeskInquiries((inquiries) => {
-      if (Array.isArray(inquiries)) {
-        setHelpDeskInquiries(inquiries);
-        try {
-          localStorage.setItem('fuhsi_helpdesk_inquiries_db', JSON.stringify(inquiries));
-        } catch (e) {}
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const handleUpdateInquiryStatus = async (inquiryId: string, status: HelpDeskInquiry['status'], replyText?: string) => {
-    const updated = helpDeskInquiries.map((inq) => {
-      if (inq.id === inquiryId) {
-        return {
-          ...inq,
-          status,
-          adminReply: replyText || inq.adminReply,
-          resolvedAt: status === 'RESOLVED' ? new Date().toISOString() : inq.resolvedAt,
-        };
-      }
-      return inq;
-    });
-    setHelpDeskInquiries(updated);
-    try {
-      localStorage.setItem('fuhsi_helpdesk_inquiries_db', JSON.stringify(updated));
-    } catch (e) {}
-    await updateHelpDeskInquiryStatus(inquiryId, status, replyText);
-    setApprovalToast(`Help Desk Ticket updated to ${status}.`);
+    setApprovalToast(`🗑️ Account deleted for ${nick || userId}.`);
     setTimeout(() => setApprovalToast(null), 3000);
   };
 
@@ -523,7 +490,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Pending ({allUsersList.filter((u) => !u.isApproved && !u.isDeclined && !u.isAdmin).length})
+              Pending ({allUsersList.filter((u) => !u.isApproved && !u.isAdmin).length})
             </button>
             <button
               onClick={() => setActiveUserTab('APPROVED')}
@@ -533,17 +500,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Approved ({allUsersList.filter((u) => u.isApproved && !u.isDeclined && !u.isAdmin).length})
-            </button>
-            <button
-              onClick={() => setActiveUserTab('DECLINED')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                activeUserTab === 'DECLINED'
-                  ? 'bg-rose-700 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Declined ({allUsersList.filter((u) => u.isDeclined && !u.isAdmin).length})
+              Approved ({allUsersList.filter((u) => u.isApproved && !u.isAdmin).length})
             </button>
             <button
               onClick={() => setActiveUserTab('ALL')}
@@ -567,9 +524,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         {(() => {
           const displayUsers = allUsersList.filter((u) => {
             if (u.isAdmin) return false;
-            if (activeUserTab === 'PENDING') return !u.isApproved && !u.isDeclined;
-            if (activeUserTab === 'APPROVED') return u.isApproved && !u.isDeclined;
-            if (activeUserTab === 'DECLINED') return u.isDeclined;
+            if (activeUserTab === 'PENDING') return !u.isApproved;
+            if (activeUserTab === 'APPROVED') return u.isApproved;
             return true;
           });
 
@@ -582,8 +538,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                     ? 'No pending student account registrations!'
                     : activeUserTab === 'APPROVED'
                     ? 'No approved active students found.'
-                    : activeUserTab === 'DECLINED'
-                    ? 'No declined accounts.'
                     : 'No registered student accounts found.'}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
@@ -614,16 +568,12 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                     </div>
 
                     <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                      user.isApproved && !user.isDeclined
+                      user.isApproved
                         ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                        : user.isDeclined
-                        ? 'bg-rose-100 text-rose-900 border-rose-300'
                         : 'bg-amber-100 text-amber-900 border-amber-300'
                     }`}>
-                      {user.isApproved && !user.isDeclined
+                      {user.isApproved
                         ? '✅ APPROVED & ACTIVE'
-                        : user.isDeclined
-                        ? '❌ DECLINED / BLOCKED'
                         : '⏳ PENDING APPROVAL'}
                     </span>
                   </div>
@@ -644,7 +594,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                       <span>Message / Query</span>
                     </button>
 
-                    {!user.isApproved || user.isDeclined ? (
+                    {!user.isApproved ? (
                       <button
                         onClick={() => handleApproveRegistration(user.id, user.nickname)}
                         className="flex-1 py-2 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
@@ -652,16 +602,14 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                         <CheckCircle2 size={14} />
                         <span>Approve Account</span>
                       </button>
-                    ) : null}
-
-                    {!user.isDeclined ? (
+                    ) : (
                       <button
                         onClick={() => handleDeclineRegistration(user.id, user.nickname)}
-                        className="py-1.5 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold text-xs transition-colors"
+                        className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
                       >
-                        Decline Account
+                        Revoke Approval
                       </button>
-                    ) : null}
+                    )}
 
                     <button
                       onClick={() => handleDeleteUserAccount(user.id, user.nickname)}
@@ -675,140 +623,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             </div>
           );
         })()}
-      </div>
-
-      {/* HELP DESK & REGISTRATION APPEALS DESK */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
-          <div>
-            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 text-teal-900">
-              <LifeBuoy className="w-4 h-4 text-teal-600" /> Help Desk Inquiries & Student Appeals ({helpDeskInquiries.length})
-            </h2>
-            <p className="text-[11px] text-slate-500">
-              Inquiries and account appeals submitted directly by students from the login screen or support portal.
-            </p>
-          </div>
-          <span className="text-[10px] font-extrabold bg-teal-50 text-teal-800 px-2.5 py-1 rounded-full border border-teal-200">
-            {helpDeskInquiries.filter(i => i.status === 'PENDING').length} Pending Review
-          </span>
-        </div>
-
-        {helpDeskInquiries.length === 0 ? (
-          <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-            <CheckCircle2 size={24} className="mx-auto text-teal-600 mb-1" />
-            <p className="font-bold text-slate-800">No support tickets or appeals currently pending!</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              When students submit a ticket or appeal from the login help desk, it will show up here instantly.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {helpDeskInquiries.map((inq) => {
-              const matchedUser = allUsersList.find(
-                (u) =>
-                  (inq.nickname && u.nickname.toLowerCase() === inq.nickname.toLowerCase()) ||
-                  (inq.email && u.studentEmail && u.studentEmail.toLowerCase() === inq.email.toLowerCase())
-              );
-
-              return (
-                <div
-                  key={inq.id}
-                  className={`p-3.5 rounded-xl border space-y-2 text-xs transition-all ${
-                    inq.status === 'RESOLVED'
-                      ? 'bg-slate-50/70 border-slate-200 opacity-80'
-                      : inq.status === 'UNDER_REVIEW'
-                      ? 'bg-amber-50/50 border-amber-200'
-                      : 'bg-teal-50/40 border-teal-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between flex-wrap gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-teal-900 bg-teal-100 px-2 py-0.5 rounded text-[11px]">
-                          {inq.ticketId}
-                        </span>
-                        <span className="font-extrabold text-slate-900 text-sm">{inq.fullName}</span>
-                        {inq.nickname && (
-                          <span className="font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md text-[10px]">
-                            {inq.nickname}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-600 mt-0.5">
-                        📧 Email: <a href={`mailto:${inq.email}`} className="font-bold text-teal-800 hover:underline">{inq.email}</a>
-                        {inq.matricNumber && <span> • Matric: <strong className="text-slate-800">{inq.matricNumber}</strong></span>}
-                        <span> • Category: <strong className="text-indigo-900">{inq.categoryLabel}</strong></span>
-                      </p>
-                    </div>
-
-                    <span
-                      className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
-                        inq.status === 'RESOLVED'
-                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                          : inq.status === 'UNDER_REVIEW'
-                          ? 'bg-amber-100 text-amber-900 border-amber-300'
-                          : 'bg-rose-100 text-rose-900 border-rose-300'
-                      }`}
-                    >
-                      {inq.status === 'RESOLVED' ? '✅ RESOLVED' : inq.status === 'UNDER_REVIEW' ? '⏳ UNDER REVIEW' : '⚠️ PENDING REVIEW'}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-800 leading-relaxed font-medium">
-                    {inq.message}
-                  </div>
-
-                  <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-                    <span className="text-[10px] text-slate-400 font-semibold">
-                      Submitted {new Date(inq.createdAt).toLocaleString()}
-                    </span>
-
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {matchedUser && (!matchedUser.isApproved || matchedUser.isDeclined) && (
-                        <button
-                          onClick={() => {
-                            handleApproveRegistration(matchedUser.id, matchedUser.nickname);
-                            handleUpdateInquiryStatus(inq.id, 'RESOLVED', 'Account approved and verified successfully.');
-                          }}
-                          className="py-1 px-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <CheckCircle2 size={12} />
-                          <span>Approve Account & Resolve Ticket</span>
-                        </button>
-                      )}
-
-                      {inq.status !== 'RESOLVED' && (
-                        <button
-                          onClick={() => handleUpdateInquiryStatus(inq.id, 'RESOLVED')}
-                          className="py-1 px-2.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-[11px] cursor-pointer"
-                        >
-                          Mark as Resolved
-                        </button>
-                      )}
-
-                      {inq.status === 'PENDING' && (
-                        <button
-                          onClick={() => handleUpdateInquiryStatus(inq.id, 'UNDER_REVIEW')}
-                          className="py-1 px-2.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] cursor-pointer"
-                        >
-                          Mark Under Review
-                        </button>
-                      )}
-
-                      <a
-                        href={`mailto:${inq.email}?subject=FUHSI%20Connect%20Support%20Ticket%20%5B${inq.ticketId}%5D%20Reply&body=Hello%20${encodeURIComponent(inq.fullName)}%2C%0A%0ARegarding%20your%20FUHSI%20Connect%20support%20inquiry%20(${inq.ticketId})%3A%0A%0A`}
-                        className="py-1 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] flex items-center gap-1"
-                      >
-                        <Mail size={12} />
-                        <span>Reply by Email</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* ADMIN MARKETPLACE MANAGEMENT DESK */}
@@ -895,16 +709,12 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                 <Key className="w-4 h-4 text-indigo-600" /> Decrypted Student Identity Record:
               </p>
               <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
-                lookupResult.isApproved && !lookupResult.isDeclined
+                lookupResult.isApproved
                   ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                  : lookupResult.isDeclined
-                  ? 'bg-rose-100 text-rose-900 border-rose-300'
                   : 'bg-amber-100 text-amber-900 border-amber-300'
               }`}>
-                {lookupResult.isApproved && !lookupResult.isDeclined
+                {lookupResult.isApproved
                   ? '✅ Active Approved Member'
-                  : lookupResult.isDeclined
-                  ? '❌ Declined Account'
                   : '⏳ Pending Approval'}
               </span>
             </div>
@@ -1078,7 +888,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                         req.status === 'REJECTED' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
                       }`}>
                         {req.status === 'APPROVED' ? '✔️ APPROVED & VERIFIED' :
-                         req.status === 'REJECTED' ? '❌ DECLINED' : '⏳ PENDING ADMIN REVIEW'}
+                         req.status === 'REJECTED' ? 'REVISION REQUESTED' : '⏳ PENDING ADMIN REVIEW'}
                       </span>
                     </div>
                   </div>
