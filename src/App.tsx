@@ -10,7 +10,7 @@ import {
 } from './data/initialData';
 import fuhsiLogo from './assets/images/fuhsi_logo_1785485694958.jpg';
 import { calculateUserPoints } from './utils/reputationUtils';
-import { getApprovedMembersCount, getStoredUsers, saveStoredUsers } from './utils/userDbUtils';
+import { getApprovedMembersCount, getStoredUsers, saveStoredUsers, upsertUser } from './utils/userDbUtils';
 import {
   fetchServerDb,
   pushServerDbSync,
@@ -1564,76 +1564,125 @@ export const App: React.FC = () => {
     bio: string,
     avatarKey: string,
     emergencyPhone: string,
-    avatarUrl?: string
+    avatarUrl?: string,
+    realName?: string,
+    studentEmail?: string
   ): string | null => {
-    const lowerNick = nickname.toLowerCase();
+    if (!userProfile) return 'Error: No active user profile.';
+
+    const rawNick = nickname.trim();
+    const lowerNick = rawNick.toLowerCase();
     if (lowerNick.includes('anonymous') || lowerNick.includes('anon')) {
       return 'Error: Nicknames containing "Anonymous" or "Anon" are forbidden. Please choose a unique student handle.';
     }
 
-    const newAvatarUrl = avatarUrl || userProfile.avatarUrl;
+    const formattedNick = rawNick.startsWith('@') ? rawNick : `@${rawNick}`;
+
+    // Verify nickname is not already used by another account
+    const cleanNewNick = formattedNick.toLowerCase().replace(/^@/, '');
+    const currentNickClean = (userProfile.nickname || '').toLowerCase().replace(/^@/, '');
+    if (cleanNewNick !== currentNickClean) {
+      const storedUsers = getStoredUsers();
+      const existing = storedUsers.find(
+        (u) =>
+          u.id !== userProfile.id &&
+          (u.nickname || '').toLowerCase().replace(/^@/, '') === cleanNewNick
+      );
+      if (existing) {
+        return `Error: The handle "${formattedNick}" is already taken by another student. Please choose a different username.`;
+      }
+    }
+
+    const newAvatarUrl = avatarUrl !== undefined ? avatarUrl : userProfile.avatarUrl;
+    const newAvatarKey = avatarKey || userProfile.avatarKey || 'caduceus';
 
     const updated: UserProfile = {
       ...userProfile,
-      nickname,
-      department,
-      level,
-      bio,
-      avatarKey,
+      nickname: formattedNick,
+      realName: realName !== undefined ? realName.trim() : userProfile.realName,
+      realNameHidden: realName !== undefined ? realName.trim() : userProfile.realNameHidden,
+      studentEmail: studentEmail !== undefined ? studentEmail.trim() : userProfile.studentEmail,
+      emergencyHomePhone: emergencyPhone !== undefined ? emergencyPhone.trim() : userProfile.emergencyHomePhone,
+      // Department and Matric Number are permanently attached and immutable
+      department: userProfile.department || department,
+      matricNumber: userProfile.matricNumber,
+      level: level || userProfile.level,
+      bio: bio !== undefined ? bio.trim() : userProfile.bio,
+      avatarKey: newAvatarKey,
       avatarUrl: newAvatarUrl,
-      emergencyHomePhone: emergencyPhone,
     };
 
+    // 1. Update React state
     setUserProfile(updated);
 
+    // 2. Persist active user to localStorage
     try {
       localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-      const storedUsers = localStorage.getItem('fuhsi_users_db');
-      let list: UserProfile[] = storedUsers ? JSON.parse(storedUsers) : [];
-      const idx = list.findIndex(
-        (u) => u.id === updated.id || u.nickname?.toLowerCase() === updated.nickname?.toLowerCase()
-      );
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], ...updated };
-      } else {
-        list.push(updated);
-      }
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(list));
+    } catch (e) {
+      console.error('Error persisting active user:', e);
+    }
+
+    // 3. Persist to database (localStorage, Firestore, and server DB)
+    try {
+      upsertUser(updated);
+      saveUserToFirestore(updated).catch((err) => {
+        console.error('Error persisting user to Firestore:', err);
+      });
+      pushServerDbSync({ users: [updated] }).catch((err) => {
+        console.error('Error syncing user profile to server DB:', err);
+      });
     } catch (e) {
       console.error('Error persisting user profile update:', e);
     }
 
-    // Propagate updated avatar and nickname across existing user posts and comments
-    const oldNick = (userProfile.nickname || '').toLowerCase().replace(/^@/, '');
-    setPosts((prev) =>
-      prev.map((p) => {
+    // 4. Propagate updated avatar and nickname across existing user posts and comments
+    const oldNick = currentNickClean;
+    const newNick = cleanNewNick;
+
+    setPosts((prev) => {
+      const updatedPosts = prev.map((p) => {
         const pNick = (p.authorNickname || p.nickname || '').toLowerCase().replace(/^@/, '');
-        if (pNick === oldNick || pNick === nickname.toLowerCase().replace(/^@/, '')) {
+        if (pNick === oldNick || pNick === newNick) {
           return {
             ...p,
-            authorNickname: nickname,
-            authorAvatarKey: avatarKey,
+            authorNickname: formattedNick,
+            authorAvatarKey: newAvatarKey,
             authorAvatarUrl: newAvatarUrl,
           };
         }
         return p;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
+        pushServerDbSync({ posts: updatedPosts, replacePosts: true } as any).catch(console.error);
+      } catch (e) {}
+      return updatedPosts;
+    });
 
-    setComments((prev) =>
-      prev.map((c) => {
+    setComments((prev) => {
+      const updatedComments = prev.map((c) => {
         const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '');
-        if (cNick === oldNick || cNick === nickname.toLowerCase().replace(/^@/, '')) {
+        if (cNick === oldNick || cNick === newNick) {
           return {
             ...c,
-            authorNickname: nickname,
-            authorAvatarKey: avatarKey,
+            authorNickname: formattedNick,
+            authorAvatarKey: newAvatarKey,
             authorAvatarUrl: newAvatarUrl,
           };
         }
         return c;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('fuhsi_comments_db', JSON.stringify(updatedComments));
+        pushServerDbSync({ comments: updatedComments, replaceComments: true } as any).catch(console.error);
+      } catch (e) {}
+      return updatedComments;
+    });
+
+    // 5. Broadcast profile updated event
+    try {
+      window.dispatchEvent(new CustomEvent('fuhsi_profile_updated', { detail: updated }));
+    } catch (e) {}
 
     return null;
   };
@@ -2194,8 +2243,8 @@ export const App: React.FC = () => {
                       allPosts={posts}
                       allComments={comments}
                       bookmarkedPostIds={myBookmarkedPostIds}
-                      onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
-                        const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
+                      onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail) => {
+                        const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
                         if (!err) closeModalUI();
                         return err;
                       }}
@@ -2296,8 +2345,8 @@ export const App: React.FC = () => {
                     allPosts={posts}
                     allComments={comments}
                     bookmarkedPostIds={myBookmarkedPostIds}
-                    onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl) => {
-                      const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl);
+                    onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail) => {
+                      const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
                       if (!err) closeModalUI();
                       return err;
                     }}

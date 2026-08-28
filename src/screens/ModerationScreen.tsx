@@ -644,39 +644,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
           <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
             <Lock className="w-4 h-4 text-indigo-600" /> Student Identity & Secret Phone Vault
           </h2>
-          <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-800 px-2.5 py-1 rounded-full border border-indigo-200">
-            Real Database Lookup
-          </span>
-        </div>
-        <p className="text-xs text-slate-500">
-          Enter or click a student's handle, matriculation number, or email to retrieve their verified real name, phone number, and account details:
-        </p>
-
-        {/* Quick Click Registered Student Badges */}
-        <div className="space-y-1">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Select Registered Student Handle:</p>
-          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
-            {allUsersList.filter(u => !u.isAdmin).map((usr) => (
-              <button
-                key={usr.id}
-                type="button"
-                onClick={() => {
-                  setLookupQuery(usr.nickname);
-                  handleLookup(undefined, usr.nickname);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all border ${
-                  lookupResult?.id === usr.id
-                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
-                    : 'bg-white hover:bg-indigo-50 text-slate-700 border-slate-200'
-                }`}
-              >
-                {usr.nickname}
-              </button>
-            ))}
-            {allUsersList.filter(u => !u.isAdmin).length === 0 && (
-              <span className="text-xs text-slate-400 italic p-1">No registered students in database.</span>
-            )}
-          </div>
         </div>
 
         <form onSubmit={(e) => handleLookup(e)} className="flex gap-2">
@@ -684,12 +651,12 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             type="text"
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
-            placeholder="Enter @nickname, Matric No, or Name..."
-            className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Enter @username, Matric No, or Email..."
+            className="flex-1 text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
           />
           <button
             type="submit"
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-xs"
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
           >
             Search Identity
           </button>
