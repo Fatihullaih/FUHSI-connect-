@@ -57,8 +57,8 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
 
   const handleOpenChatForNotification = (n: CampusNotification) => {
     const cleanNick = normalizeNickname(userProfile.nickname);
-    const targetConvId = n.conversationId || `conv_${cleanNick}_admin`;
-    const recipient = n.senderNickname || '🛡️ FUHSI Admin Trade Desk';
+    const targetConvId = n.conversationId || `conv_${cleanNick}_council`;
+    const recipient = n.senderNickname || 'FUHSI Campus Secretariat';
 
     setReadNotifIds((prev) => {
       const updated = { ...prev, [n.id]: true };
@@ -201,8 +201,8 @@ export const NotificationScreen: React.FC<NotificationScreenProps> = ({
     e.preventDefault();
     if (!replyingTo || !replyText.trim()) return;
 
-    const targetRecipient = replyingTo.senderNickname || '🛡️ FUHSI Admin Trade Desk';
-    const targetConvId = replyingTo.conversationId || `conv_${userProfile.nickname.toLowerCase().replace(/^@/, '')}_admin`;
+    const targetRecipient = replyingTo.senderNickname || 'FUHSI Campus Secretariat';
+    const targetConvId = replyingTo.conversationId || `conv_${userProfile.nickname.toLowerCase().replace(/^@/, '')}_council`;
 
     const newReplyMsg: DirectMessage = {
       id: `dm_reply_${Date.now()}`,

@@ -494,17 +494,17 @@ export function sendDirectMessage(msg: DirectMessage): {
   updateConversationList(safeMsg);
 
   // Send real notification to recipient
-  const isFromAdmin = safeMsg.senderNickname.includes('Admin') || safeMsg.senderNickname.toLowerCase().includes('modula');
+  const isFromCouncil = safeMsg.senderNickname.includes('Admin') || safeMsg.senderNickname.includes('Council') || safeMsg.senderNickname.includes('Secretariat') || safeMsg.senderNickname.toLowerCase().includes('modula');
   const previewText = safeMsg.text.length > 130 ? `${safeMsg.text.substring(0, 130)}...` : safeMsg.text;
 
   const msgTime = formatMessageTime(safeMsg.timestamp);
 
   const notif: CampusNotification = {
     id: `notif_dm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    type: isFromAdmin ? 'ADMIN' : 'DIRECT_MESSAGE',
-    title: isFromAdmin ? '🛡️ Admin Inquiry / Message' : `💬 Message from ${safeMsg.senderNickname}`,
-    message: isFromAdmin 
-      ? `Official Admin Notice: "${previewText}"`
+    type: isFromCouncil ? 'ADMIN' : 'DIRECT_MESSAGE',
+    title: isFromCouncil ? '📋 Campus Council Notice / Message' : `💬 Message from ${safeMsg.senderNickname}`,
+    message: isFromCouncil 
+      ? `Council Notice: "${previewText}"`
       : `${safeMsg.senderNickname}: "${previewText}"`,
     timestamp: msgTime,
     isRead: false,

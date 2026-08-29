@@ -83,6 +83,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [emailCopied, setEmailCopied] = useState(false);
 
   // Register Form State
+  const [accountType, setAccountType] = useState<'Student' | 'Guest'>('Student');
   const [nickname, setNickname] = useState('');
   const [realName, setRealName] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
@@ -216,89 +217,94 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMessage('Email Address is required for account verification.');
       return;
     }
-    if (!department) {
-      setErrorMessage('Please select your Department.');
-      return;
-    }
-    if (!level) {
-      setErrorMessage('Please select your Level.');
-      return;
-    }
-    if (!matricNumber.trim()) {
-      setErrorMessage('Matric Number is required.');
-      return;
-    }
 
-    const matricTrimmed = matricNumber.trim().toUpperCase();
+    let matricTrimmed = '';
 
-    // Automatic Matric Number Validation based on Level
-    if (level.includes('500')) {
-      if (!matricTrimmed.startsWith('21/') && !matricTrimmed.startsWith('FUHSI/21/') && !matricTrimmed.startsWith('20/') && !matricTrimmed.startsWith('FUHSI/20/')) {
-        setErrorMessage('Invalid matric number');
+    if (accountType === 'Student') {
+      if (!department) {
+        setErrorMessage('Please select your Department.');
         return;
       }
-    } else if (level.includes('400')) {
-      if (!matricTrimmed.startsWith('22/') && !matricTrimmed.startsWith('FUHSI/22/')) {
-        setErrorMessage('Invalid matric number');
+      if (!level) {
+        setErrorMessage('Please select your Level.');
         return;
       }
-    } else if (level.includes('300')) {
-      if (!matricTrimmed.startsWith('23/') && !matricTrimmed.startsWith('FUHSI/23/')) {
-        setErrorMessage('Invalid matric number');
+      if (!matricNumber.trim()) {
+        setErrorMessage('Matric Number is required for Student registration.');
         return;
       }
-    } else if (level.includes('200')) {
-      if (!matricTrimmed.startsWith('24/') && !matricTrimmed.startsWith('FUHSI/24/')) {
-        setErrorMessage('Invalid matric number');
-        return;
-      }
-    } else if (level.includes('100')) {
-      if (!matricTrimmed.startsWith('25/') && !matricTrimmed.startsWith('FUHSI/25/')) {
-        setErrorMessage('Invalid matric number');
-        return;
-      }
-    }
 
-    // Matric number MUST start with 20/, 21/, 22/, 23/, 24/, or 25/ (or FUHSI/20/, FUHSI/21/, etc.)
-    const validPrefixes = ['20/', '21/', '22/', '23/', '24/', '25/', 'FUHSI/20/', 'FUHSI/21/', 'FUHSI/22/', 'FUHSI/23/', 'FUHSI/24/', 'FUHSI/25/'];
-    const hasValidPrefix = validPrefixes.some((pfx) => matricTrimmed.startsWith(pfx));
+      matricTrimmed = matricNumber.trim().toUpperCase();
 
-    if (!hasValidPrefix) {
-      setErrorMessage('Invalid matric number');
-      return;
-    }
-
-    const matricPattern = /^(FUHSI\/[0-9]{2,4}\/[A-Z0-9]{2,5}\/[0-9]{2,4}|FUHSI\/[0-9]{2,4}\/[0-9]{3,4}|[0-9]{2}\/[A-Z0-9]{2,5}\/[0-9]{2,4}|[0-9]{2}\/[0-9]{3,4})$/i;
-    if (!matricPattern.test(matricTrimmed)) {
-      setErrorMessage('Invalid matric number.');
-      return;
-    }
-
-    const DEPT_CODE_MAP: Record<string, string[]> = {
-      'Medicine and Surgery': ['MBS', 'MED'],
-      'Nursing Science': ['NSC', 'NUR', 'NRS'],
-      'Medical Laboratory Science': ['MLS', 'MLT'],
-      'Doctor of Physiotherapy': ['DPT', 'PHY', 'PHT'],
-      'Audiology': ['AUD'],
-      'Pharmacology': ['PHM', 'PCO', 'PHA'],
-      'Nutrition and Dietetics': ['HND', 'NUT', 'NUD', 'NAD'],
-      'Information Technology and Health Informatics': ['ITH', 'ICT', 'INF', 'ITHI'],
-      'Microbiology': ['MCB', 'MIC'],
-      'Biochemistry': ['BCH', 'BIO'],
-      'Biotechnology and Molecular Biology': ['BMB', 'BTC'],
-      'Environmental Health Science': ['EHS', 'ENV'],
-      'Prosthetics and Orthotics': ['PRT', 'PRO'],
-    };
-
-    const parts = matricTrimmed.split('/');
-    const allowedCodes = DEPT_CODE_MAP[department] || [];
-
-    if (parts.length >= 3) {
-      const middleCode = parts.length === 3 ? parts[1] : parts[2];
-      if (isNaN(Number(middleCode))) {
-        if (allowedCodes.length > 0 && !allowedCodes.some((code) => code.toUpperCase() === middleCode.toUpperCase())) {
-          setErrorMessage('Invalid matric number.');
+      // Automatic Matric Number Validation based on Level
+      if (level.includes('500')) {
+        if (!matricTrimmed.startsWith('21/') && !matricTrimmed.startsWith('FUHSI/21/') && !matricTrimmed.startsWith('20/') && !matricTrimmed.startsWith('FUHSI/20/')) {
+          setErrorMessage('Invalid matric number');
           return;
+        }
+      } else if (level.includes('400')) {
+        if (!matricTrimmed.startsWith('22/') && !matricTrimmed.startsWith('FUHSI/22/')) {
+          setErrorMessage('Invalid matric number');
+          return;
+        }
+      } else if (level.includes('300')) {
+        if (!matricTrimmed.startsWith('23/') && !matricTrimmed.startsWith('FUHSI/23/')) {
+          setErrorMessage('Invalid matric number');
+          return;
+        }
+      } else if (level.includes('200')) {
+        if (!matricTrimmed.startsWith('24/') && !matricTrimmed.startsWith('FUHSI/24/')) {
+          setErrorMessage('Invalid matric number');
+          return;
+        }
+      } else if (level.includes('100')) {
+        if (!matricTrimmed.startsWith('25/') && !matricTrimmed.startsWith('FUHSI/25/')) {
+          setErrorMessage('Invalid matric number');
+          return;
+        }
+      }
+
+      // Matric number MUST start with 20/, 21/, 22/, 23/, 24/, or 25/ (or FUHSI/20/, FUHSI/21/, etc.)
+      const validPrefixes = ['20/', '21/', '22/', '23/', '24/', '25/', 'FUHSI/20/', 'FUHSI/21/', 'FUHSI/22/', 'FUHSI/23/', 'FUHSI/24/', 'FUHSI/25/'];
+      const hasValidPrefix = validPrefixes.some((pfx) => matricTrimmed.startsWith(pfx));
+
+      if (!hasValidPrefix) {
+        setErrorMessage('Invalid matric number');
+        return;
+      }
+
+      const matricPattern = /^(FUHSI\/[0-9]{2,4}\/[A-Z0-9]{2,5}\/[0-9]{2,4}|FUHSI\/[0-9]{2,4}\/[0-9]{3,4}|[0-9]{2}\/[A-Z0-9]{2,5}\/[0-9]{2,4}|[0-9]{2}\/[0-9]{3,4})$/i;
+      if (!matricPattern.test(matricTrimmed)) {
+        setErrorMessage('Invalid matric number.');
+        return;
+      }
+
+      const DEPT_CODE_MAP: Record<string, string[]> = {
+        'Medicine and Surgery': ['MBS', 'MED'],
+        'Nursing Science': ['NSC', 'NUR', 'NRS'],
+        'Medical Laboratory Science': ['MLS', 'MLT'],
+        'Doctor of Physiotherapy': ['DPT', 'PHY', 'PHT'],
+        'Audiology': ['AUD'],
+        'Pharmacology': ['PHM', 'PCO', 'PHA'],
+        'Nutrition and Dietetics': ['HND', 'NUT', 'NUD', 'NAD'],
+        'Information Technology and Health Informatics': ['ITH', 'ICT', 'INF', 'ITHI'],
+        'Microbiology': ['MCB', 'MIC'],
+        'Biochemistry': ['BCH', 'BIO'],
+        'Biotechnology and Molecular Biology': ['BMB', 'BTC'],
+        'Environmental Health Science': ['EHS', 'ENV'],
+        'Prosthetics and Orthotics': ['PRT', 'PRO'],
+      };
+
+      const parts = matricTrimmed.split('/');
+      const allowedCodes = DEPT_CODE_MAP[department] || [];
+
+      if (parts.length >= 3) {
+        const middleCode = parts.length === 3 ? parts[1] : parts[2];
+        if (isNaN(Number(middleCode))) {
+          if (allowedCodes.length > 0 && !allowedCodes.some((code) => code.toUpperCase() === middleCode.toUpperCase())) {
+            setErrorMessage('Invalid matric number.');
+            return;
+          }
         }
       }
     }
@@ -321,12 +327,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       allUsers = existingUsers;
     }
 
-    const duplicateMatric = allUsers.find(
-      (u) => u.matricNumber && u.matricNumber.trim().toUpperCase() === matricTrimmed
-    );
-    if (duplicateMatric) {
-      setErrorMessage('Invalid matric number.');
-      return;
+    if (accountType === 'Student' && matricTrimmed) {
+      const duplicateMatric = allUsers.find(
+        (u) => u.matricNumber && u.matricNumber.trim().toUpperCase() === matricTrimmed
+      );
+      if (duplicateMatric) {
+        setErrorMessage('Invalid matric number.');
+        return;
+      }
     }
 
     const duplicateNick = allUsers.find(
@@ -337,20 +345,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Create new user profile with active student status
+    // Create new user profile with selected account type
     const newUserProfile: UserProfile = {
       id: `usr_${Date.now()}`,
       nickname: cleanNickname,
+      accountType: accountType,
       realName: realName.trim(),
       studentEmail: studentEmail.trim() || undefined,
-      matricNumber: matricTrimmed,
+      matricNumber: accountType === 'Student' ? matricTrimmed : undefined,
       emergencyHomePhone: phone.trim() || '08000000000',
-      department: department,
-      level,
-      bio: `Student in ${department} (${level}) at FUHSI Ila-Orangun.`,
+      department: accountType === 'Student' ? department : '',
+      level: accountType === 'Student' ? level : '',
+      bio: accountType === 'Student'
+        ? `Student in ${department} (${level}) at FUHSI Ila-Orangun.`
+        : `Community Guest member on FUHSI-Connect.`,
       avatarKey,
       badgeType: 'GREEN',
-      badgeTitle: 'FUHSI Student',
+      badgeTitle: accountType === 'Student' ? 'FUHSI Student' : 'Guest',
       reputationScore: 20,
       isVerified: false,
       isApproved: true,
@@ -729,10 +740,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {mode === 'REGISTER' ? (
             <form onSubmit={handleRegister} className="space-y-4">
-              {/* Student Handle / Nickname */}
+              {/* Account Type Selection: Student or Guest */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Select Account Type <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountType('Student');
+                      setErrorMessage('');
+                    }}
+                    className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      accountType === 'Student'
+                        ? 'bg-teal-700 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <GraduationCap size={15} />
+                    <span>Student</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountType('Guest');
+                      setErrorMessage('');
+                    }}
+                    className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      accountType === 'Guest'
+                        ? 'bg-teal-700 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <User size={15} />
+                    <span>Guest</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5 font-medium leading-relaxed">
+                  {accountType === 'Student'
+                    ? 'For registered students of FUHSI (matric number, department & level required).'
+                    : 'For prospective students, visitors, and general community members.'}
+                </p>
+              </div>
+
+              {/* Handle / Nickname */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Student Handle/Nickname <span className="text-rose-500">*</span>
+                  {accountType === 'Student' ? 'Student Handle/Nickname' : 'Display Handle/Nickname'} <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">@</span>
@@ -783,64 +838,69 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              {/* Department Selector */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Department <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Building2 size={15} className="absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
-                  <select
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                    required
-                  >
-                    <option value="">-- Select Department --</option>
-                    {FUHSI_DEPARTMENTS.map((dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              {/* Student Only Fields: Department, Level & Matric Number */}
+              {accountType === 'Student' && (
+                <>
+                  {/* Department Selector */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      Department <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Building2 size={15} className="absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+                      <select
+                        value={department}
+                        onChange={(e) => setDepartment(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                        required={accountType === 'Student'}
+                      >
+                        <option value="">-- Select Department --</option>
+                        {FUHSI_DEPARTMENTS.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-              {/* Level & Matric Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Level <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={level}
-                    onChange={(e) => setLevel(e.target.value)}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                    required
-                  >
-                    <option value="">-- Select Level --</option>
-                    {FUHSI_LEVELS.map((lvl) => (
-                      <option key={lvl} value={lvl}>
-                        {lvl}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  {/* Level & Matric Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Level <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={level}
+                        onChange={(e) => setLevel(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                        required={accountType === 'Student'}
+                      >
+                        <option value="">-- Select Level --</option>
+                        {FUHSI_LEVELS.map((lvl) => (
+                          <option key={lvl} value={lvl}>
+                            {lvl}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Matric Number <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={matricNumber}
-                    onChange={(e) => setMatricNumber(e.target.value)}
-                    placeholder=""
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold uppercase text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
-                    required
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Matric Number <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={matricNumber}
+                        onChange={(e) => setMatricNumber(e.target.value)}
+                        placeholder="e.g. 24/PRT/007"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold uppercase text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                        required={accountType === 'Student'}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Phone & Password */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -71,10 +71,10 @@ export const VerificationApplyModal: React.FC<VerificationApplyModalProps> = ({
               </div>
               <h3 className="text-xl font-black text-slate-900">Application Submitted!</h3>
               <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                Your verification review fee of <span className="font-bold text-slate-900">₦1,500</span> was confirmed. Your application is now queued for human review by FUHSI Moderation Admins.
+                Your verification review fee of <span className="font-bold text-slate-900">₦1,500</span> was confirmed. Your application is now queued for evaluation by the FUHSI Verification Board.
               </p>
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-900 w-fit mx-auto">
-                Status: 🔔 Pending Admin Final Approval
+                Status: 🔔 Pending Credential Evaluation
               </div>
               <button
                 onClick={onClose}
@@ -111,7 +111,7 @@ export const VerificationApplyModal: React.FC<VerificationApplyModalProps> = ({
                     <CheckCircle2 size={13} /> 0 Active Violations
                   </div>
                   <div className="flex items-center gap-1.5 text-amber-800 font-bold">
-                    <Lock size={13} /> Admin Manual Approval
+                    <Lock size={13} /> Credential Clearance
                   </div>
                 </div>
               </div>
@@ -174,7 +174,7 @@ export const VerificationApplyModal: React.FC<VerificationApplyModalProps> = ({
                 ) : (
                   <>
                     <Award size={18} />
-                    <span>Pay ₦1,500 & Submit for Admin Review</span>
+                    <span>Pay ₦1,500 & Submit for Credential Review</span>
                   </>
                 )}
               </button>

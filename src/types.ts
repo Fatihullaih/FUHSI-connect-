@@ -9,6 +9,7 @@ export type BadgeType = 'NONE' | 'BLUE' | 'GOLD' | 'GREEN' | 'RED' | 'PURPLE';
 export interface UserProfile {
   id: string;
   nickname: string;
+  accountType?: 'Student' | 'Guest' | string;
   realNameHidden?: string;
   realName?: string;
   matricNumber?: string;
@@ -47,6 +48,7 @@ export interface Comment {
   id: string;
   postId: string;
   authorNickname: string;
+  authorAccountType?: 'Student' | 'Guest' | string;
   authorBadgeType?: BadgeType | string;
   authorBadgeTitle?: string;
   authorAvatarKey?: string;
@@ -76,6 +78,7 @@ export interface PollOption {
 export interface Post {
   id: string;
   authorNickname: string;
+  authorAccountType?: 'Student' | 'Guest' | string;
   authorBadgeType?: BadgeType | string;
   authorBadgeTitle?: string;
   authorAvatarKey?: string;

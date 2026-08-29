@@ -2057,7 +2057,7 @@ export const App: React.FC = () => {
                         id: `verif_appr_${Date.now()}`,
                         type: 'VERIFICATION',
                         title: '🎉 Account Verified!',
-                        message: `Congratulations! Your verification application has been approved by the Administrator. Your profile now displays your verified checkmark badge (${assignedTitle}) across FUHSI Connect.`,
+                        message: `Congratulations! Your verification application has been approved. Your profile now displays your verified checkmark badge (${assignedTitle}) across FUHSI Connect.`,
                         timestamp: 'Just now',
                         isRead: false,
                       };
@@ -2119,9 +2119,9 @@ export const App: React.FC = () => {
             <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto font-bold text-2xl">
               🛡️
             </div>
-            <h2 className="text-lg font-extrabold text-slate-900">Access Denied — Admin Authorization Required</h2>
+            <h2 className="text-lg font-extrabold text-slate-900">Access Restricted</h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              The <strong>Admin Control Console</strong> and <strong>Admin Trade Desk</strong> are strictly reserved for authorized FUHSI administrators. Normal student accounts do not have permission to view or manage trade desk records.
+              This management console is restricted to authorized personnel. Please return to the campus feed.
             </p>
             <button
               onClick={() => setNavIndex(0)}

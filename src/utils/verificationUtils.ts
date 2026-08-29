@@ -82,7 +82,10 @@ export function getUserBadgeInfo(nicknameOrId?: string, fallbackUser?: UserProfi
     rawTitle.toLowerCase().includes('pending') ||
     rawTitle.toLowerCase().includes('reject')
   ) {
-    rawTitle = 'FUHSI Student';
+    rawTitle = user?.accountType === 'Guest' ? 'Guest' : 'FUHSI Student';
+  }
+  if (!rawTitle && user?.accountType === 'Guest') {
+    rawTitle = 'Guest';
   }
 
   return {

@@ -5,6 +5,7 @@ import { VerificationBadge } from '../components/VerificationBadge';
 import { AvatarIcon } from '../components/AvatarIcon';
 import { isDemoUser, isDemoNickname, isDemoPost } from '../utils/postGenerator';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
+import { isGuestAccount, getUserIdentitySubtitle } from '../utils/userDbUtils';
 import { 
   Trophy, 
   Award, 
@@ -99,10 +100,12 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         parsed.forEach((u) => {
           if (u.nickname && !isDemoUser(u) && !isDemoNickname(u.nickname)) {
             const clean = u.nickname.toLowerCase().replace(/^@/, '');
+            const isGuest = isGuestAccount(u);
             usersMap.set(clean, {
               nickname: u.nickname.startsWith('@') ? u.nickname : `@${u.nickname}`,
-              department: u.department || 'FUHSI Student',
-              level: u.level || '100L',
+              department: isGuest ? '' : (u.department || 'FUHSI Student'),
+              level: isGuest ? '' : (u.level || '100L'),
+              accountType: u.accountType || (isGuest ? 'Guest' : 'Student'),
               avatarKey: u.avatarKey || 'caduceus',
               reputationScore: u.reputationScore ?? 100,
               isVerified: Boolean(u.isVerified),
@@ -116,10 +119,12 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
     if (currentUser && currentUser.nickname && !isDemoUser(currentUser) && !isDemoNickname(currentUser.nickname)) {
       const clean = currentUser.nickname.toLowerCase().replace(/^@/, '');
+      const isGuest = isGuestAccount(currentUser);
       usersMap.set(clean, {
         nickname: currentUser.nickname.startsWith('@') ? currentUser.nickname : `@${currentUser.nickname}`,
-        department: currentUser.department || 'FUHSI Student',
-        level: currentUser.level || '100L',
+        department: isGuest ? '' : (currentUser.department || 'FUHSI Student'),
+        level: isGuest ? '' : (currentUser.level || '100L'),
+        accountType: currentUser.accountType || (isGuest ? 'Guest' : 'Student'),
         avatarKey: currentUser.avatarKey || 'caduceus',
         reputationScore: currentRep,
         isVerified: Boolean(currentUser.isVerified),
@@ -367,7 +372,9 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                               );
                             })()}
                           </div>
-                          <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            {getUserIdentitySubtitle(user.nickname, user.department, user.level)}
+                          </p>
                         </div>
                       </div>
 
@@ -443,7 +450,9 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                               );
                             })()}
                           </div>
-                          <p className="text-[10px] text-slate-500 font-medium">{user.department} • {user.level}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            {getUserIdentitySubtitle(user.nickname, user.department, user.level)}
+                          </p>
                         </div>
                       </div>
 
@@ -569,7 +578,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                           )}
                         </div>
                         <p className="text-xs text-slate-500 font-medium">
-                          {student.department} • {student.level}
+                          {getUserIdentitySubtitle(student, student.department, student.level)}
                         </p>
                       </div>
                     </div>
@@ -641,7 +650,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           <div>
             <h3 className="font-extrabold text-slate-900 text-lg">Reputation Levels & Verification Rules</h3>
             <p className="text-xs text-slate-500 mt-1">
-              FUHSI Connect uses a background reputation score to maintain quality and unlock eligibility for official Admin Verification.
+              FUHSI Connect uses a background reputation score to maintain quality and unlock eligibility for official campus verification.
             </p>
           </div>
 
@@ -666,8 +675,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
             <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-1">
               <div className="font-bold text-amber-950 text-sm">🟡 3,000+ Points</div>
-              <p className="text-amber-900 font-bold">Eligible for Admin Verification</p>
-              <p className="text-slate-600 text-[11px]">Unlocks chance for Admin Review! Reaching 3,000 points enters the queue for official verification badge review.</p>
+              <p className="text-amber-900 font-bold">Eligible for Verification</p>
+              <p className="text-slate-600 text-[11px]">Unlocks eligibility for official review! Reaching 3,000 points enters the queue for credential verification badge evaluation.</p>
             </div>
           </div>
 
@@ -697,9 +706,9 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           </div>
 
           <div className="p-4 bg-teal-50 border border-teal-200/80 rounded-xl text-xs text-teal-900 space-y-1">
-            <span className="font-bold block">⭐ Final Verification Criteria (Required for Admin Approval):</span>
+            <span className="font-bold block">⭐ Verification Criteria (Required for Approval):</span>
             <p className="leading-relaxed">
-              ✅ At least 3,000 reputation points • ✅ Account age older than 2 months (60+ days) • ✅ Clean record with 0 serious violations • ✅ Positive long-term engagement • ✅ Final approval by FUHSI Admin team.
+              ✅ At least 3,000 reputation points • ✅ Account age older than 2 months (60+ days) • ✅ Clean record with 0 serious violations • ✅ Positive long-term engagement • ✅ Final clearance by the FUHSI Verification Board.
             </p>
           </div>
         </div>
@@ -713,13 +722,13 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             <h2>Apply for Student Leadership & Tutor Badge</h2>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Verified badges recognize class representatives, clinical mentors, and academic group leaders. Applications are evaluated by student union administrators.
+            Verified badges recognize class representatives, clinical mentors, and academic group leaders. Applications are evaluated by the campus review committee.
           </p>
 
           {verifSubmitted ? (
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2">
               <CheckCircle2 size={18} />
-              <span>Verification request submitted successfully! Admin review in progress.</span>
+              <span>Verification request submitted successfully! Credential review in progress.</span>
             </div>
           ) : (
             <form onSubmit={handleApplyVerif} className="space-y-4 pt-2">

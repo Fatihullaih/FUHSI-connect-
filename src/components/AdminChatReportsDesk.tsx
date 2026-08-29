@@ -120,10 +120,10 @@ export const AdminChatReportsDesk: React.FC<AdminChatReportsDeskProps> = () => {
     const targetUser = warningModalReport.reportedNickname;
     const dm: DirectMessage = {
       id: `dm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      conversationId: `conv_admin_${targetUser.toLowerCase().replace(/^@/, '')}`,
-      senderNickname: '🛡️ FUHSI Security & Moderation',
+      conversationId: `conv_council_${targetUser.toLowerCase().replace(/^@/, '')}`,
+      senderNickname: 'FUHSI Campus Secretariat',
       receiverNickname: targetUser,
-      text: `[OFFICIAL ADMIN CONDUCT NOTICE: ${warningSubject.trim()}]\n\n${warningMessage.trim()}\n\nNote: Please adhere strictly to the FUHSI Connect Community Guidelines to maintain a safe campus environment.`,
+      text: `[CAMPUS CONDUCT ADVISORY: ${warningSubject.trim()}]\n\n${warningMessage.trim()}\n\nNote: Please adhere strictly to the FUHSI Connect Community Guidelines to maintain a safe campus environment.`,
       timestamp: new Date().toISOString(),
     };
 
@@ -131,10 +131,10 @@ export const AdminChatReportsDesk: React.FC<AdminChatReportsDeskProps> = () => {
     updateChatReportStatus(
       warningModalReport.id,
       'RESOLVED',
-      `Official warning issued to ${targetUser} by Admin.`
+      `Official advisory issued to ${targetUser}.`
     );
     loadReports();
-    showToast(`Official warning dispatched to ${targetUser}. Case resolved.`);
+    showToast(`Official advisory dispatched to ${targetUser}. Case resolved.`);
     setWarningModalReport(null);
     setWarningMessage('');
   };
@@ -509,7 +509,7 @@ export const AdminChatReportsDesk: React.FC<AdminChatReportsDeskProps> = () => {
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
                 <Lock size={14} className="text-amber-700 shrink-0 mt-0.5" />
                 <span>
-                  This official message will be delivered with Admin authority directly to <strong>{warningModalReport.reportedNickname}</strong>'s chat inbox.
+                  This official message will be delivered directly to <strong>{warningModalReport.reportedNickname}</strong>'s chat inbox.
                 </span>
               </div>
 

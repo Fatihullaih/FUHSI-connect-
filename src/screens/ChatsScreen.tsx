@@ -4,6 +4,7 @@ import { AvatarIcon } from '../components/AvatarIcon';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { isDemoUser, isDemoNickname } from '../utils/postGenerator';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
+import { isGuestAccount } from '../utils/userDbUtils';
 import { 
   getStoredDirectMessages, 
   getUserConversations, 
@@ -231,12 +232,13 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
         if (prev && normalizeNickname(prev.nickname) === cleanTarget && prev.avatarKey) {
           return prev;
         }
+        const isGuest = isGuestAccount(userMatch);
         return {
           nickname: pureNick,
           avatarKey: initialRecipient?.avatarKey || userMatch?.avatarKey || '1',
           avatarUrl: initialRecipient?.avatarUrl || userMatch?.avatarUrl,
           badgeType: userMatch?.badgeType || 'GREEN',
-          badgeTitle: userMatch?.badgeTitle || 'FUHSI Student',
+          badgeTitle: isGuest ? 'Guest' : (userMatch?.badgeTitle || 'FUHSI Student'),
           isVerified: Boolean(userMatch?.isVerified || userMatch?.verificationStatus === 'approved'),
         };
       });
@@ -309,12 +311,13 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
       (u) => normalizeNickname(u.nickname) === cleanTarget || u.id === cleanTarget || u.id === targetNickname
     );
 
+    const isGuest = isGuestAccount(userMatch);
     setActiveRecipient({
       nickname: pureTarget,
       avatarKey: avatarKey || userMatch?.avatarKey || '1',
       avatarUrl: avatarUrl || userMatch?.avatarUrl,
       badgeType: userMatch?.badgeType || 'GREEN',
-      badgeTitle: userMatch?.badgeTitle || 'FUHSI Student',
+      badgeTitle: isGuest ? 'Guest' : (userMatch?.badgeTitle || 'FUHSI Student'),
       isVerified: Boolean(userMatch?.isVerified || userMatch?.verificationStatus === 'approved'),
     });
 
@@ -1040,7 +1043,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                           })()}
                         </div>
                         <p className="text-[10px] font-bold text-slate-400">
-                          {student.badgeTitle || 'FUHSI Student'}
+                          {isGuestAccount(student) ? 'Guest' : (student.badgeTitle || 'FUHSI Student')}
                         </p>
                       </div>
                     </div>

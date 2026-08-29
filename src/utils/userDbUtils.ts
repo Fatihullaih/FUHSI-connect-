@@ -13,16 +13,17 @@ export const DEFAULT_USERS_LIST: UserProfile[] = [
   {
     id: 'usr_admin_modula',
     nickname: '@modula',
-    realName: 'Executive Admin Council Officer',
-    matricNumber: 'FUHSI/ADMIN/001',
+    accountType: 'Student',
+    realName: 'Executive Council Officer',
+    matricNumber: 'FUHSI/COUNCIL/001',
     studentEmail: 'fuhsiconnectsupport@gmail.com',
     emergencyHomePhone: '08000000000',
-    department: 'FUHSI Administration',
+    department: 'Campus Secretariat',
     level: 'Council',
-    bio: 'Primary Executive Admin Council Officer (@modula).',
+    bio: 'Executive Council Lead (@modula).',
     avatarKey: '1',
     badgeType: 'GOLD',
-    badgeTitle: 'Official Admin',
+    badgeTitle: 'Executive Council',
     reputationScore: 9999,
     isVerified: true,
     isApproved: true,
@@ -32,6 +33,7 @@ export const DEFAULT_USERS_LIST: UserProfile[] = [
   {
     id: 'usr_student_adedeji_ayo_24prt007',
     nickname: '@Deji',
+    accountType: 'Student',
     realName: 'Adedeji Ayo',
     matricNumber: '24/PRT/007',
     studentEmail: 'faithlucas.co@gmail.com',
@@ -115,6 +117,70 @@ export function findUserByNickname(nickname: string): UserProfile | undefined {
   const clean = nickname.trim().toLowerCase().replace(/^@/, '');
   const users = getStoredUsers();
   return users.find((u) => (u.nickname || '').trim().toLowerCase().replace(/^@/, '') === clean);
+}
+
+/**
+ * Check if a user or user handle is a Guest account
+ */
+export function isGuestAccount(userOrNickname?: Partial<UserProfile> | string | null | any): boolean {
+  if (!userOrNickname) return false;
+  if (typeof userOrNickname === 'object') {
+    if (userOrNickname.accountType === 'Guest') return true;
+    if (userOrNickname.accountType === 'Student') return false;
+    if (userOrNickname.nickname) {
+      const dbUser = findUserByNickname(userOrNickname.nickname);
+      if (dbUser?.accountType === 'Guest') return true;
+      if (dbUser?.accountType === 'Student') return false;
+    }
+    // Fallback: If user explicitly has no department, level, or matric, check if they are guest
+    if (!userOrNickname.matricNumber && !userOrNickname.department && !userOrNickname.isAdmin) {
+      return userOrNickname.accountType === 'Guest';
+    }
+    return false;
+  }
+  const dbUser = findUserByNickname(userOrNickname);
+  return dbUser?.accountType === 'Guest';
+}
+
+/**
+ * Get account category: 'Student' | 'Guest'
+ */
+export function getUserAccountType(userOrNickname?: Partial<UserProfile> | string | null | any): 'Student' | 'Guest' {
+  return isGuestAccount(userOrNickname) ? 'Guest' : 'Student';
+}
+
+/**
+ * Return appropriate subtitle string for any user identity:
+ * - For Guest: 'Guest'
+ * - For Student: 'Department • Level' (or department/FUHSI Student)
+ */
+export function getUserIdentitySubtitle(
+  userOrNickname?: Partial<UserProfile> | string | null | any,
+  fallbackDept?: string,
+  fallbackLevel?: string
+): string {
+  if (isGuestAccount(userOrNickname)) {
+    return 'Guest';
+  }
+  let dept = fallbackDept;
+  let lvl = fallbackLevel;
+  if (typeof userOrNickname === 'object' && userOrNickname) {
+    if (userOrNickname.accountType === 'Guest') return 'Guest';
+    dept = userOrNickname.department || dept;
+    lvl = userOrNickname.level || lvl;
+  } else if (typeof userOrNickname === 'string') {
+    const dbUser = findUserByNickname(userOrNickname);
+    if (dbUser) {
+      if (dbUser.accountType === 'Guest') return 'Guest';
+      dept = dbUser.department || dept;
+      lvl = dbUser.level || lvl;
+    }
+  }
+  if (dept && lvl) {
+    return `${dept} • ${lvl}`;
+  }
+  if (dept) return dept;
+  return 'FUHSI Student';
 }
 
 /**

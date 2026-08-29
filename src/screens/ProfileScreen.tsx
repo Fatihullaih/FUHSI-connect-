@@ -40,6 +40,7 @@ import { ProfilePictureModal } from '../components/ProfilePictureModal';
 import { VerificationModal } from '../components/VerificationModal';
 import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
+import { isGuestAccount } from '../utils/userDbUtils';
 
 interface ProfileScreenProps {
   userProfile: UserProfile | null;
@@ -735,54 +736,56 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
               </div>
 
-              {/* Department (Immutable / Locked) & Academic Level */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                    <Lock size={12} className="text-teal-600 dark:text-teal-400" />
-                    <span>Academic Registration Data</span>
-                  </span>
-                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                    Department Locked 🔒
-                  </span>
-                </div>
+              {/* Department (Immutable / Locked) & Academic Level - Students Only */}
+              {!isGuestAccount(userProfile) && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                      <Lock size={12} className="text-teal-600 dark:text-teal-400" />
+                      <span>Academic Registration Data</span>
+                    </span>
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                      Department Locked 🔒
+                    </span>
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {/* Department (Read-only / Immutable) */}
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                      Department (Permanent)
-                    </label>
-                    <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700/80 text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center justify-between select-none">
-                      <span className="truncate">{userProfile?.department || department || 'FUHSI Department'}</span>
-                      <Lock size={12} className="text-slate-400 shrink-0 ml-1" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Department (Read-only / Immutable) */}
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                        Department (Permanent)
+                      </label>
+                      <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700/80 text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center justify-between select-none">
+                        <span className="truncate">{userProfile?.department || department || 'FUHSI Department'}</span>
+                        <Lock size={12} className="text-slate-400 shrink-0 ml-1" />
+                      </div>
+                    </div>
+
+                    {/* Academic Level (Editable) */}
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Academic Level
+                      </label>
+                      <select
+                        value={level}
+                        onChange={(e) => setLevel(e.target.value)}
+                        className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      >
+                        {levels.map((l) => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
-                  {/* Academic Level (Editable) */}
-                  <div className="space-y-1">
-                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                      Academic Level
-                    </label>
-                    <select
-                      value={level}
-                      onChange={(e) => setLevel(e.target.value)}
-                      className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      {levels.map((l) => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-start gap-1 leading-snug">
+                    <Info size={11} className="text-teal-600 shrink-0 mt-0.5" />
+                    <span>
+                      Your department cannot be changed because your department and matric number were verified together during registration.
+                    </span>
+                  </p>
                 </div>
-
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-start gap-1 leading-snug">
-                  <Info size={11} className="text-teal-600 shrink-0 mt-0.5" />
-                  <span>
-                    Your department cannot be changed because your department and matric number were verified together during registration.
-                  </span>
-                </p>
-              </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Bio / Profile Description</label>
@@ -790,7 +793,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   rows={2}
-                  placeholder="FUHSI Student | Learning & Saving Lives 🩺"
+                  placeholder={isGuestAccount(userProfile) ? "Guest Member | FUHSI Connect Community" : "FUHSI Student | Learning & Saving Lives 🩺"}
                   className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>

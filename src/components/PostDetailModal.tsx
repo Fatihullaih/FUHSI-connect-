@@ -9,7 +9,7 @@ import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { compressImageFile } from '../utils/imageUtils';
 import { checkIsUserVerified, getUserBadgeInfo } from '../utils/verificationUtils';
-import { findUserByNickname } from '../utils/userDbUtils';
+import { findUserByNickname, isGuestAccount } from '../utils/userDbUtils';
 
 interface PostDetailModalProps {
   post: Post;
@@ -374,10 +374,14 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
                         />
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 pt-0.5">
-                        <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-[10px]">
-                          {post.department}
-                        </span>
-                        <span>•</span>
+                        {post.department && post.department !== 'General' && !isGuestAccount(post.authorNickname) && (
+                          <>
+                            <span className="font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80 text-[10px]">
+                              {post.department}
+                            </span>
+                            <span>•</span>
+                          </>
+                        )}
                         <span 
                           className="font-semibold text-slate-500 hover:text-slate-700 transition-colors"
                           title={formatExactDateTime(post.timestamp) || post.timestamp}

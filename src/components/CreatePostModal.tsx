@@ -4,6 +4,7 @@ import { compressImageFile } from '../utils/imageUtils';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationModal } from './VerificationModal';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
+import { getUserIdentitySubtitle, isGuestAccount } from '../utils/userDbUtils';
 import { X, Sparkles, Send, ShieldCheck, BarChart2, AlertTriangle, Image as ImageIcon, Video as VideoIcon, Upload, Trash2, Building2, Bell, Crown, Lock, Plus } from 'lucide-react';
 
 interface CreatePostModalProps {
@@ -306,7 +307,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
         {/* Form Content Scrollable */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
-          {/* Verified Handle Identity Bar (Real name hidden) */}
+          {/* Handle Identity Bar (Real name hidden) */}
           <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -316,12 +317,12 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 <div>
                   <span className="text-xs font-bold text-slate-900 block">{nickname}</span>
                   <span className="text-[10px] text-slate-500 font-medium">
-                    {`${currentUser?.department} • ${currentUser?.level}`}
+                    {getUserIdentitySubtitle(currentUser, currentUser?.department, currentUser?.level)}
                   </span>
                 </div>
               </div>
               <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-1 rounded-lg border border-teal-200">
-                Student Handle
+                {isGuestAccount(currentUser) ? 'Guest' : 'Student Handle'}
               </span>
             </div>
             <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/60">

@@ -96,9 +96,9 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [lookupResult, setLookupResult] = useState<UserProfile | null>(null);
   const [lookupNotFound, setLookupNotFound] = useState(false);
 
-  // Admin Hotline Chat State
+  // Campus Desk Hotline Chat State
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'admin'; text: string; time: string }>>([
-    { sender: 'admin', text: 'FUHSI Admin Hotline active. How can we assist with your campus safety, trade requests, or verification?', time: '10:00 AM' }
+    { sender: 'admin', text: 'FUHSI Campus Secretariat desk active. How can we assist with campus inquiries, trade assistance, or verification review?', time: '10:00 AM' }
   ]);
   const [chatInput, setChatInput] = useState('');
 
@@ -157,7 +157,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
   const [allUsersList, setAllUsersList] = useState<UserProfile[]>([]);
   const [activeUserTab, setActiveUserTab] = useState<'PENDING' | 'APPROVED' | 'ALL'>('PENDING');
 
-  // Direct Admin User Query / Message State
+  // Direct User Query / Message State
   const [queryModalUser, setQueryModalUser] = useState<{ nickname: string; realName?: string; email?: string } | null>(null);
   const [querySubject, setQuerySubject] = useState('');
   const [queryMessage, setQueryMessage] = useState('');
@@ -165,7 +165,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   const handleOpenQueryModal = (nick: string, realName?: string, email?: string) => {
     setQueryModalUser({ nickname: nick, realName, email });
-    setQuerySubject(`Official Admin Inquiry - FUHSI Moderation`);
+    setQuerySubject(`Official Council Inquiry - FUHSI Campus Verification`);
     setQueryMessage('');
   };
 
@@ -175,14 +175,14 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
     const targetNick = queryModalUser.nickname;
     const cleanNick = normalizeNickname(targetNick);
-    const convId = `conv_${cleanNick}_admin`;
+    const convId = `conv_${cleanNick}_council`;
 
-    const fullMessageText = `🛡️ [${querySubject || 'ADMIN INQUIRY'}]\n\n${queryMessage.trim()}\n\n— FUHSI Safety & Moderation Council`;
+    const fullMessageText = `📋 [${querySubject || 'CAMPUS COUNCIL INQUIRY'}]\n\n${queryMessage.trim()}\n\n— FUHSI Campus Council & Secretariat`;
 
     const newMsg: DirectMessage = {
-      id: `dm_admin_query_${Date.now()}`,
+      id: `dm_council_query_${Date.now()}`,
       conversationId: convId,
-      senderNickname: userProfile?.nickname ? `${userProfile.nickname} (Admin)` : '🛡️ FUHSI Admin Moderation',
+      senderNickname: userProfile?.nickname ? userProfile.nickname : 'FUHSI Campus Council',
       receiverNickname: targetNick,
       text: fullMessageText,
       timestamp: formatMessageTime(),
@@ -190,7 +190,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
     sendDirectMessage(newMsg);
 
-    setQueryToast(`✓ Message & notification successfully dispatched to ${targetNick}!`);
+    setQueryToast(`✓ Notice and message successfully dispatched to ${targetNick}!`);
     setQueryModalUser(null);
     setQueryMessage('');
 
@@ -696,21 +696,40 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                 <span className="font-extrabold text-sm text-indigo-700">{lookupResult.nickname}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">MATRICULATION NUMBER</span>
-                <span className="font-extrabold font-mono text-slate-800">{lookupResult.matricNumber || 'Not Provided'}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">ACCOUNT CATEGORY</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black ${
+                  lookupResult.accountType === 'Guest' 
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                    : 'bg-teal-100 text-teal-900 border border-teal-300'
+                }`}>
+                  {lookupResult.accountType || 'Student'}
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-bold">COMPULSORY PHONE NUMBER</span>
                 <span className="font-extrabold text-teal-700 text-sm">{lookupResult.emergencyHomePhone || 'Not Provided'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">STUDENT EMAIL ADDRESS</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">EMAIL ADDRESS</span>
                 <span className="font-bold text-slate-800 font-mono text-[11px]">{lookupResult.studentEmail || 'Not Provided'}</span>
               </div>
-              <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">DEPARTMENT & LEVEL</span>
-                <span className="font-bold text-slate-800">{lookupResult.department || 'FUHSI'} ({lookupResult.level || '100L'})</span>
-              </div>
+              {lookupResult.accountType !== 'Guest' ? (
+                <>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">MATRICULATION NUMBER</span>
+                    <span className="font-extrabold font-mono text-slate-800">{lookupResult.matricNumber || 'Not Provided'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">DEPARTMENT & LEVEL</span>
+                    <span className="font-bold text-slate-800">{lookupResult.department || 'FUHSI'} ({lookupResult.level || '100L'})</span>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">STUDENT STATUS</span>
+                  <span className="font-bold text-slate-500 text-xs italic">Guest Member (Non-Student)</span>
+                </div>
+              )}
             </div>
 
             <div className="pt-1 flex justify-end">
@@ -1100,7 +1119,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL: SEND OFFICIAL ADMIN QUERY / MESSAGE */}
+      {/* MODAL: SEND OFFICIAL COUNCIL QUERY / MESSAGE */}
       {queryModalUser && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-100 space-y-4">
@@ -1110,7 +1129,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                   <Shield className="w-4 h-4 text-teal-700" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">Issue Official Admin Inquiry / Message</h3>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Issue Council Inquiry / Official Notice</h3>
                   <p className="text-[11px] text-slate-500 font-medium">To: {queryModalUser.nickname} {queryModalUser.realName ? `(${queryModalUser.realName})` : ''}</p>
                 </div>
               </div>

@@ -49,7 +49,7 @@ interface ChatInterfaceProps {
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   conversationId,
   currentUser,
-  recipientNickname = '🛡️ FUHSI Admin Trade Desk',
+  recipientNickname = 'FUHSI Campus Secretariat',
   recipientTitle,
   contextItem,
   isInline = false,
@@ -195,8 +195,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const renderMessageBubble = (msg: DirectMessage) => {
     const isMe = normalizeNickname(msg.senderNickname) === normalizeNickname(myNickname) ||
-                 (isAdminUser && msg.senderNickname.includes('Admin'));
-    const isMsgFromAdmin = msg.senderNickname.includes('Admin') || msg.senderNickname.toLowerCase().includes('modula');
+                 (isAdminUser && (msg.senderNickname.includes('Admin') || msg.senderNickname.includes('Council') || msg.senderNickname.includes('Secretariat')));
+    const isMsgFromAdmin = msg.senderNickname.includes('Admin') || msg.senderNickname.includes('Council') || msg.senderNickname.includes('Secretariat') || msg.senderNickname.toLowerCase().includes('modula');
 
     return (
       <div
@@ -207,7 +207,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {isMsgFromAdmin ? (
             <span className="text-[10px] font-black text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
               <Shield size={11} className="text-amber-700" />
-              <span>{isMe ? 'You (Official Admin)' : '🛡️ FUHSI Official Admin'}</span>
+              <span>{isMe ? 'You (Campus Council)' : 'FUHSI Campus Council'}</span>
             </span>
           ) : (
             <span className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1">
@@ -230,7 +230,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {isMsgFromAdmin && !isMe && (
             <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-800 border-b border-amber-200 pb-1.5 mb-2">
               <ShieldCheck size={13} className="text-amber-700 shrink-0" />
-              <span>OFFICIAL FUHSI MODERATION INQUIRY</span>
+              <span>OFFICIAL CAMPUS COUNCIL NOTICE</span>
             </div>
           )}
 
@@ -293,7 +293,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </h3>
               {isOtherPartyAdmin && (
                 <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
-                  ADMIN
+                  COUNCIL
                 </span>
               )}
             </div>

@@ -164,10 +164,10 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
 
     const dm: DirectMessage = {
       id: `dm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      conversationId: `conv_admin_${msgRecipient.trim().toLowerCase().replace(/^@/, '')}`,
-      senderNickname: '🛡️ FUHSI Admin',
+      conversationId: `conv_council_${msgRecipient.trim().toLowerCase().replace(/^@/, '')}`,
+      senderNickname: 'FUHSI Campus Secretariat',
       receiverNickname: msgRecipient.trim(),
-      text: `[ADMIN NOTICE: ${msgSubject.trim() || 'Marketplace Inquiry'}]\n\n${msgContent.trim()}`,
+      text: `[CAMPUS DESK NOTICE: ${msgSubject.trim() || 'Marketplace Inquiry'}]\n\n${msgContent.trim()}`,
       timestamp: new Date().toISOString(),
     };
     sendDirectMessage(dm);
@@ -539,7 +539,7 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
           <div>
             <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
               <MessageSquare className="w-4 h-4 text-blue-600" />
-              <span>Issue Formal Admin Inquiry to Student</span>
+              <span>Issue Campus Secretariat Inquiry to Student</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Dispatches an official notification to the student's in-app inbox.
@@ -565,7 +565,7 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
                 type="text"
                 value={msgSubject}
                 onChange={(e) => setMsgSubject(e.target.value)}
-                placeholder="e.g. Marketplace Listing Clarification / Fraud Inquiry"
+                placeholder="e.g. Marketplace Listing Clarification / Trade Inquiry"
                 className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-medium"
               />
             </div>
@@ -575,7 +575,7 @@ export const AdminTradeDesk: React.FC<AdminTradeDeskProps> = ({
               <textarea
                 value={msgContent}
                 onChange={(e) => setMsgContent(e.target.value)}
-                placeholder="Type your official administrative query or instructions here..."
+                placeholder="Type the official inquiry or instructions here..."
                 rows={4}
                 className="w-full text-xs rounded-xl border border-slate-200 p-2.5 text-slate-800 font-medium"
                 required

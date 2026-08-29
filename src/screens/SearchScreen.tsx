@@ -7,6 +7,7 @@ import { VerificationBadge } from '../components/VerificationBadge';
 import { calculateUserPoints } from '../utils/reputationUtils';
 import { isDemoUser, isDemoNickname, isDemoPost } from '../utils/postGenerator';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
+import { isGuestAccount, getUserIdentitySubtitle } from '../utils/userDbUtils';
 import {
   Search,
   Sparkles,
@@ -152,13 +153,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             if (!accMap.has(key)) {
               const exactScore = calculateUserPoints(u.nickname, u, posts, []);
               const verifInfo = getUserBadgeInfo(u.nickname, u);
+              const isGuest = isGuestAccount(u);
               accMap.set(key, {
                 id: u.id || `usr_${key}`,
                 nickname: u.nickname.startsWith('@') ? u.nickname : `@${u.nickname}`,
                 realName: u.realName || u.nickname,
-                department: u.department || 'FUHSI Student',
-                level: u.level || 'Student',
-                bio: u.bio || 'FUHSI Student Community Member.',
+                department: isGuest ? '' : (u.department || 'FUHSI Student'),
+                level: isGuest ? '' : (u.level || 'Student'),
+                bio: u.bio || (isGuest ? 'Community Guest Member on FUHSI Connect.' : 'FUHSI Student Community Member.'),
                 badgeType: verifInfo.badgeType,
                 badgeTitle: verifInfo.badgeTitle,
                 avatarKey: u.avatarKey || 'caduceus',
@@ -180,13 +182,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       if (!accMap.has(key)) {
         const exactScore = calculateUserPoints(userProfile.nickname, userProfile, posts, []);
         const verifInfo = getUserBadgeInfo(userProfile.nickname, userProfile);
+        const isGuest = isGuestAccount(userProfile);
         accMap.set(key, {
           id: userProfile.id || `usr_${key}`,
           nickname: userProfile.nickname.startsWith('@') ? userProfile.nickname : `@${userProfile.nickname}`,
           realName: userProfile.realName || userProfile.nickname,
-          department: userProfile.department || 'FUHSI Student',
-          level: userProfile.level || 'Student',
-          bio: userProfile.bio || 'FUHSI Student Community Member.',
+          department: isGuest ? '' : (userProfile.department || 'FUHSI Student'),
+          level: isGuest ? '' : (userProfile.level || 'Student'),
+          bio: userProfile.bio || (isGuest ? 'Community Guest Member on FUHSI Connect.' : 'FUHSI Student Community Member.'),
           badgeType: verifInfo.badgeType,
           badgeTitle: verifInfo.badgeTitle,
           avatarKey: userProfile.avatarKey || 'caduceus',
