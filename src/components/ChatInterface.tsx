@@ -12,6 +12,7 @@ import {
 } from '../utils/messagingUtils';
 import { 
   Send, 
+  ArrowLeft,
   Shield, 
   ShieldCheck, 
   User, 
@@ -274,8 +275,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const containerContent = (
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
       {/* Chat Header */}
-      <div className="bg-white px-4 py-3 border-b border-slate-200 flex items-center justify-between shadow-xs shrink-0">
+      <div className="bg-white px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-200 flex items-center justify-between shadow-xs shrink-0 z-10">
         <div className="flex items-center gap-2.5 min-w-0">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+              title="Back"
+            >
+              <ArrowLeft size={18} />
+              <span className="hidden xs:inline">Back</span>
+            </button>
+          )}
+
           <div
             className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs font-bold text-sm ${
               isOtherPartyAdmin
@@ -288,7 +300,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-xs font-black text-slate-900 truncate">
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 truncate">
                 {recipientNickname}
               </h3>
               {isOtherPartyAdmin && (
@@ -310,7 +322,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               title="Close chat"
             >
               <X size={18} />
@@ -446,8 +458,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Render as a full Modal overlay
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full h-[90vh] max-h-[680px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
+      <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
         {containerContent}
       </div>
     </div>

@@ -63,7 +63,7 @@ import { AuthModal } from './components/AuthModal';
 import { VerificationBadge } from './components/VerificationBadge';
 import { AvatarIcon } from './components/AvatarIcon';
 import { DynamicFeedIcon, LeaderboardIcon, StorefrontIcon } from './components/NavIcons';
-import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, Sparkles, CheckCircle2, Users, Sun, Moon, MessageCircle } from 'lucide-react';
+import { Smartphone, Search, Bell, Trophy, LogIn, LogOut, User, Shield, X, ArrowLeft, Sparkles, CheckCircle2, Users, Sun, Moon, MessageCircle } from 'lucide-react';
 import { getUserNotifications, getReadNotificationIds, getUserConversations, getDistinctUnreadSendersCount } from './utils/messagingUtils';
 import { updateActiveUserPresence } from './utils/presenceUtils';
 import { isUserMatchingAudience } from './utils/audienceUtils';
@@ -956,30 +956,6 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Anti-doxxing helper function: checks phone numbers, email, links, or matric numbers
-  const checkDoxxingThreats = (text: string): boolean => {
-    const phoneRegex = /(\+?234|0)[789][01]\d{8}/;
-    const urlRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|www\.[^\s]+)/i;
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-
-    return phoneRegex.test(text) || urlRegex.test(text) || emailRegex.test(text);
-  };
-
-  // Redact sensitive patterns from text
-  const sanitizeText = (text: string): string => {
-    let sanitized = text;
-    const phoneRegex = /(\+?234|0)[\s-]*[789][01][\s-]*\d{3,4}[\s-]*\d{4}/g;
-    const genericDigitsRegex = /\b\d{4}[\s-]?\d{3,4}[\s-]?\d{3,4}\b/g;
-    const urlRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|t\.me\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(com|ng|edu|org|net|io|me)\b[^\s]*)/gi;
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-
-    sanitized = sanitized.replace(urlRegex, '(******)');
-    sanitized = sanitized.replace(emailRegex, '(******)');
-    sanitized = sanitized.replace(phoneRegex, '(******)');
-    sanitized = sanitized.replace(genericDigitsRegex, '(******)');
-    return sanitized;
-  };
-
   // Handlers for Feed
   const handleLikeClick = (post: Post) => {
     setPosts((prev) =>
@@ -1042,7 +1018,7 @@ export const App: React.FC = () => {
   };
 
   const handleEditPost = (postId: string, newContent: string) => {
-    const cleanContent = sanitizeText(newContent.trim());
+    const cleanContent = newContent.trim();
     if (!cleanContent) return;
     const nowIso = new Date().toISOString();
 
@@ -1193,7 +1169,7 @@ export const App: React.FC = () => {
     pollOptA?: string;
     pollOptB?: string;
   }) => {
-    const cleanContent = sanitizeText(data.content);
+    const cleanContent = data.content.trim();
     const targetDept = data.targetDepartment || 'General Campus';
     const isPriority = targetDept !== 'General Campus';
 
@@ -1267,7 +1243,7 @@ export const App: React.FC = () => {
     replyToNickname?: string,
     imageUrl?: string
   ) => {
-    const cleanText = sanitizeText(commentText);
+    const cleanText = commentText.trim();
 
     const newComment: Comment = {
       id: `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -2274,27 +2250,37 @@ export const App: React.FC = () => {
             return (
               <div
                 key={`modal_profile_${idx}`}
-                className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+                className="fixed inset-0 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150"
                 style={{ zIndex: stackZIndex }}
               >
-                <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
-                  <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
+                <div className="w-full h-full max-w-3xl mx-auto bg-slate-50 flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
+                  <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 sm:px-6 flex items-center justify-between border-b border-teal-900/40 shrink-0">
                     <div className="flex items-center gap-2.5">
+                      <button
+                        onClick={closeModalUI}
+                        className="p-1.5 -ml-1.5 rounded-xl bg-teal-900/60 hover:bg-teal-900 text-teal-100 hover:text-white transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+                        title="Return to previous page"
+                      >
+                        <ArrowLeft size={18} />
+                        <span>Back</span>
+                      </button>
+                      <div className="h-4 w-px bg-teal-700/60 mx-1" />
                       <AvatarIcon avatarKey={userProfile?.avatarKey || 'caduceus'} avatarUrl={userProfile?.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
                       <div>
-                        <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
+                        <h2 className="font-extrabold text-xs sm:text-sm text-white">Student Profile</h2>
                         <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
                       </div>
                     </div>
                     <button
                       onClick={closeModalUI}
-                      className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
+                      className="p-2 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors cursor-pointer"
+                      title="Close"
                     >
                       <X size={18} />
                     </button>
                   </div>
 
-                  <div className="overflow-y-auto p-2 sm:p-4">
+                  <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                     <ProfileScreen
                       userProfile={userProfile}
                       allPosts={posts}
@@ -2336,7 +2322,6 @@ export const App: React.FC = () => {
                 userProfile={userProfile}
                 onClose={closeModalUI}
                 onSubmit={handleCreatePost}
-                checkDoxxingThreats={checkDoxxingThreats}
                 onOpenVerification={(data) => {
                   if (userProfile) {
                     const updated = {
@@ -2381,25 +2366,35 @@ export const App: React.FC = () => {
         <>
           {/* Profile Modal / Drawer (Triggered by Top-Left Profile Picture Avatar) */}
           {showProfileModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-              <div className="bg-slate-50 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative">
-                <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 px-4 flex items-center justify-between border-b border-teal-900/40">
+            <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
+              <div className="w-full h-full max-w-3xl mx-auto bg-slate-50 flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
+                <div className="sticky top-0 z-10 bg-teal-800 text-white p-3.5 sm:px-6 flex items-center justify-between border-b border-teal-900/40 shrink-0">
                   <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={closeModalUI}
+                      className="p-1.5 -ml-1.5 rounded-xl bg-teal-900/60 hover:bg-teal-900 text-teal-100 hover:text-white transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+                      title="Return to previous page"
+                    >
+                      <ArrowLeft size={18} />
+                      <span>Back</span>
+                    </button>
+                    <div className="h-4 w-px bg-teal-700/60 mx-1" />
                     <AvatarIcon avatarKey={userProfile?.avatarKey || 'caduceus'} avatarUrl={userProfile?.avatarUrl} className="w-8 h-8 rounded-full border border-teal-300" />
                     <div>
-                      <h2 className="font-extrabold text-sm text-white">Student Profile Check</h2>
+                      <h2 className="font-extrabold text-xs sm:text-sm text-white">Student Profile</h2>
                       <p className="text-[10px] text-teal-200">FUHSI Ila-Orangun Student Account</p>
                     </div>
                   </div>
                   <button
                     onClick={closeModalUI}
-                    className="p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors"
+                    className="p-2 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-200 hover:text-white transition-colors cursor-pointer"
+                    title="Close"
                   >
                     <X size={18} />
                   </button>
                 </div>
 
-                <div className="overflow-y-auto p-2 sm:p-4">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                   <ProfileScreen
                     userProfile={userProfile}
                     allPosts={posts}
@@ -2509,7 +2504,6 @@ export const App: React.FC = () => {
               userProfile={userProfile}
               onClose={closeModalUI}
               onSubmit={handleCreatePost}
-              checkDoxxingThreats={checkDoxxingThreats}
               onOpenVerification={(data) => {
                 if (userProfile) {
                   const updated = {

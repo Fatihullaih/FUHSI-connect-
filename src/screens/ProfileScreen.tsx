@@ -464,26 +464,39 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       {showPointsBreakdown && (() => {
         const bd = getUserPointsBreakdown(myNickname, userProfile, allPosts, allComments);
         return (
-          <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-            <div className="bg-white max-w-md w-full rounded-3xl p-5 sm:p-6 border border-teal-200 shadow-2xl space-y-4 my-auto animate-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 text-teal-800 font-extrabold text-base">
-                  <Award className="w-5 h-5 text-teal-600" />
-                  <span>Reputation Points Breakdown</span>
+          <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden animate-in fade-in duration-150">
+            <div className="w-full h-full max-w-3xl mx-auto bg-white dark:bg-slate-900 flex flex-col shadow-2xl sm:border-x sm:border-slate-200 dark:sm:border-slate-800 overflow-hidden">
+              <div className="p-4 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 z-10">
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setShowPointsBreakdown(false)}
+                    className="p-1.5 -ml-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+                    title="Return to previous page"
+                  >
+                    <ArrowLeft size={18} />
+                    <span>Back</span>
+                  </button>
+                  <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+                  <div className="flex items-center gap-2 text-teal-800 dark:text-teal-400 font-extrabold text-sm sm:text-base">
+                    <Award className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                    <span>Reputation Points Breakdown</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowPointsBreakdown(false)}
-                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                  title="Close"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-500">
-                Official reputation calculation for <strong className="text-slate-800">{userProfile?.nickname || myNickname}</strong> based on campus activity:
-              </p>
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Official reputation calculation for <strong className="text-slate-800 dark:text-slate-200">{userProfile?.nickname || myNickname}</strong> based on campus activity:
+                </p>
 
-              <div className="space-y-2 text-xs">
+                <div className="space-y-2 text-xs">
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-800 block">👤 Profile Completion</span>
@@ -564,6 +577,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               >
                 Close Breakdown
               </button>
+              </div>
             </div>
           </div>
         );
@@ -571,28 +585,43 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* SETTINGS & PERSONAL DETAILS MODAL (Account Owner Only) */}
       {isEditingSettings && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden animate-in fade-in duration-150">
           <form 
             onSubmit={handleSave} 
-            className="bg-white max-w-lg w-full rounded-3xl p-5 sm:p-6 border border-teal-200 shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto animate-in zoom-in-95"
+            className="w-full h-full max-w-3xl mx-auto bg-white dark:bg-slate-900 flex flex-col shadow-2xl sm:border-x sm:border-slate-200 dark:sm:border-slate-800 overflow-hidden"
           >
             {/* Settings Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-teal-600" />
-                <div>
-                  <h2 className="font-black text-slate-900 text-sm sm:text-base">Account Settings</h2>
-                  <p className="text-[10px] text-slate-500 font-medium">Accessible only to you (Account Owner)</p>
+            <div className="p-4 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 z-10">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingSettings(false)}
+                  className="p-1.5 -ml-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+                  title="Return to previous page"
+                >
+                  <ArrowLeft size={18} />
+                  <span>Back</span>
+                </button>
+                <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                  <div>
+                    <h2 className="font-black text-slate-900 dark:text-slate-100 text-sm sm:text-base">Account Settings</h2>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Accessible only to you (Account Owner)</p>
+                  </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditingSettings(false)}
-                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition-colors"
+                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                title="Close"
               >
                 <X size={18} />
               </button>
             </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
 
             {/* Privacy Shield Notice */}
             <div className="p-3 bg-teal-50 border border-teal-200 rounded-2xl text-[11px] text-teal-900 font-medium flex items-start gap-2">

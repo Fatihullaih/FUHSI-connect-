@@ -12,6 +12,7 @@ import { isGuestAccount } from '../utils/userDbUtils';
 import { isUserFollowing, getFollowersCount, getFollowingCount, normalizeHandle } from '../utils/followUtils';
 import { 
   X, 
+  ArrowLeft,
   Award, 
   Calendar, 
   UserCheck, 
@@ -189,21 +190,31 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150"
       style={{ zIndex: zIndex ?? 70 }}
     >
-      <div className="bg-slate-50 w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative animate-in zoom-in-95">
+      <div className="w-full h-full max-w-3xl mx-auto bg-slate-50 flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
         {/* Header Banner */}
-        <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-5 sm:p-6 text-white relative">
-          <button
-            onClick={onClose}
-            className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-100 hover:text-white transition-colors cursor-pointer"
-            title="Close Profile Details"
-          >
-            <X size={18} />
-          </button>
+        <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-4 sm:p-6 text-white shrink-0 shadow-xs relative">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1 rounded-xl bg-teal-900/60 hover:bg-teal-900 text-teal-100 hover:text-white transition-colors flex items-center gap-1.5 font-bold text-xs sm:text-sm cursor-pointer"
+              title="Return to previous page"
+            >
+              <ArrowLeft size={18} />
+              <span>Back</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full bg-teal-900/60 hover:bg-teal-900 text-teal-100 hover:text-white transition-colors cursor-pointer"
+              title="Close Profile Details"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
-          <div className="flex items-center justify-between gap-3 pr-8 sm:pr-10">
+          <div className="flex items-center justify-between gap-3">
             {/* Left Column: Avatar + Handle / Username / Join Date */}
             <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
               {/* Clickable Profile Picture for Full-size View & Download */}

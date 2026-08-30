@@ -4,7 +4,7 @@ import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
 import { normalizeHandle, formatHandle, isUserFollowing, getFollowersList, getFollowingList } from '../utils/followUtils';
-import { X, Users, UserPlus, UserCheck } from 'lucide-react';
+import { X, ArrowLeft, Users, UserPlus, UserCheck } from 'lucide-react';
 
 interface FollowersListModalProps {
   targetNickname: string;
@@ -58,20 +58,32 @@ export const FollowersListModal: React.FC<FollowersListModalProps> = ({
   }, [activeList, activeTab, allUsers]);
 
   return (
-    <div className="fixed inset-0 z-80 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in-50">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+    <div className="fixed inset-0 z-80 w-full h-full bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden animate-in fade-in duration-150">
+      <div className="w-full h-full max-w-3xl mx-auto bg-white dark:bg-slate-900 flex flex-col shadow-2xl sm:border-x sm:border-slate-200 dark:sm:border-slate-800 overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <Users size={18} className="text-teal-600 dark:text-teal-400" />
-              <span>{formatHandle(cleanTarget)}</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Connection Directory</p>
+        <div className="p-4 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0 z-10">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 font-bold text-xs sm:text-sm cursor-pointer"
+              title="Return to previous page"
+            >
+              <ArrowLeft size={18} />
+              <span>Back</span>
+            </button>
+            <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+            <div>
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Users size={16} className="text-teal-600 dark:text-teal-400" />
+                <span>{formatHandle(cleanTarget)}</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Connection Directory</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            title="Close"
           >
             <X size={18} />
           </button>

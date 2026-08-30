@@ -14,6 +14,7 @@ import {
   Search, 
   User, 
   X, 
+  ArrowLeft,
   CheckCircle2, 
   SlidersHorizontal, 
   MessageCircle, 
@@ -1028,34 +1029,47 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
         const isHousing = detailsModalItem.isHousing || detailsModalItem.category?.toLowerCase().includes('housing') || detailsModalItem.category?.toLowerCase().includes('room');
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-            <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-auto relative max-h-[92vh] overflow-y-auto no-scrollbar">
+          <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
+            <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
               {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-black text-slate-800 text-sm tracking-wider uppercase">
-                    VIEW DETAILS
-                  </h2>
-                  {isHousing && (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-extrabold text-[10px] flex items-center gap-1">
-                      <Home size={11} /> Housing & Rent
-                    </span>
-                  )}
-                  {isSold && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px]">
-                      {soldInfo.soldBadgeText}
-                    </span>
-                  )}
+              <div className="p-4 sm:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 z-10">
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setDetailsModalItem(null)}
+                    className="p-1.5 -ml-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+                    title="Return to previous page"
+                  >
+                    <ArrowLeft size={18} />
+                    <span>Back</span>
+                  </button>
+                  <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-black text-slate-800 text-xs sm:text-sm tracking-wider uppercase">
+                      ITEM DETAILS
+                    </h2>
+                    {isHousing && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-extrabold text-[10px] flex items-center gap-1">
+                        <Home size={11} /> Housing & Rent
+                      </span>
+                    )}
+                    {isSold && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-extrabold text-[10px]">
+                        {soldInfo.soldBadgeText}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <button
                   onClick={() => setDetailsModalItem(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+                  className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                   title="Close"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
 
               {/* Large Photo Preview (Picture Only, No Video) */}
               <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 w-full h-64 sm:h-72">
@@ -1269,23 +1283,36 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
 
       {/* 6. MODAL: POST ITEM FORM */}
       {showSellModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-8 max-h-[92vh] overflow-y-auto no-scrollbar">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Post Item</h3>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  List an item or accommodation for verified campus students
-                </p>
+        <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
+          <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
+            <div className="p-4 sm:px-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0 z-10">
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => setShowSellModal(false)}
+                  className="p-1.5 -ml-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+                  title="Return to previous page"
+                >
+                  <ArrowLeft size={18} />
+                  <span>Back</span>
+                </button>
+                <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Post Item</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    List an item or accommodation for verified campus students
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => setShowSellModal(false)} 
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold cursor-pointer"
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                title="Close"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
             {sellSuccessMsg ? (
               <div className="p-6 bg-emerald-50 text-emerald-900 rounded-2xl text-center space-y-2">
                 <CheckCircle2 size={32} className="text-emerald-600 mx-auto" />
@@ -1535,6 +1562,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                 </button>
               </form>
             )}
+            </div>
           </div>
         </div>
       )}

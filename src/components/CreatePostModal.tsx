@@ -1,11 +1,23 @@
 import React, { useState, useMemo } from 'react';
 import { PostCategory, UserProfile } from '../types';
 import { compressImageFile } from '../utils/imageUtils';
-import { AvatarIcon } from './AvatarIcon';
 import { VerificationModal } from './VerificationModal';
 import { INITIAL_USER_PROFILE } from '../data/initialData';
-import { getUserIdentitySubtitle, isGuestAccount } from '../utils/userDbUtils';
-import { X, Sparkles, Send, ShieldCheck, BarChart2, AlertTriangle, Image as ImageIcon, Video as VideoIcon, Upload, Trash2, Building2, Bell, Crown, Lock, Plus } from 'lucide-react';
+import { 
+  X, 
+  ArrowLeft,
+  Sparkles, 
+  Send, 
+  ShieldCheck, 
+  BarChart2, 
+  AlertTriangle, 
+  Image as ImageIcon, 
+  Video as VideoIcon, 
+  Upload, 
+  Trash2, 
+  Lock, 
+  Plus 
+} from 'lucide-react';
 
 interface CreatePostModalProps {
   userProfile?: UserProfile | null;
@@ -28,32 +40,8 @@ interface CreatePostModalProps {
     }
   ) => void;
   onCreatePost?: (content: string, category: PostCategory, customNickname?: string) => void;
-  checkDoxxingThreats?: (text: string) => boolean;
   onOpenVerification?: (data?: any) => void;
 }
-
-// Target Audience Options - General Campus is Priority 1 listed first, followed by Faculties & Dept Abbreviations
-const TARGET_AUDIENCE_OPTIONS = [
-  { label: '🌟 General Campus (Broadcast to All)', value: 'General Campus' },
-  // Faculties (automatically synchronizes all departments inside)
-  { label: '🏛️ Faculty of Allied Health Sciences (NSC, MLS, DPT, AUD, EHS, ITH, HND, PRT)', value: 'Faculty of Allied Health Sciences' },
-  { label: '🏛️ Faculty of Basic Medical Sciences (MBBS, PHM)', value: 'Faculty of Basic Medical Sciences' },
-  { label: '🏛️ Faculty of Science (BCH, MCB, BMB)', value: 'Faculty of Science' },
-  // Department Abbreviations
-  { label: '🩺 MBBS - Medicine & Surgery', value: 'MBBS' },
-  { label: '💉 NSC - Nursing Science', value: 'NSC' },
-  { label: '🔬 MLS - Medical Laboratory Science', value: 'MLS' },
-  { label: '🦿 DPT - Doctor of Physiotherapy', value: 'DPT' },
-  { label: '👂 AUD - Audiology', value: 'AUD' },
-  { label: '💊 PHM - Pharmacology', value: 'PHM' },
-  { label: '🍎 HND - Nutrition & Dietetics', value: 'HND' },
-  { label: '💻 ITH - Info Tech & Health Informatics', value: 'ITH' },
-  { label: '🧫 MCB - Microbiology', value: 'MCB' },
-  { label: '🧬 BCH - Biochemistry', value: 'BCH' },
-  { label: '🧪 BMB - Biotech & Molecular Biology', value: 'BMB' },
-  { label: '🌿 EHS - Environmental Health Science', value: 'EHS' },
-  { label: '🦶 PRT - Prosthetics & Orthotics', value: 'PRT' },
-];
 
 export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   userProfile,
@@ -62,7 +50,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onClose,
   onSubmit,
   onCreatePost,
-  checkDoxxingThreats,
   onOpenVerification,
 }) => {
   const currentUser = userProfile || user || INITIAL_USER_PROFILE;
@@ -99,7 +86,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   }, [currentUser]);
 
   const [content, setContent] = useState('');
-  const [targetDepartment, setTargetDepartment] = useState('General Campus');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [showImageInput, setShowImageInput] = useState(false);
   const [videoUri, setVideoUri] = useState('');
@@ -110,7 +96,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [hasPoll, setHasPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
-  const [doxxingWarning, setDoxxingWarning] = useState(false);
 
   const handleAddPollOption = () => {
     setPollOptions((prev) => [...prev, '']);
@@ -130,15 +115,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   };
 
   if (isOpen === false) return null;
-
-  const handleContentChange = (text: string) => {
-    setContent(text);
-    if (checkDoxxingThreats && text.trim()) {
-      setDoxxingWarning(checkDoxxingThreats(text));
-    } else {
-      setDoxxingWarning(false);
-    }
-  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -257,7 +233,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
       onSubmit({
         content: content.trim(),
         department: currentUser?.department || 'General',
-        targetDepartment: targetDepartment,
+        targetDepartment: 'General Campus',
         category: 'General',
         imageUrl: imageUrls[0] || undefined,
         imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
@@ -274,101 +250,61 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     setContent('');
     setImageUrls([]);
     setVideoUri('');
-    setTargetDepartment('General Campus');
     setPollQuestion('');
     setPollOptions(['', '']);
     setHasPoll(false);
     onClose();
   };
 
-  const nickname = currentUser?.nickname || '@FUHSIStudent';
-
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
+      <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+        <div className="p-4 sm:px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-2xs z-10">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
-              <Sparkles size={18} />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-base">Create Campus Post</h3>
-              <p className="text-xs text-slate-500">Share updates, ask questions, or attach lecture diagrams</p>
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5 font-bold text-xs sm:text-sm cursor-pointer"
+              title="Return to previous page"
+            >
+              <ArrowLeft size={18} />
+              <span>Back</span>
+            </button>
+            <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">Create Campus Post</h3>
+                <p className="text-[11px] text-slate-500">Share updates</p>
+              </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Close"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Form Content Scrollable */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
-          {/* Handle Identity Bar (Real name hidden) */}
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-xs">
-                  <AvatarIcon avatarKey={currentUser?.avatarKey} size={16} />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">{nickname}</span>
-                  <span className="text-[10px] text-slate-500 font-medium">
-                    {getUserIdentitySubtitle(currentUser, currentUser?.department, currentUser?.level)}
-                  </span>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-1 rounded-lg border border-teal-200">
-                {isGuestAccount(currentUser) ? 'Guest' : 'Student Handle'}
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/60">
-              🔒 Your real name is strictly hidden from peers — posts appear under your handle <span className="font-bold text-slate-700">{nickname}</span>.
-            </p>
-          </div>
-
-          {/* Doxxing / Privacy Alert */}
-          {doxxingWarning && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-              <span>Anti-Doxxing Guard: Sensitive contacts detected. Numbers or links will be auto-redacted.</span>
-            </div>
-          )}
-
-          {/* Target Feed / Campus Faculty Selector (OPTIONAL) */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Building2 size={14} className="text-teal-600" />
-              Target Audience / Campus Faculty <span className="text-[10px] font-medium text-slate-400">(Optional)</span>
-            </label>
-            <select
-              value={targetDepartment}
-              onChange={(e) => setTargetDepartment(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors cursor-pointer"
-            >
-              {TARGET_AUDIENCE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
+        {/* Form Content */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Post Content Area */}
           <div>
             <textarea
               rows={4}
               value={content}
-              onChange={(e) => handleContentChange(e.target.value)}
+              onChange={(e) => setContent(e.target.value)}
               placeholder="What's happening?"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              autoFocus
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors resize-none placeholder:text-slate-400 font-medium"
             />
           </div>
 
-          {/* Attachments Bar (Image & Premium Video) */}
+          {/* Attachments Actions (Image, Video, Poll) */}
           <div className="border-t border-slate-100 pt-3 space-y-3">
             <div className="flex items-center gap-4 flex-wrap">
               {/* Image Toggle */}
@@ -400,6 +336,16 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                     <Lock size={10} /> VERIFIED ONLY
                   </span>
                 )}
+              </button>
+
+              {/* Poll Toggle */}
+              <button
+                type="button"
+                onClick={() => setHasPoll(!hasPoll)}
+                className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline cursor-pointer"
+              >
+                <BarChart2 size={16} />
+                <span>{hasPoll ? 'Remove Poll' : '+ Attach Poll'}</span>
               </button>
             </div>
 
@@ -525,21 +471,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 )}
               </div>
             )}
-          </div>
 
-          {/* Campus Poll Options */}
-          <div className="border-t border-slate-100 pt-3">
-            <button
-              type="button"
-              onClick={() => setHasPoll(!hasPoll)}
-              className="text-xs font-bold text-teal-700 flex items-center gap-1.5 hover:underline mb-2 cursor-pointer"
-            >
-              <BarChart2 size={16} />
-              <span>{hasPoll ? 'Remove Campus Poll' : '+ Attach Student Poll'}</span>
-            </button>
-
+            {/* Poll Input Section */}
             {hasPoll && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3 mt-2">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                 <div>
                   <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                     Poll Question
@@ -562,7 +497,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                       <input
                         type="text"
                         placeholder={`Option ${String.fromCharCode(65 + index)} (e.g. ${
-                          index === 0 ? '5 Courses' : index === 1 ? '8 Courses' : index === 2 ? '12 Courses' : 'Option Choice'
+                          index === 0 ? 'Option A' : index === 1 ? 'Option B' : 'Option Choice'
                         })`}
                         value={optText}
                         onChange={(e) => handleUpdatePollOption(index, e.target.value)}
@@ -594,30 +529,23 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             )}
           </div>
 
-          {/* Footer Submit Bar */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
-              <ShieldCheck size={14} className="text-teal-600" />
-              <span>Anti-Doxxing Safeguard Active</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!content.trim()}
-                className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs px-5 py-2 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-              >
-                <Send size={14} />
-                <span>Publish Post</span>
-              </button>
-            </div>
+          {/* Footer Actions: Cancel | Publish Post */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!content.trim()}
+              className="bg-teal-700 hover:bg-teal-800 disabled:opacity-40 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+            >
+              <Send size={14} />
+              <span>Publish Post</span>
+            </button>
           </div>
         </form>
       </div>
@@ -642,7 +570,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 <span>Verification Benefits Include:</span>
               </div>
               <ul className="space-y-1 text-[11px] text-slate-700 font-medium">
-                <li className="flex items-center gap-1.5">✓ Upload any video posts</li>
+                <li className="flex items-center gap-1.5">✓ Upload video posts</li>
                 <li className="flex items-center gap-1.5">✓ Verified checkmark across the platform</li>
                 <li className="flex items-center gap-1.5">✓ Higher trust and marketplace credibility</li>
               </ul>
@@ -682,5 +610,3 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     </div>
   );
 };
-
-

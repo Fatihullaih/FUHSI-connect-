@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Post, Comment, PostCategory, UserProfile } from '../types';
 import { PostCard } from '../components/PostCard';
-import { INITIAL_USER_PROFILE } from '../data/initialData';
 import { generateMorePosts, isDemoPost } from '../utils/postGenerator';
 import { getTimestampMs } from '../utils/dateUtils';
 import { 
-  Plus, 
   Loader2,
   RefreshCw,
   SquarePen,
   ArrowUp,
   Sparkles,
-  Users,
   MessageSquarePlus
 } from 'lucide-react';
 
@@ -44,8 +41,6 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   userProfile,
   user,
   posts = [],
-  selectedFilter: externalFilter,
-  onFilterSelect,
   onLikeClick,
   onBookmarkClick,
   onCommentClick,
@@ -62,7 +57,6 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   onAddComment,
   onFlagPost,
 }) => {
-  const [internalFilter, setInternalFilter] = useState<string>('All Campus');
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [autoRefreshNotice, setAutoRefreshNotice] = useState<string | null>(null);
 
@@ -72,10 +66,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   const [hasReachedEnd, setHasReachedEnd] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const loadCountRef = useRef(0);
-  const MAX_LOAD_BATCHES = 3; // Stops at the last batch of posts
-
-  const currentUser = userProfile || user || INITIAL_USER_PROFILE;
-  const currentFilter = externalFilter !== undefined ? externalFilter : internalFilter;
+  const MAX_LOAD_BATCHES = 3;
 
   // Handle scroll detection for Back to Top button
   useEffect(() => {
@@ -102,31 +93,6 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  const handleSelectFilter = (cat: string) => {
-    if (onFilterSelect) {
-      onFilterSelect(cat);
-    } else {
-      setInternalFilter(cat);
-    }
-  };
-
-  const filterOptions = [
-    'All Campus',
-    'MBBS',
-    'NSC',
-    'MLS',
-    'DPT',
-    'AUD',
-    'PHM',
-    'HND',
-    'ITH',
-    'MCB',
-    'BCH',
-    'BMB',
-    'EHS',
-    'PRT',
-  ];
 
   // Infinite Scroll Trigger Function with distinct end
   const loadMorePosts = useCallback(() => {
@@ -178,31 +144,10 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
   // Combine initial posts and extra loaded posts (excluding any demo posts)
   const allCombinedPosts = [...posts, ...extraPosts].filter((post) => !isDemoPost(post));
 
-  // Filter posts by selected department/category
-  let filteredPosts = allCombinedPosts.filter((post) => {
-    if (post.status === 'Removed') return false;
-
-    if (currentFilter !== 'All Campus' && currentFilter !== 'All') {
-      const dept = post.department || post.authorDepartment || '';
-      const targetDept = post.targetDepartment || '';
-      const cat = post.category || '';
-
-      const isGeneralPost = !targetDept || targetDept === 'General Campus' || targetDept === 'General' || targetDept === 'All';
-
-      const matchesFilter =
-        isGeneralPost ||
-        dept.toLowerCase().includes(currentFilter.toLowerCase()) ||
-        targetDept.toLowerCase().includes(currentFilter.toLowerCase()) ||
-        cat.toLowerCase() === currentFilter.toLowerCase();
-
-      if (!matchesFilter) return false;
-    }
-
-    return true;
-  });
-
-  // Strictly chronological: Latest posted / newest thread appears FIRST
-  filteredPosts.sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
+  // Filter removed posts and sort chronologically (newest first)
+  const activePosts = allCombinedPosts
+    .filter((post) => post.status !== 'Removed')
+    .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
   return (
     <div className="py-4 px-3 sm:px-4 max-w-2xl mx-auto pb-28 space-y-3">
@@ -213,34 +158,15 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
             <Sparkles size={15} className="text-teal-300" />
             <span>{autoRefreshNotice}</span>
           </span>
-          <button onClick={() => setAutoRefreshNotice(null)} className="text-teal-200 hover:text-white font-black text-sm">
+          <button onClick={() => setAutoRefreshNotice(null)} className="text-teal-200 hover:text-white font-black text-sm cursor-pointer">
             ✕
           </button>
         </div>
       )}
 
-      {/* Category / Department Horizontal Pill Selector */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-2.5 shadow-xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          {filterOptions.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => handleSelectFilter(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transform-gpu transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer ${
-                currentFilter === cat
-                  ? 'bg-teal-800 text-white shadow-xs scale-102'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-              }`}
-            >
-              {cat === 'All Campus' ? '🌟 All Campus' : cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Chronological Feed */}
       <div className="space-y-3">
-        {filteredPosts.length === 0 ? (
+        {activePosts.length === 0 ? (
           <div className="py-12 px-6 bg-white rounded-2xl border border-slate-200 text-center space-y-4 shadow-xs">
             <div className="w-14 h-14 bg-teal-50 text-teal-700 rounded-2xl flex items-center justify-center mx-auto border border-teal-200/80">
               <MessageSquarePlus size={28} />
@@ -248,9 +174,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
             <div className="max-w-sm mx-auto space-y-1">
               <h3 className="text-base font-extrabold text-slate-900">No Campus Posts Yet</h3>
               <p className="text-xs text-slate-500 font-medium">
-                {currentFilter !== 'All Campus'
-                  ? `No active posts found in "${currentFilter}". Select "All Campus" or create the first post!`
-                  : 'Be the first to share an update, academic question, or announcement with the university community.'}
+                Be the first to share an update, academic question, or announcement with the university community.
               </p>
             </div>
             <button
@@ -269,7 +193,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
           </div>
         ) : (
           <>
-            {filteredPosts.map((post) => (
+            {activePosts.map((post) => (
               <PostCard
                 key={post.id}
                 post={post}
@@ -302,7 +226,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
                 ) : (
                   <button
                     onClick={loadMorePosts}
-                    className="text-xs font-bold text-slate-500 hover:text-teal-800 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5"
+                    className="text-xs font-bold text-slate-500 hover:text-teal-800 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <RefreshCw size={14} />
                     <span>Load older posts...</span>
@@ -320,7 +244,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
                 </div>
                 <button
                   onClick={scrollToTop}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
                 >
                   <ArrowUp size={15} />
                   <span>Back to Top</span>
@@ -335,7 +259,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
       {showBackToTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-20 left-4 sm:left-8 z-40 bg-slate-900/90 hover:bg-slate-900 active:scale-95 text-white rounded-full p-3 shadow-xl flex items-center gap-1.5 transition-all border border-slate-700/60"
+          className="fixed bottom-20 left-4 sm:left-8 z-40 bg-slate-900/90 hover:bg-slate-900 active:scale-95 text-white rounded-full p-3 shadow-xl flex items-center gap-1.5 transition-all border border-slate-700/60 cursor-pointer"
           title="Back to Top"
         >
           <ArrowUp className="w-5 h-5 text-white" />
@@ -352,7 +276,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({
             onCreatePost('', 'General');
           }
         }}
-        className="fixed bottom-20 right-4 sm:right-8 z-40 bg-teal-700 hover:bg-teal-800 active:scale-95 text-white rounded-full p-4 sm:px-5 sm:py-3.5 shadow-2xl flex items-center gap-2 transition-all hover:scale-105 border border-teal-500/40 group"
+        className="fixed bottom-20 right-4 sm:right-8 z-40 bg-teal-700 hover:bg-teal-800 active:scale-95 text-white rounded-full p-4 sm:px-5 sm:py-3.5 shadow-2xl flex items-center gap-2 transition-all hover:scale-105 border border-teal-500/40 group cursor-pointer"
         title="Post to Campus Feed"
       >
         <SquarePen className="w-5 h-5 text-white transition-transform group-hover:rotate-6" />

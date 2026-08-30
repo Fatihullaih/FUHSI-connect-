@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
+  ArrowLeft,
   ShieldCheck, 
   ShieldAlert,
   CheckCircle, 
@@ -166,18 +167,27 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="bg-white max-w-2xl w-full rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col relative animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
+      <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
         
         {/* Top Bar Navigation */}
-        <div className="bg-slate-950 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center text-sky-400">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-black text-lg text-white tracking-tight flex items-center gap-2">
-                <span>Get Verified</span>
+        <div className="bg-slate-950 text-white p-4 sm:px-6 flex items-center justify-between border-b border-slate-800 shrink-0 z-10">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
+              title="Return to previous page"
+            >
+              <ArrowLeft size={18} />
+              <span>Back</span>
+            </button>
+            <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center text-sky-400">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h2 className="font-black text-sm sm:text-base text-white tracking-tight">
+                Get Verified
               </h2>
             </div>
           </div>
@@ -191,7 +201,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
         </div>
 
         {/* Scrollable Main Content */}
-        <div className="overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
           {/* Intro Description */}
           <div className="bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-2 border border-slate-800">

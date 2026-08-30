@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, MessageSquare, Heart, Bookmark, Send, CornerDownRight, Maximize2, Trash2, AlertTriangle, BarChart2, Check, Image as ImageIcon, Edit3, Lock, ShieldCheck, Clock } from 'lucide-react';
+import { X, ArrowLeft, MessageSquare, Heart, Bookmark, Send, CornerDownRight, Maximize2, Trash2, AlertTriangle, BarChart2, Check, Image as ImageIcon, Edit3, Lock, ShieldCheck, Clock } from 'lucide-react';
 import { Post, Comment, UserProfile, PollOption } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
@@ -310,25 +310,37 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-900/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150"
       style={{ zIndex: zIndex ?? 75 }}
     >
-      <div className="bg-white rounded-3xl max-w-xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150 my-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/90 shrink-0">
+      <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
+        {/* Full-width Sticky Header */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-200 bg-white/95 backdrop-blur-md shrink-0 z-10 shadow-2xs">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-teal-700" />
-            <h2 className="font-extrabold text-slate-900 text-sm sm:text-base">Thread Discussion</h2>
+            <button
+              onClick={onClose}
+              className="p-1.5 -ml-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5 font-bold text-xs sm:text-sm cursor-pointer"
+              title="Return to previous page"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-800" />
+              <span>Back</span>
+            </button>
+            <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-teal-700" />
+              <h2 className="font-extrabold text-slate-900 text-sm sm:text-base">Thread Discussion</h2>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+            className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {/* Main Post Card */}
           {(() => {
             const isMyPost = Boolean(
