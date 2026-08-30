@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { UserProfile, Post, Comment } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { UserProfile, Post, Comment, FollowRecord } from '../types';
 import { compressImageFile } from '../utils/imageUtils';
 import { calculateUserPoints, getUserPointsBreakdown } from '../utils/reputationUtils';
+import { getFollowersCount, getFollowingCount, normalizeHandle } from '../utils/followUtils';
+import { FollowersListModal } from '../components/FollowersListModal';
 import { 
   User, 
   Lock, 
@@ -13,6 +15,7 @@ import {
   Link, 
   Save, 
   UserPlus, 
+  Users,
   X, 
   MessageSquare, 
   FileText, 
@@ -46,6 +49,8 @@ interface ProfileScreenProps {
   userProfile: UserProfile | null;
   allPosts?: Post[];
   allComments?: Comment[];
+  allFollows?: FollowRecord[];
+  allUsers?: UserProfile[];
   bookmarkedPostIds?: string[];
   onSaveProfile: (
     nickname: string,
@@ -76,6 +81,7 @@ interface ProfileScreenProps {
   onDeletePost?: (postId: string) => void;
   onEditPost?: (postId: string, newContent: string) => void;
   onDeleteComment?: (commentId: string) => void;
+  onToggleFollow?: (targetNickname: string) => void;
   onLogout?: () => void;
   onClose?: () => void;
 }
@@ -84,6 +90,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   userProfile,
   allPosts = [],
   allComments = [],
+  allFollows = [],
+  allUsers = [],
   bookmarkedPostIds = [],
   onSaveProfile,
   onSubmitVerification,
@@ -95,6 +103,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onDeletePost,
   onEditPost,
   onDeleteComment,
+  onToggleFollow,
   onLogout,
   onClose,
 }) => {
@@ -104,6 +113,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [showPictureModal, setShowPictureModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showFollowersModal, setShowFollowersModal] = useState<{ open: boolean; tab: 'followers' | 'following' } | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [showPointsBreakdown, setShowPointsBreakdown] = useState(false);
 
@@ -157,6 +167,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Handle popstate for back button inside ProfileScreen
   useEffect(() => {
     const handlePopState = () => {
+      if (showFollowersModal) {
+        setShowFollowersModal(null);
+        return;
+      }
       if (confirmLogout) {
         setConfirmLogout(false);
         return;
@@ -177,7 +191,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [confirmLogout, showPictureModal, showPointsBreakdown, isEditingSettings]);
+  }, [showFollowersModal, confirmLogout, showPictureModal, showPointsBreakdown, isEditingSettings]);
 
   const departments = [
     'Medicine and Surgery (MBBS)',
@@ -204,15 +218,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // User posts (threads) sorted chronologically (newest first)
   const myNickname = userProfile?.nickname || '';
-  const normMyNick = myNickname ? myNickname.toLowerCase().replace(/^@/, '').trim() : '';
+  const normMyNick = useMemo(() => normalizeHandle(myNickname), [myNickname]);
 
   const myPosts = (allPosts || [])
     .filter((p) => {
       if (!p) return false;
-      const author = (p.authorNickname || p.nickname || (p as any).customNickname || '')
-        .toLowerCase()
-        .replace(/^@/, '')
-        .trim();
+      const author = normalizeHandle(p.authorNickname || p.nickname || (p as any).customNickname || '');
       return normMyNick && author === normMyNick;
     })
     .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
@@ -221,7 +232,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const myReplies = (allComments || [])
     .filter((c) => {
       if (!c) return false;
-      const author = (c.authorNickname || '').toLowerCase().replace(/^@/, '').trim();
+      const author = normalizeHandle(c.authorNickname || '');
       return normMyNick && author === normMyNick;
     })
     .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
@@ -239,6 +250,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const pointsEarned = calculateUserPoints(myNickname, userProfile, allPosts, allComments);
   const joinedDate = userProfile?.joinedDate || 'Jul 2026';
+
+  // Dynamic real Following & Followers counts (Calculated from actual stored accounts)
+  const myFollowersCount = useMemo(() => getFollowersCount(normMyNick, allFollows), [normMyNick, allFollows]);
+  const myFollowingCount = useMemo(() => getFollowingCount(normMyNick, allFollows), [normMyNick, allFollows]);
 
   const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -398,7 +413,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           )}
         </div>
 
-        {/* Stats Row: Total Threads & Total Points Earned (NO Followers/Following) */}
+        {/* Stats Row: Total Threads & Total Points Earned */}
         <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 text-center">
             <span className="text-xs font-bold text-slate-500 uppercase block">Total Threads</span>
@@ -419,6 +434,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Info size={12} className="text-teal-600 opacity-60 group-hover:opacity-100" />
             </span>
           </div>
+        </div>
+
+        {/* Real Following & Followers System (Calculated from actual accounts) */}
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-4 text-xs sm:text-sm font-extrabold text-slate-700">
+          <button
+            type="button"
+            onClick={() => setShowFollowersModal({ open: true, tab: 'following' })}
+            className="hover:text-teal-700 transition-colors cursor-pointer flex items-center gap-1.5 group"
+            title="View accounts you are following"
+          >
+            <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-teal-700">{myFollowingCount}</span>
+            <span className="text-slate-500 group-hover:text-teal-700 font-bold">Following</span>
+          </button>
+          <span className="text-slate-300 font-bold">·</span>
+          <button
+            type="button"
+            onClick={() => setShowFollowersModal({ open: true, tab: 'followers' })}
+            className="hover:text-teal-700 transition-colors cursor-pointer flex items-center gap-1.5 group"
+            title="View accounts following you"
+          >
+            <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-teal-700">{myFollowersCount}</span>
+            <span className="text-slate-500 group-hover:text-teal-700 font-bold">Followers</span>
+          </button>
         </div>
       </div>
 
@@ -1110,6 +1148,43 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onSubmitVerification={(data) => {
             onSubmitVerification?.(data);
           }}
+        />
+      )}
+
+      {/* Followers & Following List Modal */}
+      {showFollowersModal && (
+        <FollowersListModal
+          targetNickname={myNickname}
+          initialTab={showFollowersModal.tab}
+          allFollows={allFollows}
+          allUsers={allUsers}
+          currentUserNickname={myNickname}
+          onToggleFollow={onToggleFollow}
+          onSelectUser={(selectedNick) => {
+            setShowFollowersModal(null);
+            if (onAuthorClick) {
+              const dummyPost: Post = {
+                id: `author_${selectedNick}`,
+                authorNickname: selectedNick,
+                authorAvatarKey: 'caduceus',
+                authorBadgeType: 'NONE' as any,
+                authorBadgeTitle: '',
+                authorPoints: 0,
+                timeAgo: '',
+                category: 'General',
+                categoryTag: 'General',
+                content: '',
+                text: '',
+                timestamp: new Date().toISOString(),
+                likesCount: 0,
+                commentsCount: 0,
+                isQuarantined: false,
+                createdAt: '',
+              };
+              onAuthorClick(dummyPost);
+            }
+          }}
+          onClose={() => setShowFollowersModal(null)}
         />
       )}
     </div>

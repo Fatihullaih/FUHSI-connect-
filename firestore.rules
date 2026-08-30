@@ -72,6 +72,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Follows Collection
+    match /follows/{followId} {
+      allow read, write: if true;
+    }
+
     // Admins Collection
     match /admins/{adminId} {
       allow read, write: if true;

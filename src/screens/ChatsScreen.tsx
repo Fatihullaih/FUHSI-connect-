@@ -64,6 +64,16 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
   onClearInitialRecipient,
   allUsers = [],
 }) => {
+  if (isGuestAccount(userProfile)) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-6 text-center">
+        <span className="text-sm font-bold text-slate-400 dark:text-slate-500 tracking-wide select-none">
+          (Restricted)
+        </span>
+      </div>
+    );
+  }
+
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeConvId, setActiveConvId] = useState<string | null>(initialConversationId || null);

@@ -266,9 +266,9 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       .map((item) => item.post);
   }, [query, posts]);
 
-  // Perform Intelligent Search Matching for Marketplace Items
+  // Perform Intelligent Search Matching for Marketplace Items (Disabled for Guest accounts)
   const matchingHubItems = useMemo(() => {
-    if (!query.trim()) return [];
+    if (!query.trim() || isGuestAccount(userProfile)) return [];
 
     return (marketplaceItems || [])
       .filter((item) => {

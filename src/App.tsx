@@ -10,7 +10,7 @@ import {
 } from './data/initialData';
 import fuhsiLogo from './assets/images/fuhsi_logo_1785485694958.jpg';
 import { calculateUserPoints } from './utils/reputationUtils';
-import { getApprovedMembersCount, getStoredUsers, saveStoredUsers, upsertUser } from './utils/userDbUtils';
+import { getApprovedMembersCount, getStoredUsers, saveStoredUsers, upsertUser, isGuestAccount } from './utils/userDbUtils';
 import {
   fetchServerDb,
   pushServerDbSync,
@@ -22,6 +22,7 @@ import {
   mergeReports,
   mergeVerifCandidates,
   mergeDirectMessages,
+  mergeFollows,
 } from './utils/apiSync';
 import {
   subscribeUsers,
@@ -30,18 +31,22 @@ import {
   subscribeVerificationRequests,
   subscribeMarketplaceApproved,
   subscribeAllDirectMessages,
+  subscribeFollows,
   savePostToFirestore,
   deletePostFromFirestore,
   saveCommentToFirestore,
   saveMarketplaceApprovedToFirestore,
   saveVerificationRequestToFirestore,
   saveUserToFirestore,
+  saveFollowToFirestore,
+  deleteFollowFromFirestore,
   deleteMarketplaceApprovedFromFirestore,
   seedFirestoreInitialDataIfNeeded,
   purgeAllExceptAdminFromFirestore,
 } from './lib/firestoreSync';
 import { initTheme, getStoredTheme, setStoredTheme, ThemeMode } from './utils/themeUtils';
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption, DirectMessage } from './types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption, DirectMessage, FollowRecord } from './types';
+import { getStoredFollows, saveStoredFollows, toggleFollowState } from './utils/followUtils';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { CampusHubScreen } from './screens/CampusHubScreen';
@@ -184,6 +189,9 @@ export const App: React.FC = () => {
     return {};
   });
 
+  // Real Following & Followers State (Persisted & Synced across all devices)
+  const [allFollows, setAllFollows] = useState<FollowRecord[]>(() => getStoredFollows());
+
   // Active user bookmark IDs key
   const activeUserKey = (userProfile?.nickname || '').toLowerCase().replace(/^@/, '');
   const myBookmarkedPostIds = userBookmarksMap[activeUserKey] || [];
@@ -242,13 +250,13 @@ export const App: React.FC = () => {
   // - 2 different users sending unread messages = 2
   // - 3 different users = 3
   const unreadChatsCount = useMemo(() => {
-    if (!userProfile?.nickname) return 0;
+    if (!userProfile?.nickname || isGuestAccount(userProfile)) return 0;
     try {
       return getDistinctUnreadSendersCount(userProfile.nickname);
     } catch (e) {
       return 0;
     }
-  }, [userProfile?.nickname, notifTrigger]);
+  }, [userProfile?.nickname, userProfile?.accountType, notifTrigger]);
 
   // Auto Sync States to LocalStorage and Server Central Database
   useEffect(() => {
@@ -439,6 +447,15 @@ export const App: React.FC = () => {
       }
     });
 
+    // 7. Subscribe Following & Followers in real-time
+    const unsubFollows = subscribeFollows((fsFollows) => {
+      if (!isMounted || !fsFollows) return;
+      const localFollows = getStoredFollows();
+      const merged = mergeFollows(localFollows, fsFollows);
+      saveStoredFollows(merged);
+      setAllFollows((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+    });
+
     return () => {
       isMounted = false;
       unsubUsers();
@@ -447,6 +464,7 @@ export const App: React.FC = () => {
       unsubVerifs();
       unsubMarketplace();
       unsubDirectMessages();
+      unsubFollows();
     };
   }, []);
 
@@ -600,6 +618,14 @@ export const App: React.FC = () => {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated'));
         }
+      }
+
+      // 10. Sync Following & Followers
+      if (Array.isArray(db.follows)) {
+        const localFollows = getStoredFollows();
+        const mergedFollows = mergeFollows(localFollows, db.follows);
+        saveStoredFollows(mergedFollows);
+        setAllFollows((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedFollows) ? mergedFollows : prev));
       }
     };
 
@@ -1687,6 +1713,34 @@ export const App: React.FC = () => {
     return null;
   };
 
+  // Memoized all stored registered users for follower profile information
+  const allUsers = useMemo(() => {
+    return getStoredUsers();
+  }, [appTotalMembers, notifTrigger]);
+
+  // Real-time Follow / Unfollow Handler (Syncs locally, Firestore and Server DB)
+  const handleToggleFollow = useCallback((targetNickname: string) => {
+    if (!userProfile?.nickname) return;
+    const { updatedFollows, isNowFollowing, docId } = toggleFollowState(
+      userProfile.nickname,
+      targetNickname,
+      allFollows
+    );
+
+    setAllFollows(updatedFollows);
+    saveStoredFollows(updatedFollows);
+    pushServerDbSync({ follows: updatedFollows, replaceFollows: true } as any);
+
+    if (isNowFollowing) {
+      const record = updatedFollows.find((f) => f.id === docId);
+      if (record) {
+        saveFollowToFirestore(record).catch(console.error);
+      }
+    } else {
+      deleteFollowFromFirestore(docId).catch(console.error);
+    }
+  }, [userProfile?.nickname, allFollows]);
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-2 sm:p-4">
@@ -2198,6 +2252,8 @@ export const App: React.FC = () => {
                 userProfile={userProfile}
                 allPosts={posts}
                 allComments={comments}
+                allFollows={allFollows}
+                allUsers={allUsers}
                 zIndex={stackZIndex}
                 onClose={closeModalUI}
                 onLikeClick={handleLikeClick}
@@ -2206,6 +2262,7 @@ export const App: React.FC = () => {
                 onEditPost={handleEditPost}
                 onAuthorClick={openAuthorProfile}
                 onCommentClick={openPostDetail}
+                onToggleFollow={handleToggleFollow}
                 onStartChat={(recipientNickname, avatarKey, avatarUrl) => {
                   handleStartChat(recipientNickname, avatarKey, avatarUrl);
                 }}
@@ -2242,6 +2299,8 @@ export const App: React.FC = () => {
                       userProfile={userProfile}
                       allPosts={posts}
                       allComments={comments}
+                      allFollows={allFollows}
+                      allUsers={allUsers}
                       bookmarkedPostIds={myBookmarkedPostIds}
                       onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail) => {
                         const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
@@ -2261,6 +2320,7 @@ export const App: React.FC = () => {
                       onDeletePost={handleDeletePost}
                       onEditPost={handleEditPost}
                       onDeleteComment={handleDeleteComment}
+                      onToggleFollow={handleToggleFollow}
                       onClose={closeModalUI}
                     />
                   </div>
@@ -2344,6 +2404,8 @@ export const App: React.FC = () => {
                     userProfile={userProfile}
                     allPosts={posts}
                     allComments={comments}
+                    allFollows={allFollows}
+                    allUsers={allUsers}
                     bookmarkedPostIds={myBookmarkedPostIds}
                     onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail) => {
                       const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
@@ -2362,6 +2424,7 @@ export const App: React.FC = () => {
                     onAuthorClick={openAuthorProfile}
                     onDeletePost={handleDeletePost}
                     onDeleteComment={handleDeleteComment}
+                    onToggleFollow={handleToggleFollow}
                     onClose={closeModalUI}
                   />
                 </div>
@@ -2383,6 +2446,8 @@ export const App: React.FC = () => {
               userProfile={userProfile}
               allPosts={posts}
               allComments={comments}
+              allFollows={allFollows}
+              allUsers={allUsers}
               zIndex={70}
               onClose={closeModalUI}
               onLikeClick={handleLikeClick}
@@ -2390,6 +2455,7 @@ export const App: React.FC = () => {
               onDeletePost={handleDeletePost}
               onAuthorClick={openAuthorProfile}
               onCommentClick={openPostDetail}
+              onToggleFollow={handleToggleFollow}
               onStartChat={(recipientNickname, avatarKey, avatarUrl) => {
                 handleStartChat(recipientNickname, avatarKey, avatarUrl);
               }}

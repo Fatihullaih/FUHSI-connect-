@@ -1,4 +1,4 @@
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, ChatConversation, ChatReport } from '../types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, ChatConversation, ChatReport, FollowRecord } from '../types';
 import {
   isDemoUser,
   isDemoPost,
@@ -27,6 +27,7 @@ export interface ServerDbState {
   chatReports?: ChatReport[];
   chatRestrictions?: any[];
   chatViolations?: any[];
+  follows?: FollowRecord[];
   replaceUsers?: boolean;
   replacePosts?: boolean;
   replaceComments?: boolean;
@@ -34,6 +35,7 @@ export interface ServerDbState {
   replacePendingMarketplaceItems?: boolean;
   replaceVerificationRequests?: boolean;
   replaceReports?: boolean;
+  replaceFollows?: boolean;
 }
 
 export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserProfile[] {
@@ -283,6 +285,31 @@ export function mergeChatRestrictions(a: any[] = [], b: any[] = []): any[] {
   const map = new Map<string, any>();
   a.forEach((r) => r?.userNickname && map.set(r.userNickname.toLowerCase(), { ...r }));
   b.forEach((r) => r?.userNickname && map.set(r.userNickname.toLowerCase(), { ...(map.get(r.userNickname.toLowerCase()) || {}), ...r }));
+  return Array.from(map.values());
+}
+
+export function mergeFollows(a: FollowRecord[] = [], b: FollowRecord[] = []): FollowRecord[] {
+  const map = new Map<string, FollowRecord>();
+  const processFollow = (f: FollowRecord) => {
+    if (!f || !f.followerNickname || !f.followingNickname) return;
+    const cleanFollower = f.followerNickname.toLowerCase().replace(/^@/, '').trim();
+    const cleanFollowing = f.followingNickname.toLowerCase().replace(/^@/, '').trim();
+    if (!cleanFollower || !cleanFollowing || cleanFollower === cleanFollowing) return;
+    if (isDemoNickname(cleanFollower) || isDemoNickname(cleanFollowing)) return;
+    const key = `${cleanFollower}__${cleanFollowing}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        id: f.id || `${cleanFollower}__follows__${cleanFollowing}`,
+        followerNickname: f.followerNickname.startsWith('@') ? f.followerNickname : `@${cleanFollower}`,
+        followingNickname: f.followingNickname.startsWith('@') ? f.followingNickname : `@${cleanFollowing}`,
+        createdAt: f.createdAt || new Date().toISOString(),
+      });
+    }
+  };
+
+  a.forEach(processFollow);
+  b.forEach(processFollow);
+
   return Array.from(map.values());
 }
 

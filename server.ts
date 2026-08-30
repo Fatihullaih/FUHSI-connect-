@@ -16,6 +16,7 @@ import {
   mergeChatConversations,
   mergeChatReports,
   mergeChatRestrictions,
+  mergeFollows,
 } from './src/utils/apiSync';
 import {
   isDemoUser,
@@ -56,6 +57,7 @@ function sanitizeServerDb(dbObj: typeof DEFAULT_SERVER_DB): typeof DEFAULT_SERVE
     }),
     chatReports: (dbObj.chatReports || []).filter((cr: any) => !isDemoNickname(cr.reportedNickname) && !isDemoNickname(cr.reporterNickname)),
     chatRestrictions: (dbObj.chatRestrictions || []).filter((cr: any) => !isDemoNickname(cr.nickname) && !isDemoNickname(cr.userNickname)),
+    follows: (dbObj.follows || []).filter((f: any) => !isDemoNickname(f?.followerNickname) && !isDemoNickname(f?.followingNickname)),
   };
 }
 
@@ -90,6 +92,7 @@ function initAndLoadServerDb() {
         chatConversations: mergeChatConversations([], parsed.chatConversations || []),
         chatReports: mergeChatReports([], parsed.chatReports || []),
         chatRestrictions: mergeChatRestrictions([], parsed.chatRestrictions || []),
+        follows: mergeFollows([], parsed.follows || []),
       });
       persistServerDb();
       console.log('[DB Init] Loaded and sanitized central database from data/db.json on server disk.');
@@ -221,6 +224,14 @@ app.post('/api/db/sync', (req, res) => {
           activeDb.chatRestrictions = updates.chatRestrictions;
         } else {
           activeDb.chatRestrictions = mergeChatRestrictions(activeDb.chatRestrictions, updates.chatRestrictions);
+        }
+        changed = true;
+      }
+      if (Array.isArray(updates.follows)) {
+        if (updates.replaceFollows) {
+          activeDb.follows = updates.follows;
+        } else {
+          activeDb.follows = mergeFollows(activeDb.follows, updates.follows);
         }
         changed = true;
       }

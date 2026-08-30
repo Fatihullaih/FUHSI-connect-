@@ -10,7 +10,7 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, HelpDeskInquiry } from '../types';
+import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, DirectMessage, HelpDeskInquiry, FollowRecord } from '../types';
 import { isDemoUser, isDemoPost, isDemoNickname, isDemoComment, isDemoVerificationRequest, isDemoMarketplaceItem, isDemoDirectMessage } from '../utils/postGenerator';
 
 // Collection references
@@ -24,6 +24,7 @@ const REPORTS_COL = 'reports';
 const HELPDESK_COL = 'helpdesk_inquiries';
 const VERIF_CANDIDATES_COL = 'verif_candidates';
 const DIRECT_MESSAGES_COL = 'direct_messages';
+const FOLLOWS_COL = 'follows';
 const SETTINGS_COL = 'settings';
 const VERIFICATION_SETTINGS_DOC = 'verification_settings';
 
@@ -41,7 +42,7 @@ export function subscribeUsers(onUpdate: (users: UserProfile[]) => void) {
     });
     onUpdate(list);
   }, (err) => {
-    console.error('Firestore users subscription error:', err);
+    console.warn('Firestore users subscription fallback/warning:', err?.message || err);
   });
 }
 
@@ -118,7 +119,7 @@ export function subscribePosts(onUpdate: (posts: Post[]) => void) {
     list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     onUpdate(list);
   }, (err) => {
-    console.error('Firestore posts subscription error:', err);
+    console.warn('Firestore posts subscription fallback/warning:', err?.message || err);
   });
 }
 
@@ -160,7 +161,7 @@ export function subscribeComments(onUpdate: (comments: Comment[]) => void) {
     });
     onUpdate(list);
   }, (err) => {
-    console.error('Firestore comments subscription error:', err);
+    console.warn('Firestore comments subscription fallback/warning:', err?.message || err);
   });
 }
 
@@ -521,7 +522,7 @@ export function subscribeAllDirectMessages(onUpdate: (messages: DirectMessage[])
       onUpdate(list);
     },
     (err) => {
-      console.error('Firestore all direct messages subscription error:', err);
+      console.warn('Firestore all direct messages subscription fallback/warning:', err?.message || err);
     }
   );
 }
@@ -545,7 +546,7 @@ export function subscribeHelpDeskInquiries(onUpdate: (inquiries: HelpDeskInquiry
       onUpdate(list);
     },
     (err) => {
-      console.error('Firestore help desk inquiries subscription error:', err);
+      console.warn('Firestore help desk inquiries subscription fallback/warning:', err?.message || err);
     }
   );
 }
@@ -581,6 +582,60 @@ export async function updateHelpDeskInquiryStatus(inquiryId: string, status: 'PE
     console.error('Error updating Help Desk inquiry status:', err);
   }
 }
+
+/**
+ * Subscribe to all follow relationships in real-time
+ */
+export function subscribeFollows(onUpdate: (follows: FollowRecord[]) => void) {
+  return onSnapshot(
+    collection(db, FOLLOWS_COL),
+    (snapshot) => {
+      const list: FollowRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        const item = docSnap.data() as FollowRecord;
+        if (
+          item &&
+          item.followerNickname &&
+          item.followingNickname &&
+          !isDemoNickname(item.followerNickname) &&
+          !isDemoNickname(item.followingNickname)
+        ) {
+          list.push(item);
+        }
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('Firestore follows subscription fallback/warning:', err?.message || err);
+    }
+  );
+}
+
+/**
+ * Save single follow relationship to Firestore
+ */
+export async function saveFollowToFirestore(follow: FollowRecord): Promise<void> {
+  if (!follow || !follow.id || !follow.followerNickname || !follow.followingNickname) return;
+  if (isDemoNickname(follow.followerNickname) || isDemoNickname(follow.followingNickname)) return;
+  try {
+    await setDoc(doc(db, FOLLOWS_COL, follow.id), sanitizeForFirestore(follow), { merge: true });
+  } catch (err) {
+    console.error('Error saving follow relationship to Firestore:', err);
+  }
+}
+
+/**
+ * Delete a follow relationship from Firestore
+ */
+export async function deleteFollowFromFirestore(docId: string): Promise<void> {
+  if (!docId) return;
+  try {
+    await deleteDoc(doc(db, FOLLOWS_COL, docId));
+  } catch (err) {
+    console.error('Error deleting follow relationship from Firestore:', err);
+  }
+}
+
 
 
 

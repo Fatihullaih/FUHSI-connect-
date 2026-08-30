@@ -1,17 +1,22 @@
 import React, { useState, useMemo } from 'react';
-import { Post, Comment, BadgeType, UserProfile } from '../types';
+import { Post, Comment, BadgeType, UserProfile, FollowRecord } from '../types';
 import { AvatarIcon } from './AvatarIcon';
 import { VerificationBadge } from './VerificationBadge';
 import { PostCard } from './PostCard';
 import { ProfilePictureModal } from './ProfilePictureModal';
+import { FollowersListModal } from './FollowersListModal';
 import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
 import { calculateUserPoints } from '../utils/reputationUtils';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
+import { isGuestAccount } from '../utils/userDbUtils';
+import { isUserFollowing, getFollowersCount, getFollowingCount, normalizeHandle } from '../utils/followUtils';
 import { 
   X, 
   Award, 
   Calendar, 
   UserCheck, 
+  UserPlus,
+  Users,
   FileText, 
   MessageSquare,
   Lock,
@@ -32,6 +37,8 @@ interface AuthorProfileModalProps {
   allPosts?: Post[];
   posts?: Post[];
   allComments?: Comment[];
+  allFollows?: FollowRecord[];
+  allUsers?: UserProfile[];
   zIndex?: number;
   onClose: () => void;
   onLikeClick?: (post: Post) => void;
@@ -41,6 +48,7 @@ interface AuthorProfileModalProps {
   onDeletePost?: (postId: string) => void;
   onEditPost?: (postId: string, newContent: string) => void;
   onStartChat?: (recipientNickname: string, recipientAvatarKey?: string, recipientAvatarUrl?: string) => void;
+  onToggleFollow?: (targetNickname: string) => void;
 }
 
 export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => {
@@ -58,6 +66,8 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     allPosts = [],
     posts = [],
     allComments = [],
+    allFollows = [],
+    allUsers = [],
     zIndex,
     onClose,
     onLikeClick,
@@ -67,10 +77,12 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
     onDeletePost,
     onEditPost,
     onStartChat,
+    onToggleFollow,
   } = props;
 
   const [activeTab, setActiveTab] = useState<'threads' | 'replies'>('threads');
   const [showPictureModal, setShowPictureModal] = useState(false);
+  const [showFollowersModal, setShowFollowersModal] = useState<{ open: boolean; tab: 'followers' | 'following' } | null>(null);
 
   const badgeInfo = useMemo(() => {
     return getUserBadgeInfo(authorNickname, userProfile);
@@ -80,13 +92,17 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
 
   React.useEffect(() => {
     const handlePopState = () => {
+      if (showFollowersModal) {
+        setShowFollowersModal(null);
+        return;
+      }
       if (showPictureModal) {
         setShowPictureModal(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [showPictureModal]);
+  }, [showPictureModal, showFollowersModal]);
 
   // Derive username format
   const username = authorNickname.startsWith('@') 
@@ -97,6 +113,19 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
   const normCurrentUser = (currentUserNickname || userProfile?.nickname || '').toLowerCase().replace(/^@/, '').trim();
   const isViewingSelf = Boolean(normCurrentUser && normAuthor === normCurrentUser);
   const effectivePosts = (allPosts && allPosts.length > 0) ? allPosts : posts;
+
+  // Real, dynamic Following and Followers calculations
+  const isFollowingAuthor = useMemo(() => {
+    return isUserFollowing(normCurrentUser, normAuthor, allFollows);
+  }, [normCurrentUser, normAuthor, allFollows]);
+
+  const authorFollowersCount = useMemo(() => {
+    return getFollowersCount(normAuthor, allFollows);
+  }, [normAuthor, allFollows]);
+
+  const authorFollowingCount = useMemo(() => {
+    return getFollowingCount(normAuthor, allFollows);
+  }, [normAuthor, allFollows]);
 
   // Find all threads written by this author, sorted chronologically (newest first)
   const authorPosts = useMemo(() => {
@@ -212,20 +241,50 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
               </div>
             </div>
 
-            {/* Right Column: 💬 Chat Button positioned on opposite side */}
+            {/* Right Column: [Chat] and [Follow] / [Following] Action Buttons */}
             {!isViewingSelf && (
-              <div className="shrink-0 self-center">
+              <div className="shrink-0 flex items-center gap-2">
+                {!isGuestAccount(userProfile) && !isGuestAccount(authorNickname) && (
+                  <button
+                    id={`btn-chat-with-${normAuthor}`}
+                    onClick={() => {
+                      if (onStartChat) {
+                        onStartChat(authorNickname, authorAvatarKey, authorAvatarUrl);
+                      }
+                    }}
+                    className="inline-flex items-center justify-center px-3 py-1.5 bg-white/90 hover:bg-white text-teal-950 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border border-teal-200 cursor-pointer hover:shadow-md"
+                    title={`Chat with ${authorNickname}`}
+                  >
+                    <span>💬 Chat</span>
+                  </button>
+                )}
+
+                {/* Follow Button (Available for all account types: Student & Guest) */}
                 <button
-                  id={`btn-chat-with-${normAuthor}`}
+                  id={`btn-follow-${normAuthor}`}
                   onClick={() => {
-                    if (onStartChat) {
-                      onStartChat(authorNickname, authorAvatarKey, authorAvatarUrl);
+                    if (onToggleFollow) {
+                      onToggleFollow(authorNickname);
                     }
                   }}
-                  className="inline-flex items-center justify-center px-3.5 py-1.5 bg-white text-teal-900 hover:bg-teal-50 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border border-teal-200 cursor-pointer hover:shadow-md"
-                  title={`Chat with ${authorNickname}`}
+                  className={`inline-flex items-center justify-center px-3.5 py-1.5 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border cursor-pointer hover:shadow-md ${
+                    isFollowingAuthor
+                      ? 'bg-teal-950/80 text-teal-100 border-teal-400/80 hover:bg-rose-900/90 hover:text-white hover:border-rose-400'
+                      : 'bg-white text-teal-950 hover:bg-teal-50 border-white'
+                  }`}
+                  title={isFollowingAuthor ? `Unfollow ${authorNickname}` : `Follow ${authorNickname}`}
                 >
-                  <span>💬 Chat</span>
+                  {isFollowingAuthor ? (
+                    <span className="flex items-center gap-1.5">
+                      <UserCheck size={13} className="text-teal-300" />
+                      <span>Following</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <UserPlus size={13} className="text-teal-700" />
+                      <span>Follow</span>
+                    </span>
+                  )}
                 </button>
               </div>
             )}
@@ -245,6 +304,27 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
             </div>
             <div className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Total Points Earned</div>
           </div>
+        </div>
+
+        {/* Real Dynamic Following & Followers Row (Calculated from actual accounts) */}
+        <div className="bg-slate-50/90 border-b border-slate-200 py-2.5 px-4 flex items-center justify-center gap-3 text-xs font-black text-slate-700">
+          <button
+            type="button"
+            onClick={() => setShowFollowersModal({ open: true, tab: 'following' })}
+            className="hover:text-teal-700 transition-colors cursor-pointer flex items-center gap-1 group"
+          >
+            <span className="text-sm font-black text-slate-900 group-hover:text-teal-700">{authorFollowingCount}</span>
+            <span className="text-slate-500 group-hover:text-teal-700 font-bold">Following</span>
+          </button>
+          <span className="text-slate-300 font-bold">·</span>
+          <button
+            type="button"
+            onClick={() => setShowFollowersModal({ open: true, tab: 'followers' })}
+            className="hover:text-teal-700 transition-colors cursor-pointer flex items-center gap-1 group"
+          >
+            <span className="text-sm font-black text-slate-900 group-hover:text-teal-700">{authorFollowersCount}</span>
+            <span className="text-slate-500 group-hover:text-teal-700 font-bold">Followers</span>
+          </button>
         </div>
 
         {/* Tabs Row: Threads & Replies */}
@@ -396,6 +476,43 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
           avatarKey={authorAvatarKey}
           isOwner={false}
           onClose={() => setShowPictureModal(false)}
+        />
+      )}
+
+      {/* Followers & Following List Modal */}
+      {showFollowersModal && (
+        <FollowersListModal
+          targetNickname={authorNickname}
+          initialTab={showFollowersModal.tab}
+          allFollows={allFollows}
+          allUsers={allUsers}
+          currentUserNickname={currentUserNickname || userProfile?.nickname}
+          onToggleFollow={onToggleFollow}
+          onSelectUser={(selectedNick) => {
+            setShowFollowersModal(null);
+            if (onAuthorClick) {
+              const dummyPost: Post = {
+                id: `author_${selectedNick}`,
+                authorNickname: selectedNick,
+                authorAvatarKey: 'caduceus',
+                authorBadgeType: 'NONE' as any,
+                authorBadgeTitle: '',
+                authorPoints: 0,
+                timeAgo: '',
+                category: 'General',
+                categoryTag: 'General',
+                content: '',
+                text: '',
+                timestamp: new Date().toISOString(),
+                likesCount: 0,
+                commentsCount: 0,
+                isQuarantined: false,
+                createdAt: '',
+              };
+              onAuthorClick(dummyPost);
+            }
+          }}
+          onClose={() => setShowFollowersModal(null)}
         />
       )}
     </div>

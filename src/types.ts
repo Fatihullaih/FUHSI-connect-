@@ -247,6 +247,13 @@ export interface PreservedChatMessage {
   timestamp: string;
 }
 
+export interface FollowRecord {
+  id: string;
+  followerNickname: string;
+  followingNickname: string;
+  createdAt: string;
+}
+
 export interface ChatReport {
   id: string;
   conversationId: string;

@@ -36,6 +36,7 @@ import {
   MARKETPLACE_REPORT_REASONS 
 } from '../utils/marketplaceUtils';
 import { blockUser, getBlockedUsers, isUserBlocked } from '../utils/blockUtils';
+import { isGuestAccount } from '../utils/userDbUtils';
 
 interface CampusHubScreenProps {
   userProfile: UserProfile | null;
@@ -199,6 +200,16 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
   onDeleteMarketplaceItem,
   onAuthorClick,
 }) => {
+  if (isGuestAccount(userProfile)) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-6 text-center">
+        <span className="text-sm font-bold text-slate-400 dark:text-slate-500 tracking-wide select-none">
+          (Restricted)
+        </span>
+      </div>
+    );
+  }
+
   // Navigation & filter state
   const [activeView, setActiveView] = useState<'listings' | 'my_listings'>('listings');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');

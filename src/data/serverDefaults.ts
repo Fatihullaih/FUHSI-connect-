@@ -25,4 +25,5 @@ export const DEFAULT_SERVER_DB = {
   chatConversations: [],
   chatReports: [],
   chatRestrictions: [],
+  follows: [],
 };
