@@ -35,9 +35,12 @@ import {
   savePostToFirestore,
   deletePostFromFirestore,
   saveCommentToFirestore,
+  deleteCommentFromFirestore,
   saveMarketplaceApprovedToFirestore,
   saveVerificationRequestToFirestore,
+  deleteVerificationRequestFromFirestore,
   saveUserToFirestore,
+  deleteUserFromFirestore,
   saveFollowToFirestore,
   deleteFollowFromFirestore,
   deleteMarketplaceApprovedFromFirestore,
@@ -48,6 +51,15 @@ import { initTheme, getStoredTheme, setStoredTheme, ThemeMode } from './utils/th
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption, DirectMessage, FollowRecord } from './types';
 import { getStoredFollows, saveStoredFollows, toggleFollowState } from './utils/followUtils';
 import { toggleUserLike, isItemLikedByUser, getEffectiveLikesCount } from './utils/reactionUtils';
+import {
+  isDemoUser,
+  isDemoNickname,
+  isDemoPost,
+  isDemoComment,
+  isDemoVerificationRequest,
+  isDemoMarketplaceItem,
+  isDemoDirectMessage,
+} from './utils/postGenerator';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { CampusHubScreen } from './screens/CampusHubScreen';
@@ -318,155 +330,93 @@ export const App: React.FC = () => {
       console.error('Firestore seed check failed:', err)
     );
 
-    // 1. Subscribe Users
+    // 1. Subscribe Users in real-time from Firestore
     const unsubUsers = subscribeUsers((fsUsers) => {
-      if (!isMounted || !fsUsers || fsUsers.length === 0) return;
-      let localUsers: UserProfile[] = [];
-      try {
-        const uStr = localStorage.getItem('fuhsi_users_db');
-        if (uStr) localUsers = JSON.parse(uStr);
-      } catch (e) {}
+      if (!isMounted) return;
+      if (!fsUsers || fsUsers.length === 0) return;
 
-      const merged = mergeUsers(localUsers, fsUsers);
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(merged));
-      setAppTotalMembers(merged.filter((u) => u.isApproved === true && !u.isDeclined).length);
+      const validUsers = fsUsers.filter((u) => !isDemoUser(u) && !isDemoNickname(u.nickname));
+      if (validUsers.length === 0) return;
 
-      // Update active user profile if updated from Firestore
+      localStorage.setItem('fuhsi_users_db', JSON.stringify(validUsers));
+      setAppTotalMembers(validUsers.filter((u) => u.isApproved === true && !u.isDeclined).length);
+
+      // Reconcile active logged-in user profile
       const activeUserJson = localStorage.getItem('fuhsi_active_user');
       if (activeUserJson) {
         try {
           const parsed = JSON.parse(activeUserJson);
-          const found = merged.find(
-            (u) => u.id === parsed.id || (u.nickname && u.nickname.toLowerCase() === parsed.nickname?.toLowerCase())
+          const cleanParsedNick = (parsed.nickname || '').toLowerCase().replace(/^@/, '');
+          const found = validUsers.find(
+            (u) => (u.id && parsed.id && u.id === parsed.id) ||
+                   (u.nickname && u.nickname.toLowerCase().replace(/^@/, '') === cleanParsedNick)
           );
-          if (found) {
+
+          if (!found && !parsed.isAdmin && parsed.accountType !== 'Guest') {
+            // User was removed/deleted from central database by Admin -> terminate session
+            localStorage.removeItem('fuhsi_active_user');
+            setUserProfile(INITIAL_USER_PROFILE);
+            setIsLoggedIn(false);
+          } else if (found) {
             setUserProfile((prev) => {
-              const prevTime = prev?.updatedAt ? new Date(prev.updatedAt).getTime() : 0;
-              const foundTime = found.updatedAt ? new Date(found.updatedAt).getTime() : 0;
-              if (
-                foundTime > prevTime ||
-                prev.isApproved !== found.isApproved ||
-                prev.isVerified !== found.isVerified ||
-                prev.isDeclined !== found.isDeclined ||
-                prev.badgeType !== found.badgeType ||
-                prev.badgeTitle !== found.badgeTitle ||
-                prev.reputationScore !== found.reputationScore
-              ) {
-                const updated = {
-                  ...found,
-                  ...prev,
-                  isApproved: found.isApproved !== undefined ? found.isApproved : prev.isApproved,
-                  isVerified: found.isVerified !== undefined ? found.isVerified : prev.isVerified,
-                  isDeclined: found.isDeclined !== undefined ? found.isDeclined : prev.isDeclined,
-                  badgeType: found.badgeType || prev.badgeType,
-                  badgeTitle: found.badgeTitle !== undefined ? found.badgeTitle : prev.badgeTitle,
-                  reputationScore: Math.max(found.reputationScore || 0, prev.reputationScore || 0),
-                  // If remote is newer, use remote's edited fields; otherwise keep local edits
-                  bio: foundTime > prevTime && found.bio !== undefined ? found.bio : prev.bio,
-                  avatarKey: foundTime > prevTime && found.avatarKey ? found.avatarKey : prev.avatarKey,
-                  avatarUrl: foundTime > prevTime && found.avatarUrl !== undefined ? found.avatarUrl : prev.avatarUrl,
-                  realName: foundTime > prevTime && found.realName ? found.realName : prev.realName,
-                  realNameHidden: foundTime > prevTime && found.realNameHidden ? found.realNameHidden : prev.realNameHidden,
-                  level: foundTime > prevTime && found.level ? found.level : prev.level,
-                  emergencyHomePhone: foundTime > prevTime && found.emergencyHomePhone ? found.emergencyHomePhone : prev.emergencyHomePhone,
-                  updatedAt: foundTime > prevTime ? found.updatedAt : prev.updatedAt,
-                };
-                localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-                return updated;
-              }
-              return prev;
+              if (!prev) return found;
+              const updated: UserProfile = {
+                ...found,
+                savedPassword: found.savedPassword || (found as any).password || prev.savedPassword || (prev as any).password,
+                password: found.savedPassword || (found as any).password || prev.savedPassword || (prev as any).password,
+              };
+              localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+              return updated;
             });
           }
         } catch (e) {
-          console.error(e);
+          console.error('Error reconciling active user with Firestore users:', e);
         }
       }
     });
 
-    // 2. Subscribe Posts
+    // 2. Subscribe Posts in real-time from Firestore
     const unsubPosts = subscribePosts((fsPosts) => {
-      if (!isMounted || !fsPosts || fsPosts.length === 0) return;
-      let localPosts: Post[] = [];
-      try {
-        const pStr = localStorage.getItem('fuhsi_posts_db');
-        if (pStr) localPosts = JSON.parse(pStr);
-      } catch (e) {}
-
-      const merged = mergePosts(localPosts, fsPosts);
-      localStorage.setItem('fuhsi_posts_db', JSON.stringify(merged));
-      setPosts((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      if (!isMounted) return;
+      const validPosts = (fsPosts || []).filter((p) => !isDemoPost(p));
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(validPosts));
+      setPosts(validPosts);
       setSelectedPost((prev) => {
         if (!prev) return null;
-        const match = merged.find((p) => p.id === prev.id);
-        return match || prev;
+        const match = validPosts.find((p) => p.id === prev.id);
+        return match || null;
       });
     });
 
-    // 3. Subscribe Comments
+    // 3. Subscribe Comments in real-time from Firestore
     const unsubComments = subscribeComments((fsComments) => {
-      if (!isMounted || !fsComments || fsComments.length === 0) return;
-      let localComments: Comment[] = [];
-      try {
-        const cStr = localStorage.getItem('fuhsi_comments_db');
-        if (cStr) localComments = JSON.parse(cStr);
-      } catch (e) {}
-
-      const merged = mergeComments(localComments, fsComments);
-      localStorage.setItem('fuhsi_comments_db', JSON.stringify(merged));
-      setComments((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      if (!isMounted) return;
+      const validComments = (fsComments || []).filter((c) => !isDemoComment(c));
+      localStorage.setItem('fuhsi_comments_db', JSON.stringify(validComments));
+      setComments(validComments);
     });
 
-    // 4. Subscribe Verification Requests
+    // 4. Subscribe Verification Requests in real-time from Firestore
     const unsubVerifs = subscribeVerificationRequests((fsVerifs) => {
-      if (!isMounted || !fsVerifs || fsVerifs.length === 0) return;
-      let localVerifs: VerificationRequest[] = [];
-      try {
-        const vStr = localStorage.getItem('fuhsi_verifications_db');
-        if (vStr) localVerifs = JSON.parse(vStr);
-      } catch (e) {}
-
-      const merged = mergeVerificationRequests(localVerifs, fsVerifs);
-      localStorage.setItem('fuhsi_verifications_db', JSON.stringify(merged));
-      setVerificationRequests((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      if (!isMounted) return;
+      const validVerifs = (fsVerifs || []).filter((v) => !isDemoVerificationRequest(v));
+      localStorage.setItem('fuhsi_verifications_db', JSON.stringify(validVerifs));
+      setVerificationRequests(validVerifs);
     });
 
-    // 5. Subscribe Marketplace Approved Items
+    // 5. Subscribe Marketplace Approved Items in real-time from Firestore
     const unsubMarketplace = subscribeMarketplaceApproved((fsItems) => {
-      if (!isMounted || !fsItems) return;
-      let deletedIds: string[] = [];
-      try {
-        const dStr = localStorage.getItem('fuhsi_deleted_marketplace_ids');
-        if (dStr) deletedIds = JSON.parse(dStr);
-      } catch (e) {}
-
-      let localItems: MarketplaceItem[] = [];
-      try {
-        const aStr = localStorage.getItem('fuhsi_marketplace_approved_db');
-        if (aStr) localItems = JSON.parse(aStr);
-      } catch (e) {}
-
-      const validFsItems = (fsItems || []).filter((i) => i && i.id && !deletedIds.includes(i.id));
-      const merged = mergeMarketplaceItems(localItems, validFsItems).filter((i) => i && i.id && !deletedIds.includes(i.id));
-      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(merged));
-      setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
-      if (merged.length > validFsItems.length) {
-        merged.forEach((item) => {
-          saveMarketplaceApprovedToFirestore(item).catch(console.error);
-        });
-      }
+      if (!isMounted) return;
+      const validItems = (fsItems || []).filter((i) => i && i.id && !isDemoMarketplaceItem(i));
+      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(validItems));
+      setMarketplaceItems(validItems);
     });
 
     // 6. Subscribe Direct Messages in real-time
     const unsubDirectMessages = subscribeAllDirectMessages((fsDirectMessages) => {
-      if (!isMounted || !fsDirectMessages) return;
-      let localMsgs: DirectMessage[] = [];
-      try {
-        const dStr = localStorage.getItem('fuhsi_direct_messages_db');
-        if (dStr) localMsgs = JSON.parse(dStr);
-      } catch (e) {}
-
-      const merged = mergeDirectMessages(localMsgs, fsDirectMessages);
-      localStorage.setItem('fuhsi_direct_messages_db', JSON.stringify(merged));
+      if (!isMounted) return;
+      const validMsgs = (fsDirectMessages || []).filter((d) => !isDemoDirectMessage(d));
+      localStorage.setItem('fuhsi_direct_messages_db', JSON.stringify(validMsgs));
       setNotifTrigger((prev) => prev + 1);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated'));
@@ -475,11 +425,10 @@ export const App: React.FC = () => {
 
     // 7. Subscribe Following & Followers in real-time
     const unsubFollows = subscribeFollows((fsFollows) => {
-      if (!isMounted || !fsFollows) return;
-      const localFollows = getStoredFollows();
-      const merged = mergeFollows(localFollows, fsFollows);
-      saveStoredFollows(merged);
-      setAllFollows((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      if (!isMounted) return;
+      const validFollows = (fsFollows || []).filter((f) => f && f.followerNickname && f.followingNickname);
+      saveStoredFollows(validFollows);
+      setAllFollows(validFollows);
     });
 
     return () => {
@@ -503,174 +452,100 @@ export const App: React.FC = () => {
       if (!db || !isMounted) return;
 
       // 1. Sync Users List
-      let localUsers: UserProfile[] = [];
-      try {
-        const uStr = localStorage.getItem('fuhsi_users_db');
-        if (uStr) localUsers = JSON.parse(uStr);
-      } catch (e) {}
+      if (Array.isArray(db.users) && db.users.length > 0) {
+        const validUsers = db.users.filter((u) => !isDemoUser(u) && !isDemoNickname(u.nickname));
+        if (validUsers.length > 0) {
+          localStorage.setItem('fuhsi_users_db', JSON.stringify(validUsers));
+          setAppTotalMembers(validUsers.filter((u) => u.isApproved === true && !u.isDeclined).length);
 
-      const mergedUsers = mergeUsers(localUsers, db.users || []);
-      localStorage.setItem('fuhsi_users_db', JSON.stringify(mergedUsers));
-      setAppTotalMembers(mergedUsers.filter((u) => u.isApproved === true && !u.isDeclined).length);
-
-      if (mergedUsers.length > (db.users || []).length) {
-        pushServerDbSync({ users: mergedUsers });
-      }
-
-      // Update active logged-in user if their status/profile was modified by Admin or on another device
-      const activeUserJson = localStorage.getItem('fuhsi_active_user');
-      if (activeUserJson) {
-        try {
-          const parsed = JSON.parse(activeUserJson);
-          const found = mergedUsers.find(
-            (u) => u.id === parsed.id || (u.nickname && u.nickname.toLowerCase() === parsed.nickname?.toLowerCase())
-          );
-          if (found) {
-            setUserProfile((prev) => {
-              const prevTime = prev?.updatedAt ? new Date(prev.updatedAt).getTime() : 0;
-              const foundTime = found.updatedAt ? new Date(found.updatedAt).getTime() : 0;
-              if (
-                foundTime > prevTime ||
-                prev.isApproved !== found.isApproved ||
-                prev.isVerified !== found.isVerified ||
-                prev.isDeclined !== found.isDeclined ||
-                prev.badgeType !== found.badgeType ||
-                prev.badgeTitle !== found.badgeTitle ||
-                prev.reputationScore !== found.reputationScore
-              ) {
-                const updated = {
-                  ...found,
-                  ...prev,
-                  isApproved: found.isApproved !== undefined ? found.isApproved : prev.isApproved,
-                  isVerified: found.isVerified !== undefined ? found.isVerified : prev.isVerified,
-                  isDeclined: found.isDeclined !== undefined ? found.isDeclined : prev.isDeclined,
-                  badgeType: found.badgeType || prev.badgeType,
-                  badgeTitle: found.badgeTitle !== undefined ? found.badgeTitle : prev.badgeTitle,
-                  reputationScore: Math.max(found.reputationScore || 0, prev.reputationScore || 0),
-                  bio: foundTime > prevTime && found.bio !== undefined ? found.bio : prev.bio,
-                  avatarKey: foundTime > prevTime && found.avatarKey ? found.avatarKey : prev.avatarKey,
-                  avatarUrl: foundTime > prevTime && found.avatarUrl !== undefined ? found.avatarUrl : prev.avatarUrl,
-                  realName: foundTime > prevTime && found.realName ? found.realName : prev.realName,
-                  realNameHidden: foundTime > prevTime && found.realNameHidden ? found.realNameHidden : prev.realNameHidden,
-                  level: foundTime > prevTime && found.level ? found.level : prev.level,
-                  emergencyHomePhone: foundTime > prevTime && found.emergencyHomePhone ? found.emergencyHomePhone : prev.emergencyHomePhone,
-                  updatedAt: foundTime > prevTime ? found.updatedAt : prev.updatedAt,
-                };
-                localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
-                return updated;
+          const activeUserJson = localStorage.getItem('fuhsi_active_user');
+          if (activeUserJson) {
+            try {
+              const parsed = JSON.parse(activeUserJson);
+              const cleanParsedNick = (parsed.nickname || '').toLowerCase().replace(/^@/, '');
+              const found = validUsers.find(
+                (u) => (u.id && parsed.id && u.id === parsed.id) ||
+                       (u.nickname && u.nickname.toLowerCase().replace(/^@/, '') === cleanParsedNick)
+              );
+              if (!found && !parsed.isAdmin && parsed.accountType !== 'Guest') {
+                localStorage.removeItem('fuhsi_active_user');
+                setUserProfile(INITIAL_USER_PROFILE);
+                setIsLoggedIn(false);
+              } else if (found) {
+                setUserProfile((prev) => {
+                  if (!prev) return found;
+                  const updated: UserProfile = {
+                    ...found,
+                    savedPassword: found.savedPassword || (found as any).password || prev.savedPassword || (prev as any).password,
+                    password: found.savedPassword || (found as any).password || prev.savedPassword || (prev as any).password,
+                  };
+                  localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
+                  return updated;
+                });
               }
-              return prev;
-            });
+            } catch (e) {
+              console.error('Error updating active user profile from server db:', e);
+            }
           }
-        } catch (e) {
-          console.error('Error updating active user profile from server db:', e);
         }
       }
 
       // 2. Sync Posts
-      let localPosts: Post[] = [];
-      try {
-        const pStr = localStorage.getItem('fuhsi_posts_db');
-        if (pStr) localPosts = JSON.parse(pStr);
-      } catch (e) {}
-      const mergedPosts = mergePosts(localPosts, db.posts || []);
-      localStorage.setItem('fuhsi_posts_db', JSON.stringify(mergedPosts));
-      setPosts((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedPosts) ? mergedPosts : prev));
-      if (mergedPosts.length > (db.posts || []).length) {
-        pushServerDbSync({ posts: mergedPosts });
+      if (Array.isArray(db.posts)) {
+        const validPosts = db.posts.filter((p) => !isDemoPost(p));
+        localStorage.setItem('fuhsi_posts_db', JSON.stringify(validPosts));
+        setPosts((prev) => (JSON.stringify(prev) !== JSON.stringify(validPosts) ? validPosts : prev));
       }
 
       // 3. Sync Comments
-      let localComments: Comment[] = [];
-      try {
-        const cStr = localStorage.getItem('fuhsi_comments_db');
-        if (cStr) localComments = JSON.parse(cStr);
-      } catch (e) {}
-      const mergedComments = mergeComments(localComments, db.comments || []);
-      localStorage.setItem('fuhsi_comments_db', JSON.stringify(mergedComments));
-      setComments((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedComments) ? mergedComments : prev));
-      if (mergedComments.length > (db.comments || []).length) {
-        pushServerDbSync({ comments: mergedComments });
+      if (Array.isArray(db.comments)) {
+        const validComments = db.comments.filter((c) => !isDemoComment(c));
+        localStorage.setItem('fuhsi_comments_db', JSON.stringify(validComments));
+        setComments((prev) => (JSON.stringify(prev) !== JSON.stringify(validComments) ? validComments : prev));
       }
 
       // 4. Sync Marketplace Approved Items
-      let deletedIds: string[] = [];
-      try {
-        const dStr = localStorage.getItem('fuhsi_deleted_marketplace_ids');
-        if (dStr) deletedIds = JSON.parse(dStr);
-      } catch (e) {}
-
-      let localApproved: MarketplaceItem[] = [];
-      try {
-        const aStr = localStorage.getItem('fuhsi_marketplace_approved_db');
-        if (aStr) localApproved = JSON.parse(aStr);
-      } catch (e) {}
-      const mergedApproved = mergeMarketplaceItems(localApproved, db.marketplaceItems || [])
-        .filter((i) => i && i.id && !deletedIds.includes(i.id));
-      localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(mergedApproved));
-      setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedApproved) ? mergedApproved : prev));
+      if (Array.isArray(db.marketplaceItems)) {
+        const validApproved = db.marketplaceItems.filter((i) => i && i.id && !isDemoMarketplaceItem(i));
+        localStorage.setItem('fuhsi_marketplace_approved_db', JSON.stringify(validApproved));
+        setMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(validApproved) ? validApproved : prev));
+      }
 
       // 5. Sync Marketplace Pending Items
-      let localPending: MarketplaceItem[] = [];
-      try {
-        const penStr = localStorage.getItem('fuhsi_marketplace_pending_db');
-        if (penStr) localPending = JSON.parse(penStr);
-      } catch (e) {}
-      const mergedPending = mergeMarketplaceItems(localPending, db.pendingMarketplaceItems || [])
-        .filter((i) => i && i.id && !deletedIds.includes(i.id));
-      localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(mergedPending));
-      setPendingMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedPending) ? mergedPending : prev));
+      if (Array.isArray(db.pendingMarketplaceItems)) {
+        const validPending = db.pendingMarketplaceItems.filter((i) => i && i.id && !isDemoMarketplaceItem(i));
+        localStorage.setItem('fuhsi_marketplace_pending_db', JSON.stringify(validPending));
+        setPendingMarketplaceItems((prev) => (JSON.stringify(prev) !== JSON.stringify(validPending) ? validPending : prev));
+      }
 
       // 6. Sync Verification Requests
-      let localVerifs: VerificationRequest[] = [];
-      try {
-        const vStr = localStorage.getItem('fuhsi_verifications_db');
-        if (vStr) localVerifs = JSON.parse(vStr);
-      } catch (e) {}
-      const mergedVerifs = mergeVerificationRequests(localVerifs, db.verificationRequests || []);
-      localStorage.setItem('fuhsi_verifications_db', JSON.stringify(mergedVerifs));
-      setVerificationRequests((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedVerifs) ? mergedVerifs : prev));
+      if (Array.isArray(db.verificationRequests)) {
+        const validVerifs = db.verificationRequests.filter((v) => !isDemoVerificationRequest(v));
+        localStorage.setItem('fuhsi_verifications_db', JSON.stringify(validVerifs));
+        setVerificationRequests((prev) => (JSON.stringify(prev) !== JSON.stringify(validVerifs) ? validVerifs : prev));
+      }
 
       // 7. Sync Reports
-      let localReports: Report[] = [];
-      try {
-        const rStr = localStorage.getItem('fuhsi_reports_db');
-        if (rStr) localReports = JSON.parse(rStr);
-      } catch (e) {}
-      const mergedReports = mergeReports(localReports, db.reports || []);
-      localStorage.setItem('fuhsi_reports_db', JSON.stringify(mergedReports));
-      setReports((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedReports) ? mergedReports : prev));
+      if (Array.isArray(db.reports)) {
+        localStorage.setItem('fuhsi_reports_db', JSON.stringify(db.reports));
+        setReports((prev) => (JSON.stringify(prev) !== JSON.stringify(db.reports) ? db.reports : prev));
+      }
 
-      // 8. Sync Verification Candidates
-      let localCands: any[] = [];
-      try {
-        const candStr = localStorage.getItem('fuhsi_verif_candidates_db');
-        if (candStr) localCands = JSON.parse(candStr);
-      } catch (e) {}
-      const mergedCands = mergeVerifCandidates(localCands, db.verifCandidates || []);
-      localStorage.setItem('fuhsi_verif_candidates_db', JSON.stringify(mergedCands));
-
-      // 9. Sync Direct Messages
+      // 8. Sync Direct Messages
       if (Array.isArray(db.directMessages)) {
-        let localMsgs: DirectMessage[] = [];
-        try {
-          const dStr = localStorage.getItem('fuhsi_direct_messages_db');
-          if (dStr) localMsgs = JSON.parse(dStr);
-        } catch (e) {}
-        const mergedMsgs = mergeDirectMessages(localMsgs, db.directMessages);
-        localStorage.setItem('fuhsi_direct_messages_db', JSON.stringify(mergedMsgs));
+        const validDms = db.directMessages.filter((d) => !isDemoDirectMessage(d));
+        localStorage.setItem('fuhsi_direct_messages_db', JSON.stringify(validDms));
         setNotifTrigger((prev) => prev + 1);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('fuhsi_direct_message_updated'));
         }
       }
 
-      // 10. Sync Following & Followers
+      // 9. Sync Following & Followers
       if (Array.isArray(db.follows)) {
-        const localFollows = getStoredFollows();
-        const mergedFollows = mergeFollows(localFollows, db.follows);
-        saveStoredFollows(mergedFollows);
-        setAllFollows((prev) => (JSON.stringify(prev) !== JSON.stringify(mergedFollows) ? mergedFollows : prev));
+        const validFollows = db.follows.filter((f) => f && f.followerNickname && f.followingNickname);
+        saveStoredFollows(validFollows);
+        setAllFollows((prev) => (JSON.stringify(prev) !== JSON.stringify(validFollows) ? validFollows : prev));
       }
     };
 
@@ -1065,12 +940,27 @@ export const App: React.FC = () => {
   };
 
   const handleDeletePost = (postId: string) => {
-    deletePostFromFirestore(postId).catch((err) => console.error(err));
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
-    setComments((prev) => prev.filter((c) => c.postId !== postId));
+    deletePostFromFirestore(postId).catch((err) => console.error('Error deleting post from Firestore:', err));
+    const updatedPosts = posts.filter((p) => p.id !== postId);
+    const updatedComments = comments.filter((c) => c.postId !== postId);
+    setPosts(updatedPosts);
+    setComments(updatedComments);
+    try {
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
+      localStorage.setItem('fuhsi_comments_db', JSON.stringify(updatedComments));
+    } catch (e) {
+      console.error(e);
+    }
+    pushServerDbSync({ posts: updatedPosts, replacePosts: true, comments: updatedComments, replaceComments: true }).catch((err) =>
+      console.error('Error syncing post deletion to server db:', err)
+    );
+
     if (selectedPost && selectedPost.id === postId) {
       setSelectedPost(null);
     }
+    setModalStack((prevStack) =>
+      prevStack.filter((item) => !(item.type === 'postDetail' && item.post?.id === postId))
+    );
   };
 
   const handleEditPost = (postId: string, newContent: string) => {
@@ -1130,14 +1020,24 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteComment = (commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (selectedPost && p.id === selectedPost.id) {
-          return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) };
-        }
-        return p;
-      })
+    deleteCommentFromFirestore(commentId).catch((err) => console.error('Error deleting comment from Firestore:', err));
+    const updatedComments = comments.filter((c) => c.id !== commentId && c.parentId !== commentId);
+    setComments(updatedComments);
+    const updatedPosts = posts.map((p) => {
+      if (selectedPost && p.id === selectedPost.id) {
+        return { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) };
+      }
+      return p;
+    });
+    setPosts(updatedPosts);
+    try {
+      localStorage.setItem('fuhsi_comments_db', JSON.stringify(updatedComments));
+      localStorage.setItem('fuhsi_posts_db', JSON.stringify(updatedPosts));
+    } catch (e) {
+      console.error(e);
+    }
+    pushServerDbSync({ comments: updatedComments, replaceComments: true, posts: updatedPosts, replacePosts: true }).catch((err) =>
+      console.error('Error syncing comment deletion to server db:', err)
     );
   };
 

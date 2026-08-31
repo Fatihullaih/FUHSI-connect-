@@ -348,7 +348,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       });
       saveStoredUsers(updatedList);
       setAllUsersList(updatedList);
-      deleteUserFromFirestore(userId);
+      deleteUserFromFirestore(userId, nick);
 
       const activeJson = localStorage.getItem('fuhsi_active_user');
       if (activeJson) {

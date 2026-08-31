@@ -94,12 +94,49 @@ export async function deleteUserFromFirestore(userId: string, nickname?: string)
   try {
     if (userId) {
       await deleteDoc(doc(db, USERS_COL, userId));
-    } else if (nickname) {
+    }
+    if (nickname) {
       const docId = nickname.toLowerCase().replace(/[^a-z0-9_]/g, '');
       await deleteDoc(doc(db, USERS_COL, docId));
     }
   } catch (err) {
     console.error('Error deleting user from Firestore:', err);
+  }
+}
+
+/**
+ * Delete comment from Firestore
+ */
+export async function deleteCommentFromFirestore(commentId: string): Promise<void> {
+  if (!commentId) return;
+  try {
+    await deleteDoc(doc(db, COMMENTS_COL, commentId));
+  } catch (err) {
+    console.error('Error deleting comment from Firestore:', err);
+  }
+}
+
+/**
+ * Delete direct message from Firestore
+ */
+export async function deleteDirectMessageFromFirestore(messageId: string): Promise<void> {
+  if (!messageId) return;
+  try {
+    await deleteDoc(doc(db, DIRECT_MESSAGES_COL, messageId));
+  } catch (err) {
+    console.error('Error deleting direct message from Firestore:', err);
+  }
+}
+
+/**
+ * Delete report from Firestore
+ */
+export async function deleteReportFromFirestore(reportId: string): Promise<void> {
+  if (!reportId) return;
+  try {
+    await deleteDoc(doc(db, REPORTS_COL, reportId));
+  } catch (err) {
+    console.error('Error deleting report from Firestore:', err);
   }
 }
 
