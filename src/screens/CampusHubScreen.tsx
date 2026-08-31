@@ -1276,6 +1276,7 @@ export const CampusHubScreen: React.FC<CampusHubScreenProps> = ({
                   </div>
                 )}
               </div>
+              </div>
             </div>
           </div>
         );

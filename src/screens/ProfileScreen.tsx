@@ -930,6 +930,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 )}
               </div>
             )}
+            </div>
           </form>
         </div>
       )}

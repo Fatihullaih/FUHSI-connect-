@@ -1,23 +1,30 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Suppress benign internal network retry warnings from Firestore WebChannel in preview environments
+try {
+  setLogLevel('error');
+} catch {
+  // Ignore if not supported
+}
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
 
-// Initialize Firestore with long-polling transport enabled to prevent 10s WebChannel connection timeouts
+// Initialize Firestore with robust long-polling transport to prevent connection stalls in web previews
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(
     app,
     {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
       ignoreUndefinedProperties: true,
     },
     databaseId
   );
-} catch (e) {
+} catch {
   // If already initialized, fallback to getFirestore
   firestoreInstance = getFirestore(app, databaseId);
 }
