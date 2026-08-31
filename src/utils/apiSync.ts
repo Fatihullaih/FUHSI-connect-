@@ -61,49 +61,64 @@ export function mergeUsers(a: UserProfile[] = [], b: UserProfile[] = []): UserPr
     if (!key) return;
     const existing = map.get(key);
     if (!existing) {
-      const sanitizedBadgeTitle =
-        u.badgeTitle && !u.badgeTitle.toLowerCase().includes('decline') && !u.badgeTitle.toLowerCase().includes('pending')
-          ? u.badgeTitle
-          : 'FUHSI Student';
-      map.set(key, { ...u, badgeTitle: sanitizedBadgeTitle });
+      map.set(key, { ...u, badgeTitle: u.badgeTitle ? u.badgeTitle.trim() : '' });
     } else {
+      const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+      const incomingTime = u.updatedAt ? new Date(u.updatedAt).getTime() : 0;
+      const useIncoming = incomingTime >= existingTime;
+
+      const primary = useIncoming ? u : existing;
+      const secondary = useIncoming ? existing : u;
+
       let isDeclined = false;
-      if (u.isDeclined !== undefined) {
-        isDeclined = Boolean(u.isDeclined);
-      } else if (existing.isDeclined !== undefined) {
-        isDeclined = Boolean(existing.isDeclined);
+      if (primary.isDeclined !== undefined) {
+        isDeclined = Boolean(primary.isDeclined);
+      } else if (secondary.isDeclined !== undefined) {
+        isDeclined = Boolean(secondary.isDeclined);
       }
 
       let isApproved = false;
       if (isDeclined) {
         isApproved = false;
-      } else if (u.isApproved !== undefined) {
-        isApproved = Boolean(u.isApproved);
-      } else if (existing.isApproved !== undefined) {
-        isApproved = Boolean(existing.isApproved);
+      } else if (primary.isApproved !== undefined) {
+        isApproved = Boolean(primary.isApproved);
+      } else if (secondary.isApproved !== undefined) {
+        isApproved = Boolean(secondary.isApproved);
       } else {
         isApproved = true;
       }
 
-      let badgeTitle = u.badgeTitle || existing.badgeTitle || 'FUHSI Student';
+      let badgeTitle = primary.badgeTitle !== undefined ? primary.badgeTitle : (secondary.badgeTitle || '');
       if (badgeTitle.toLowerCase().includes('decline') || badgeTitle.toLowerCase().includes('pending')) {
-        badgeTitle = 'FUHSI Student';
+        badgeTitle = '';
       }
 
       const merged: UserProfile = {
-        ...existing,
-        ...u,
+        ...secondary,
+        ...primary,
+        id: primary.id || secondary.id,
+        nickname: primary.nickname || secondary.nickname,
+        realName: primary.realName || secondary.realName,
+        realNameHidden: primary.realNameHidden || secondary.realNameHidden || primary.realName || secondary.realName,
+        studentEmail: primary.studentEmail || secondary.studentEmail,
+        emergencyHomePhone: primary.emergencyHomePhone || secondary.emergencyHomePhone,
+        department: primary.department || secondary.department,
+        matricNumber: primary.matricNumber || secondary.matricNumber,
+        level: primary.level || secondary.level,
+        bio: primary.bio !== undefined ? primary.bio : (secondary.bio || ''),
+        avatarKey: primary.avatarKey || secondary.avatarKey || 'caduceus',
+        avatarUrl: primary.avatarUrl !== undefined ? primary.avatarUrl : secondary.avatarUrl,
         isApproved,
         isDeclined,
-        isVerified: Boolean(u.isVerified !== undefined ? u.isVerified : existing.isVerified),
-        verificationStatus: u.verificationStatus || existing.verificationStatus,
-        isAdmin: Boolean(existing.isAdmin || u.isAdmin),
-        reputationScore: Math.max(existing.reputationScore || 0, u.reputationScore || 0),
-        badgeType: u.badgeType && u.badgeType !== 'NONE' ? u.badgeType : existing.badgeType || 'BLUE',
+        isVerified: Boolean(primary.isVerified !== undefined ? primary.isVerified : secondary.isVerified),
+        verificationStatus: primary.verificationStatus || secondary.verificationStatus,
+        isAdmin: Boolean(primary.isAdmin || secondary.isAdmin),
+        reputationScore: Math.max(primary.reputationScore || 0, secondary.reputationScore || 0),
+        badgeType: primary.badgeType && primary.badgeType !== 'NONE' ? primary.badgeType : secondary.badgeType || 'BLUE',
         badgeTitle,
-        studentEmail: u.studentEmail || existing.studentEmail,
-        savedPassword: (u as any).savedPassword || (u as any).password || (existing as any).savedPassword || (existing as any).password,
-        password: (u as any).savedPassword || (u as any).password || (existing as any).savedPassword || (existing as any).password,
+        savedPassword: (primary as any).savedPassword || (primary as any).password || (secondary as any).savedPassword || (secondary as any).password,
+        password: (primary as any).savedPassword || (primary as any).password || (secondary as any).savedPassword || (secondary as any).password,
+        updatedAt: primary.updatedAt || secondary.updatedAt || new Date().toISOString(),
       };
       map.set(key, merged);
     }

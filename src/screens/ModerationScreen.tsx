@@ -227,7 +227,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             isApproved: true,
             isDeclined: false,
             badgeType: u.badgeType && u.badgeType !== 'NONE' ? u.badgeType : 'BLUE',
-            badgeTitle: u.badgeTitle && !u.badgeTitle.toLowerCase().includes('decline') && !u.badgeTitle.toLowerCase().includes('pending') ? u.badgeTitle : 'FUHSI Student',
+            badgeTitle: u.badgeTitle ? u.badgeTitle.trim() : '',
             isAdmin: Boolean(u.isAdmin),
           };
         }
@@ -291,7 +291,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
         const activeUser: UserProfile = JSON.parse(activeJson);
         const matchActive = userId ? activeUser.id === userId : (nick && activeUser.nickname?.toLowerCase() === nick.toLowerCase());
         if (activeUser && matchActive) {
-          const updatedActive = { ...activeUser, isApproved: true, isDeclined: false, badgeTitle: 'FUHSI Student' };
+          const updatedActive = { ...activeUser, isApproved: true, isDeclined: false, badgeTitle: activeUser.badgeTitle || '' };
           localStorage.setItem('fuhsi_active_user', JSON.stringify(updatedActive));
         }
       }
@@ -313,7 +313,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             ...u,
             isApproved: false,
             isDeclined: false,
-            badgeTitle: 'FUHSI Student',
+            badgeTitle: '',
           };
         }
         return u;
@@ -832,8 +832,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             </div>
           ) : (
             verificationRequests.map((req) => {
-              const currentBadgeColor = selectedReqColors[req.id] || req.assignedBadgeType || (req.accountType === 'Executive' ? 'GREEN' : req.accountType === 'Organization' ? 'GOLD' : 'BLUE');
-              const currentBadgeTitle = selectedReqTitles[req.id] !== undefined ? selectedReqTitles[req.id] : (req.positionTitle || req.assignedBadgeTitle || '');
+              const currentBadgeColor = selectedReqColors[req.id] || req.assignedBadgeType || 'BLUE';
+              const currentBadgeTitle = selectedReqTitles[req.id] !== undefined ? selectedReqTitles[req.id] : (req.assignedBadgeTitle || '');
 
               return (
                 <div 
@@ -854,7 +854,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                         {req.positionTitle && (
                           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 border border-teal-200">
-                            Position/Org: {req.positionTitle}
+                            Requested Title / Note: {req.positionTitle}
                           </span>
                         )}
 
@@ -885,14 +885,14 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                            Assign Verify Badge Color
+                            Assign Badge Colour
                           </label>
                           <div className="grid grid-cols-4 gap-1.5">
                             <button
                               type="button"
                               onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'BLUE' }))}
-                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
-                                currentBadgeColor === 'BLUE' ? 'bg-sky-50 text-sky-800 border-sky-400 ring-2 ring-sky-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                                currentBadgeColor === 'BLUE' ? 'bg-sky-50 text-sky-800 border-sky-400 ring-2 ring-sky-400/30' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                               }`}
                             >
                               <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
@@ -902,8 +902,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                             <button
                               type="button"
                               onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'GREEN' }))}
-                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
-                                currentBadgeColor === 'GREEN' ? 'bg-emerald-50 text-emerald-800 border-emerald-400 ring-2 ring-emerald-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                                currentBadgeColor === 'GREEN' ? 'bg-emerald-50 text-emerald-800 border-emerald-400 ring-2 ring-emerald-400/30' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                               }`}
                             >
                               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
@@ -912,20 +912,20 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'GOLD' }))}
-                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
-                                currentBadgeColor === 'GOLD' ? 'bg-amber-50 text-amber-900 border-amber-400 ring-2 ring-amber-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'ORANGE' }))}
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                                currentBadgeColor === 'ORANGE' || currentBadgeColor === 'GOLD' ? 'bg-orange-50 text-orange-900 border-orange-400 ring-2 ring-orange-400/30' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                               }`}
                             >
-                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                              <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
                               <span>Orange</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setSelectedReqColors((prev) => ({ ...prev, [req.id]: 'PURPLE' }))}
-                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer ${
-                                currentBadgeColor === 'PURPLE' ? 'bg-purple-50 text-purple-900 border-purple-400 ring-2 ring-purple-400/30' : 'bg-slate-50 text-slate-600 border-slate-200'
+                              className={`py-1.5 rounded-lg text-[10px] font-black border flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                                currentBadgeColor === 'PURPLE' ? 'bg-purple-50 text-purple-900 border-purple-400 ring-2 ring-purple-400/30' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                               }`}
                             >
                               <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
@@ -936,34 +936,37 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                            Assign Custom Badge Title / Position Label
+                            Assign Custom Title / Role (Optional)
                           </label>
                           <input
                             type="text"
                             value={currentBadgeTitle}
                             onChange={(e) => setSelectedReqTitles((prev) => ({ ...prev, [req.id]: e.target.value }))}
-                            placeholder="e.g. SUG President, MSSN, Class Rep"
-                            className="w-full text-xs rounded-xl border border-slate-300 p-2 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-slate-900"
+                            placeholder="Leave empty for badge only (or enter custom title)"
+                            className="w-full text-xs rounded-xl border border-slate-300 p-2 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-slate-900 placeholder:text-slate-400 placeholder:font-normal"
                           />
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            If left blank, user gets only the verified badge with no title text.
+                          </p>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-medium text-slate-500">Badge Preview:</span>
-                          <VerificationBadge isVerified badgeType={currentBadgeColor} title={currentBadgeTitle} showTitle />
+                          <span className="text-[11px] font-medium text-slate-500">Live Preview:</span>
+                          <VerificationBadge isVerified badgeType={currentBadgeColor} title={currentBadgeTitle.trim()} showTitle={Boolean(currentBadgeTitle.trim())} />
                         </div>
 
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => {
-                              onApproveVerification(req.id, currentBadgeColor, currentBadgeTitle);
+                              onApproveVerification(req.id, currentBadgeColor, currentBadgeTitle.trim());
                             }}
                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold text-xs transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
                           >
                             <CheckCircle2 size={14} />
-                            <span>Approve & Assign Badge</span>
+                            <span>Approve Verification</span>
                           </button>
 
                           <button

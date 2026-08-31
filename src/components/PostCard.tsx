@@ -109,8 +109,8 @@ export const PostCard: React.FC<PostCardProps> = ({
   const commentsCount = post.commentsCount ?? post.commentCount ?? comments.length;
   const department = post.department || post.authorDepartment || 'General';
 
-  const avatarKey = post.authorAvatarKey || post.authorAvatarId || authorUser?.avatarKey || (isMyPost ? userProfile?.avatarKey : undefined) || 'caduceus';
-  const avatarUrl = post.authorAvatarUrl || authorUser?.avatarUrl || (isMyPost ? userProfile?.avatarUrl : undefined);
+  const avatarKey = (isMyPost ? userProfile?.avatarKey : undefined) || authorUser?.avatarKey || post.authorAvatarKey || post.authorAvatarId || 'caduceus';
+  const avatarUrl = (isMyPost ? userProfile?.avatarUrl : undefined) ?? authorUser?.avatarUrl ?? post.authorAvatarUrl;
   const category = post.category || 'General';
 
   const postRawContent = post.content || post.text || '';
@@ -583,35 +583,46 @@ export const PostCard: React.FC<PostCardProps> = ({
               {comments.length === 0 ? (
                 <p className="text-xs text-slate-400 italic py-2">No comments yet. Be the first student to reply!</p>
               ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="bg-white p-3 rounded-xl border border-slate-200/70 text-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <div 
-                        onClick={() => {
-                          if (onAuthorClick) {
-                            onAuthorClick({
-                              ...post,
-                              authorNickname: comment.authorNickname,
-                              authorAvatarKey: comment.authorAvatarKey || comment.authorAvatarId,
-                              authorAvatarUrl: comment.authorAvatarUrl,
-                              authorBadgeType: comment.authorBadgeType,
-                              authorBadgeTitle: comment.authorBadgeTitle,
-                            });
-                          }
-                        }}
-                        className={`flex items-center gap-2 ${onAuthorClick ? 'cursor-pointer group/user' : ''}`}
-                        title={onAuthorClick ? `View ${comment.authorNickname}'s profile` : undefined}
-                      >
-                        <div className="w-5 h-5 rounded-full bg-teal-50 flex items-center justify-center shrink-0 group-hover/user:scale-105 transition-transform">
-                          <AvatarIcon avatarKey={comment.authorAvatarKey || comment.authorAvatarId} avatarUrl={comment.authorAvatarUrl} size={12} />
+                comments.map((comment) => {
+                  const isMyComment = Boolean(
+                    userProfile?.nickname &&
+                    comment?.authorNickname &&
+                    comment.authorNickname.toLowerCase() === userProfile.nickname.toLowerCase()
+                  );
+                  const cAuthorUser = findUserByNickname(comment.authorNickname);
+                  const commentAvatarKey = (isMyComment ? userProfile?.avatarKey : undefined) || cAuthorUser?.avatarKey || comment.authorAvatarKey || comment.authorAvatarId || 'caduceus';
+                  const commentAvatarUrl = (isMyComment ? userProfile?.avatarUrl : undefined) ?? cAuthorUser?.avatarUrl ?? comment.authorAvatarUrl;
+
+                  return (
+                    <div key={comment.id} className="bg-white p-3 rounded-xl border border-slate-200/70 text-xs">
+                      <div className="flex items-center justify-between mb-1">
+                        <div 
+                          onClick={() => {
+                            if (onAuthorClick) {
+                              onAuthorClick({
+                                ...post,
+                                authorNickname: comment.authorNickname,
+                                authorAvatarKey: commentAvatarKey,
+                                authorAvatarUrl: commentAvatarUrl,
+                                authorBadgeType: comment.authorBadgeType,
+                                authorBadgeTitle: comment.authorBadgeTitle,
+                              });
+                            }
+                          }}
+                          className={`flex items-center gap-2 ${onAuthorClick ? 'cursor-pointer group/user' : ''}`}
+                          title={onAuthorClick ? `View ${comment.authorNickname}'s profile` : undefined}
+                        >
+                          <div className="w-5 h-5 rounded-full bg-teal-50 flex items-center justify-center shrink-0 group-hover/user:scale-105 transition-transform overflow-hidden">
+                            <AvatarIcon avatarKey={commentAvatarKey} avatarUrl={commentAvatarUrl} size={12} sizeClassName="w-5 h-5 object-cover" />
+                          </div>
+                          <span className="font-bold text-slate-800 group-hover/user:text-teal-700 group-hover/user:underline">{comment.authorNickname}</span>
                         </div>
-                        <span className="font-bold text-slate-800 group-hover/user:text-teal-700 group-hover/user:underline">{comment.authorNickname}</span>
+                        <span className="text-slate-400 text-[10px]" title={comment.timestamp}>{formatRelativeTime(comment.timestamp)}</span>
                       </div>
-                      <span className="text-slate-400 text-[10px]" title={comment.timestamp}>{formatRelativeTime(comment.timestamp)}</span>
+                      <p className="text-slate-700 leading-relaxed pl-7">{comment.content}</p>
                     </div>
-                    <p className="text-slate-700 leading-relaxed pl-7">{comment.content}</p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

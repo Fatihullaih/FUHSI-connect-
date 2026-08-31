@@ -2,13 +2,16 @@ import { UserProfile } from '../types';
 
 export interface UserBadgeInfo {
   isVerified: boolean;
-  badgeType: 'BLUE' | 'GOLD' | 'PURPLE' | string;
+  badgeType: 'BLUE' | 'GREEN' | 'ORANGE' | 'PURPLE' | 'GOLD' | string;
   badgeTitle: string;
 }
 
 /**
  * Single source of truth helper to retrieve consistent verification status and badge presentation.
- * Ensures one account = one verification status = one badge design across all screens.
+ * Ensures:
+ * 1. Verification status is accurate across all screens.
+ * 2. Badge colors (Blue, Green, Orange, Purple, Gold) remain distinct and identical everywhere.
+ * 3. No public title is ever auto-generated or invented if none was explicitly assigned by Admin.
  */
 export function getUserBadgeInfo(nicknameOrId?: string, fallbackUser?: UserProfile | null): UserBadgeInfo {
   const defaultInfo: UserBadgeInfo = {
@@ -44,13 +47,13 @@ export function getUserBadgeInfo(nicknameOrId?: string, fallbackUser?: UserProfi
     user = fallbackUser;
   }
 
-  // Also check verifications DB for approved status
-  let isApprovedInVerifDb = false;
+  // Also check verifications DB for approved request and explicitly assigned badge and title
+  let approvedVerifReq: any = null;
   try {
     const vStr = localStorage.getItem('fuhsi_verifications_db');
     if (vStr) {
       const vList: any[] = JSON.parse(vStr);
-      isApprovedInVerifDb = vList.some(
+      approvedVerifReq = vList.find(
         (req) =>
           req.status === 'APPROVED' &&
           (req.applicantNickname || '').trim().toLowerCase().replace(/^@/, '') === clean
@@ -65,27 +68,59 @@ export function getUserBadgeInfo(nicknameOrId?: string, fallbackUser?: UserProfi
     user?.verificationStatus === 'approved' ||
     user?.isAdmin ||
     clean === 'modula' ||
-    isApprovedInVerifDb
+    Boolean(approvedVerifReq)
   );
 
-  let rawType = (user?.badgeType || 'BLUE').toUpperCase();
-  if (user?.isAdmin || clean === 'modula') {
-    rawType = 'GOLD';
-  } else if (rawType === 'GREEN' || rawType === 'VERIFIED' || rawType === 'NONE' || !rawType) {
-    rawType = 'BLUE'; // Unified blue verification badge for student accounts
+  if (!isVerified) {
+    return {
+      isVerified: false,
+      badgeType: 'BLUE',
+      badgeTitle: '',
+    };
   }
 
-  let rawTitle = (user?.badgeTitle || '').trim();
-  // Strip any internal or declined status
-  if (
+  // Determine Badge Color: Honor exact assigned color without alteration
+  let rawType = (
+    approvedVerifReq?.assignedBadgeType ||
+    user?.badgeType ||
+    'BLUE'
+  ).toUpperCase();
+
+  if (rawType === 'VERIFIED' || rawType === 'NONE' || !rawType) {
+    rawType = 'BLUE';
+  }
+
+  // Determine Badge Title: ONLY show what was explicitly assigned by the Admin.
+  // Never invent, auto-assign, or inject a generic default title.
+  let rawTitle = '';
+  if (approvedVerifReq?.assignedBadgeTitle !== undefined && approvedVerifReq?.assignedBadgeTitle !== null) {
+    rawTitle = String(approvedVerifReq.assignedBadgeTitle).trim();
+  } else if (user?.badgeTitle) {
+    rawTitle = String(user.badgeTitle).trim();
+  }
+
+  // Filter out any legacy automatic placeholder strings so they don't display as titles
+  const isGenericPlaceholder =
     rawTitle.toLowerCase().includes('decline') ||
     rawTitle.toLowerCase().includes('pending') ||
-    rawTitle.toLowerCase().includes('reject')
-  ) {
-    rawTitle = user?.accountType === 'Guest' ? 'Guest' : 'FUHSI Student';
-  }
-  if (!rawTitle && user?.accountType === 'Guest') {
-    rawTitle = 'Guest';
+    rawTitle.toLowerCase().includes('reject') ||
+    [
+      'FUHSI Student',
+      'Student',
+      'Verified',
+      'Verified Student',
+      'Member',
+      'Campus Member',
+      'Official Admin',
+      'Executive Council',
+      'Admin Official',
+      'FUHSI Official',
+      'Student Executive',
+      'Guest',
+    ].includes(rawTitle);
+
+  if (isGenericPlaceholder) {
+    rawTitle = '';
   }
 
   return {

@@ -6,7 +6,6 @@ import { fetchServerDb, mergeUsers, pushServerDbSync } from '../utils/apiSync';
 import { AvatarIcon } from './AvatarIcon';
 import { 
   ShieldCheck, 
-  ArrowLeft,
   X,
   Sparkles, 
   User, 
@@ -107,6 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Login Form State
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [isAdminPortal, setIsAdminPortal] = useState(false);
 
   // Forgot Password Recovery Flow State
@@ -677,39 +677,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 w-full h-full bg-slate-100 flex flex-col overflow-hidden animate-in fade-in duration-150">
-      <div className="w-full h-full max-w-3xl mx-auto bg-white flex flex-col shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[95vh] flex flex-col animate-in zoom-in-95">
         {/* Header */}
-        <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-4 sm:px-6 text-white shrink-0 relative z-10">
+        <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 p-5 text-white shrink-0 relative">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {canClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="p-1.5 -ml-1.5 rounded-xl bg-teal-900/60 hover:bg-teal-900 text-teal-100 transition-colors flex items-center gap-1 font-bold text-xs sm:text-sm cursor-pointer"
-                  title="Return to previous page"
-                >
-                  <ArrowLeft size={18} />
-                  <span>Back</span>
-                </button>
-              )}
-              {canClose && <div className="h-4 w-px bg-teal-600/60 mx-0.5" />}
-              <div
-                onDoubleClick={handleSecretHeaderClick}
-                className="flex items-center gap-2.5 cursor-pointer select-none group"
-                title="FUHSI-Connect"
-              >
-                <img
-                  src={fuhsiLogo}
-                  alt="FUHSI Connect"
-                  className="w-9 h-9 rounded-full object-cover shrink-0 border border-white/30 group-active:scale-95 transition-transform shadow-xs"
-                />
-                <div>
-                  <h2 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    <span>FUHSI-Connect</span>
-                  </h2>
-                </div>
+            <div
+              onDoubleClick={handleSecretHeaderClick}
+              className="flex items-center gap-2.5 cursor-pointer select-none group"
+              title="FUHSI-Connect"
+            >
+              <img
+                src={fuhsiLogo}
+                alt="FUHSI Connect"
+                className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/30 group-active:scale-95 transition-transform shadow-xs"
+              />
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                  <span>FUHSI-Connect</span>
+                </h2>
               </div>
             </div>
 
@@ -717,7 +703,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-full bg-teal-900/50 hover:bg-teal-900 text-teal-100 transition-colors cursor-pointer"
+                className="p-1.5 rounded-full bg-teal-900/50 hover:bg-teal-900 text-teal-100 transition-colors cursor-pointer"
                 title="Close"
               >
                 <X size={18} />
@@ -730,7 +716,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Scrollable Form Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+        <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {errorMessage && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold space-y-2">
               <div className="flex items-start gap-2">
@@ -1063,13 +1049,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="relative">
                   <Lock size={15} className="absolute left-3 top-2.5 text-slate-400" />
                   <input
-                    type="password"
+                    type={showLoginPassword ? 'text' : 'password'}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
+                    className="w-full pl-9 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:border-teal-500 focus:outline-none"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
+                    title={showLoginPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showLoginPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
                 </div>
                 {!isAdminPortal && (
                   <div className="flex justify-end mt-1">

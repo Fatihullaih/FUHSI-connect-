@@ -8,7 +8,7 @@ import { FollowersListModal } from './FollowersListModal';
 import { formatRelativeTime, getTimestampMs } from '../utils/dateUtils';
 import { calculateUserPoints } from '../utils/reputationUtils';
 import { getUserBadgeInfo } from '../utils/verificationUtils';
-import { isGuestAccount } from '../utils/userDbUtils';
+import { isGuestAccount, findUserByNickname } from '../utils/userDbUtils';
 import { isUserFollowing, getFollowersCount, getFollowingCount, normalizeHandle } from '../utils/followUtils';
 import { 
   X, 
@@ -114,6 +114,26 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
   const normCurrentUser = (currentUserNickname || userProfile?.nickname || '').toLowerCase().replace(/^@/, '').trim();
   const isViewingSelf = Boolean(normCurrentUser && normAuthor === normCurrentUser);
   const effectivePosts = (allPosts && allPosts.length > 0) ? allPosts : posts;
+
+  // Resolve freshest author profile from allUsers, userProfile, or storage
+  const authorProfileUser = useMemo(() => {
+    if (isViewingSelf && userProfile) {
+      return userProfile;
+    }
+    if (allUsers && allUsers.length > 0) {
+      const match = allUsers.find(
+        (u) => (u.nickname || '').toLowerCase().replace(/^@/, '').trim() === normAuthor
+      );
+      if (match) return match;
+    }
+    return findUserByNickname(authorNickname);
+  }, [isViewingSelf, userProfile, allUsers, normAuthor, authorNickname]);
+
+  const effectiveAvatarKey = authorProfileUser?.avatarKey || authorAvatarKey || 'caduceus';
+  const effectiveAvatarUrl = authorProfileUser?.avatarUrl !== undefined ? authorProfileUser.avatarUrl : authorAvatarUrl;
+  const effectiveBio = authorProfileUser?.bio || '';
+  const effectiveDepartment = authorProfileUser?.department || '';
+  const effectiveLevel = authorProfileUser?.level || '';
 
   // Real, dynamic Following and Followers calculations
   const isFollowingAuthor = useMemo(() => {
@@ -225,8 +245,8 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
               >
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/10 backdrop-blur-xs flex items-center justify-center border-2 border-teal-300/80 shadow-md overflow-hidden hover:scale-105 transition-transform">
                   <AvatarIcon
-                    avatarKey={authorAvatarKey}
-                    avatarUrl={authorAvatarUrl}
+                    avatarKey={effectiveAvatarKey}
+                    avatarUrl={effectiveAvatarUrl}
                     sizeClassName="w-full h-full object-cover"
                   />
                 </div>
@@ -245,6 +265,12 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
 
                 <p className="text-xs text-teal-200 font-bold mt-0.5">{username}</p>
 
+                {(effectiveDepartment || effectiveLevel) && (
+                  <p className="text-xs text-teal-100/90 font-semibold mt-0.5 truncate">
+                    {[effectiveDepartment, effectiveLevel].filter(Boolean).join(' • ')}
+                  </p>
+                )}
+
                 <p className="text-xs text-teal-100 font-medium mt-1 flex items-center gap-1.5">
                   <Calendar size={13} className="text-teal-300 shrink-0" />
                   <span>Joined {authorJoinedDate}</span>
@@ -260,7 +286,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
                     id={`btn-chat-with-${normAuthor}`}
                     onClick={() => {
                       if (onStartChat) {
-                        onStartChat(authorNickname, authorAvatarKey, authorAvatarUrl);
+                        onStartChat(authorNickname, effectiveAvatarKey, effectiveAvatarUrl);
                       }
                     }}
                     className="inline-flex items-center justify-center px-3 py-1.5 bg-white/90 hover:bg-white text-teal-950 active:scale-95 text-xs font-black rounded-xl shadow-xs transition-all border border-teal-200 cursor-pointer hover:shadow-md"
@@ -483,8 +509,8 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = (props) => 
       {showPictureModal && (
         <ProfilePictureModal
           nickname={authorNickname}
-          avatarUrl={authorAvatarUrl}
-          avatarKey={authorAvatarKey}
+          avatarUrl={effectiveAvatarUrl}
+          avatarKey={effectiveAvatarKey}
           isOwner={false}
           onClose={() => setShowPictureModal(false)}
         />

@@ -4,7 +4,7 @@ export type PostCategory = 'General' | 'Academic' | 'Events' | 'Confessions' | '
 
 export type PostStatus = 'Active' | 'UnderReview' | 'Removed';
 
-export type BadgeType = 'NONE' | 'BLUE' | 'GOLD' | 'GREEN' | 'RED' | 'PURPLE';
+export type BadgeType = 'NONE' | 'BLUE' | 'GOLD' | 'GREEN' | 'ORANGE' | 'RED' | 'PURPLE';
 
 export interface UserProfile {
   id: string;
@@ -42,6 +42,7 @@ export interface UserProfile {
   savedPassword?: string;
   lastActiveAt?: string;
   isOnline?: boolean;
+  updatedAt?: string;
 }
 
 export interface Comment {

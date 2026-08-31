@@ -150,8 +150,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
     const exactTime = formatExactDateTime(comment.timestamp) || comment.timestamp;
 
     const commentAuthorUser = findUserByNickname(comment.authorNickname);
-    const commentAvatarKey = comment.authorAvatarKey || commentAuthorUser?.avatarKey || (isMyComment ? userProfile?.avatarKey : undefined) || '1';
-    const commentAvatarUrl = comment.authorAvatarUrl || commentAuthorUser?.avatarUrl || (isMyComment ? userProfile?.avatarUrl : undefined);
+    const commentAvatarKey = (isMyComment ? userProfile?.avatarKey : undefined) || commentAuthorUser?.avatarKey || comment.authorAvatarKey || '1';
+    const commentAvatarUrl = (isMyComment ? userProfile?.avatarUrl : undefined) ?? commentAuthorUser?.avatarUrl ?? comment.authorAvatarUrl;
 
     const commentBadgeInfo = getUserBadgeInfo(comment.authorNickname, commentAuthorUser || (isMyComment ? userProfile : null));
 
@@ -349,8 +349,8 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
               post.authorNickname.toLowerCase() === userProfile.nickname.toLowerCase()
             );
             const authorUser = findUserByNickname(post?.authorNickname);
-            const postAvatarKey = post.authorAvatarKey || authorUser?.avatarKey || (isMyPost ? userProfile?.avatarKey : undefined) || '1';
-            const postAvatarUrl = post.authorAvatarUrl || authorUser?.avatarUrl || (isMyPost ? userProfile?.avatarUrl : undefined);
+            const postAvatarKey = (isMyPost ? userProfile?.avatarKey : undefined) || authorUser?.avatarKey || post.authorAvatarKey || '1';
+            const postAvatarUrl = (isMyPost ? userProfile?.avatarUrl : undefined) ?? authorUser?.avatarUrl ?? post.authorAvatarUrl;
 
             const authorBadgeInfo = getUserBadgeInfo(post?.authorNickname, authorUser || (isMyPost ? userProfile : null));
 

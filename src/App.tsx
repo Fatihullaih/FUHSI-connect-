@@ -340,16 +340,36 @@ export const App: React.FC = () => {
           );
           if (found) {
             setUserProfile((prev) => {
+              const prevTime = prev?.updatedAt ? new Date(prev.updatedAt).getTime() : 0;
+              const foundTime = found.updatedAt ? new Date(found.updatedAt).getTime() : 0;
               if (
+                foundTime > prevTime ||
                 prev.isApproved !== found.isApproved ||
                 prev.isVerified !== found.isVerified ||
                 prev.isDeclined !== found.isDeclined ||
                 prev.badgeType !== found.badgeType ||
                 prev.badgeTitle !== found.badgeTitle ||
-                prev.reputationScore !== found.reputationScore ||
-                prev.studentEmail !== found.studentEmail
+                prev.reputationScore !== found.reputationScore
               ) {
-                const updated = { ...prev, ...found };
+                const updated = {
+                  ...found,
+                  ...prev,
+                  isApproved: found.isApproved !== undefined ? found.isApproved : prev.isApproved,
+                  isVerified: found.isVerified !== undefined ? found.isVerified : prev.isVerified,
+                  isDeclined: found.isDeclined !== undefined ? found.isDeclined : prev.isDeclined,
+                  badgeType: found.badgeType || prev.badgeType,
+                  badgeTitle: found.badgeTitle !== undefined ? found.badgeTitle : prev.badgeTitle,
+                  reputationScore: Math.max(found.reputationScore || 0, prev.reputationScore || 0),
+                  // If remote is newer, use remote's edited fields; otherwise keep local edits
+                  bio: foundTime > prevTime && found.bio !== undefined ? found.bio : prev.bio,
+                  avatarKey: foundTime > prevTime && found.avatarKey ? found.avatarKey : prev.avatarKey,
+                  avatarUrl: foundTime > prevTime && found.avatarUrl !== undefined ? found.avatarUrl : prev.avatarUrl,
+                  realName: foundTime > prevTime && found.realName ? found.realName : prev.realName,
+                  realNameHidden: foundTime > prevTime && found.realNameHidden ? found.realNameHidden : prev.realNameHidden,
+                  level: foundTime > prevTime && found.level ? found.level : prev.level,
+                  emergencyHomePhone: foundTime > prevTime && found.emergencyHomePhone ? found.emergencyHomePhone : prev.emergencyHomePhone,
+                  updatedAt: foundTime > prevTime ? found.updatedAt : prev.updatedAt,
+                };
                 localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
                 return updated;
               }
@@ -501,16 +521,35 @@ export const App: React.FC = () => {
           );
           if (found) {
             setUserProfile((prev) => {
+              const prevTime = prev?.updatedAt ? new Date(prev.updatedAt).getTime() : 0;
+              const foundTime = found.updatedAt ? new Date(found.updatedAt).getTime() : 0;
               if (
+                foundTime > prevTime ||
                 prev.isApproved !== found.isApproved ||
                 prev.isVerified !== found.isVerified ||
                 prev.isDeclined !== found.isDeclined ||
                 prev.badgeType !== found.badgeType ||
                 prev.badgeTitle !== found.badgeTitle ||
-                prev.reputationScore !== found.reputationScore ||
-                prev.studentEmail !== found.studentEmail
+                prev.reputationScore !== found.reputationScore
               ) {
-                const updated = { ...prev, ...found };
+                const updated = {
+                  ...found,
+                  ...prev,
+                  isApproved: found.isApproved !== undefined ? found.isApproved : prev.isApproved,
+                  isVerified: found.isVerified !== undefined ? found.isVerified : prev.isVerified,
+                  isDeclined: found.isDeclined !== undefined ? found.isDeclined : prev.isDeclined,
+                  badgeType: found.badgeType || prev.badgeType,
+                  badgeTitle: found.badgeTitle !== undefined ? found.badgeTitle : prev.badgeTitle,
+                  reputationScore: Math.max(found.reputationScore || 0, prev.reputationScore || 0),
+                  bio: foundTime > prevTime && found.bio !== undefined ? found.bio : prev.bio,
+                  avatarKey: foundTime > prevTime && found.avatarKey ? found.avatarKey : prev.avatarKey,
+                  avatarUrl: foundTime > prevTime && found.avatarUrl !== undefined ? found.avatarUrl : prev.avatarUrl,
+                  realName: foundTime > prevTime && found.realName ? found.realName : prev.realName,
+                  realNameHidden: foundTime > prevTime && found.realNameHidden ? found.realNameHidden : prev.realNameHidden,
+                  level: foundTime > prevTime && found.level ? found.level : prev.level,
+                  emergencyHomePhone: foundTime > prevTime && found.emergencyHomePhone ? found.emergencyHomePhone : prev.emergencyHomePhone,
+                  updatedAt: foundTime > prevTime ? found.updatedAt : prev.updatedAt,
+                };
                 localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
                 return updated;
               }
@@ -722,8 +761,8 @@ export const App: React.FC = () => {
           ...prev,
           isVerified: true,
           verificationStatus: 'approved' as const,
-          badgeType: appVerif.assignedBadgeType || prev.badgeType || 'GREEN',
-          badgeTitle: appVerif.assignedBadgeTitle || prev.badgeTitle || 'Verified',
+          badgeType: appVerif.assignedBadgeType || prev.badgeType || 'BLUE',
+          badgeTitle: appVerif.assignedBadgeTitle !== undefined ? (appVerif.assignedBadgeTitle || '').trim() : (prev.badgeTitle || '').trim(),
         }));
       }
     }
@@ -1612,6 +1651,7 @@ export const App: React.FC = () => {
       bio: bio !== undefined ? bio.trim() : userProfile.bio,
       avatarKey: newAvatarKey,
       avatarUrl: newAvatarUrl,
+      updatedAt: new Date().toISOString(),
     };
 
     // 1. Update React state
@@ -1645,12 +1685,14 @@ export const App: React.FC = () => {
       const updatedPosts = prev.map((p) => {
         const pNick = (p.authorNickname || p.nickname || '').toLowerCase().replace(/^@/, '');
         if (pNick === oldNick || pNick === newNick) {
-          return {
+          const updatedPost = {
             ...p,
             authorNickname: formattedNick,
             authorAvatarKey: newAvatarKey,
             authorAvatarUrl: newAvatarUrl,
           };
+          savePostToFirestore(updatedPost).catch(console.error);
+          return updatedPost;
         }
         return p;
       });
@@ -1665,12 +1707,14 @@ export const App: React.FC = () => {
       const updatedComments = prev.map((c) => {
         const cNick = (c.authorNickname || '').toLowerCase().replace(/^@/, '');
         if (cNick === oldNick || cNick === newNick) {
-          return {
+          const updatedComment = {
             ...c,
             authorNickname: formattedNick,
             authorAvatarKey: newAvatarKey,
             authorAvatarUrl: newAvatarUrl,
           };
+          saveCommentToFirestore(updatedComment).catch(console.error);
+          return updatedComment;
         }
         return c;
       });
@@ -1957,12 +2001,12 @@ export const App: React.FC = () => {
               onAdminRejectMarketplaceItem={handleAdminRejectMarketplaceItem}
               onDeleteMarketplaceItem={handleDeleteMarketplaceItem}
               onResolveReport={(repId: string) => setReports((prev) => prev.filter((r) => r.id !== repId))}
-            onApproveVerification={(reqId, badgeType = 'GREEN', badgeTitle = '') => {
+            onApproveVerification={(reqId, badgeType = 'BLUE', badgeTitle = '') => {
               setVerificationRequests((prev) => {
                 const updatedList = prev.map((v) => {
                   if (v.id === reqId) {
                     const targetApplicantNick = v.applicantNickname;
-                    const assignedTitle = badgeTitle !== undefined ? badgeTitle : (v.positionTitle || '');
+                    const assignedTitle = (badgeTitle || '').trim();
                     const cleanTarget = targetApplicantNick.toLowerCase().replace(/^@/, '');
 
                     const approvedReq: VerificationRequest = {
@@ -2131,7 +2175,7 @@ export const App: React.FC = () => {
             onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p.id !== postId))}
             onUpdateBadge={(badgeType, badgeTitle) => {
               if (userProfile) {
-                const updated = { ...userProfile, isVerified: true, verificationStatus: 'approved' as const, badgeType: badgeType || 'GREEN', badgeTitle: badgeTitle || 'Verified' };
+                const updated = { ...userProfile, isVerified: true, verificationStatus: 'approved' as const, badgeType: badgeType || 'BLUE', badgeTitle: (badgeTitle || '').trim() };
                 setUserProfile(updated);
                 localStorage.setItem('fuhsi_active_user', JSON.stringify(updated));
               }
@@ -2289,9 +2333,7 @@ export const App: React.FC = () => {
                       allUsers={allUsers}
                       bookmarkedPostIds={myBookmarkedPostIds}
                       onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail) => {
-                        const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
-                        if (!err) closeModalUI();
-                        return err;
+                        return handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
                       }}
                       onSubmitVerification={handleSubmitVerification}
                       onOpenAuthModal={() => {
@@ -2403,9 +2445,7 @@ export const App: React.FC = () => {
                     allUsers={allUsers}
                     bookmarkedPostIds={myBookmarkedPostIds}
                     onSaveProfile={(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail) => {
-                      const err = handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
-                      if (!err) closeModalUI();
-                      return err;
+                      return handleSaveUserProfile(nickname, department, level, bio, avatarKey, emergencyPhone, avatarUrl, realName, studentEmail);
                     }}
                     onSubmitVerification={handleSubmitVerification}
                     onOpenAuthModal={() => {
