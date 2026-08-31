@@ -8,6 +8,7 @@ import { ImagePreviewModal } from './ImagePreviewModal';
 import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { checkIsUserVerified, getUserBadgeInfo } from '../utils/verificationUtils';
 import { findUserByNickname } from '../utils/userDbUtils';
+import { isItemLikedByUser, getEffectiveLikesCount } from '../utils/reactionUtils';
 import { 
   Heart, 
   MessageSquare, 
@@ -103,8 +104,8 @@ export const PostCard: React.FC<PostCardProps> = ({
   }, [post.authorNickname, currentUserNickname, authorUser, isMyPost, userProfile]);
 
   const isVerifiedUser = authorBadgeInfo.isVerified;
-  const likesCount = post.likesCount ?? post.upvotes ?? 0;
-  const isLiked = post.isLikedByMe || post.userVote === 'up';
+  const likesCount = getEffectiveLikesCount(post);
+  const isLiked = isItemLikedByUser(post, userProfile);
   const isBookmarked = post.isBookmarkedByMe !== undefined ? Boolean(post.isBookmarkedByMe) : Boolean(post.isBookmarked);
   const commentsCount = post.commentsCount ?? post.commentCount ?? comments.length;
   const department = post.department || post.authorDepartment || 'General';

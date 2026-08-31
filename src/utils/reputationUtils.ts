@@ -78,9 +78,17 @@ export const calculateUserPoints = (
   // 3. Receive a like on a thread (+1 per like from OTHER users)
   // Anti-abuse: Liking your own post earns 0 points
   myPosts.forEach((p) => {
-    const totalLikes = p.likesCount ?? p.upvotes ?? 0;
-    const isSelfLiked = Boolean(p.isLikedByMe || p.userVote === 'up');
-    const likesFromOthers = Math.max(0, totalLikes - (isSelfLiked ? 1 : 0));
+    let likesFromOthers = 0;
+    if (Array.isArray(p.likedBy) && p.likedBy.length > 0) {
+      likesFromOthers = p.likedBy.filter((k) => {
+        const norm = (k || '').toLowerCase().replace(/^@/, '').trim();
+        return norm && norm !== normTarget;
+      }).length;
+    } else {
+      const totalLikes = p.likesCount ?? p.upvotes ?? 0;
+      const isSelfLiked = Boolean(p.isLikedByMe || p.userVote === 'up');
+      likesFromOthers = Math.max(0, totalLikes - (isSelfLiked ? 1 : 0));
+    }
     points += likesFromOthers * REPUTATION_RULES.RECEIVE_LIKE;
   });
 
@@ -201,9 +209,16 @@ export const getUserPointsBreakdown = (
 
   let totalLikesFromOthers = 0;
   myPosts.forEach((p) => {
-    const totalLikes = p.likesCount ?? p.upvotes ?? 0;
-    const isSelfLiked = Boolean(p.isLikedByMe || p.userVote === 'up');
-    totalLikesFromOthers += Math.max(0, totalLikes - (isSelfLiked ? 1 : 0));
+    if (Array.isArray(p.likedBy) && p.likedBy.length > 0) {
+      totalLikesFromOthers += p.likedBy.filter((k) => {
+        const norm = (k || '').toLowerCase().replace(/^@/, '').trim();
+        return norm && norm !== normTarget;
+      }).length;
+    } else {
+      const totalLikes = p.likesCount ?? p.upvotes ?? 0;
+      const isSelfLiked = Boolean(p.isLikedByMe || p.userVote === 'up');
+      totalLikesFromOthers += Math.max(0, totalLikes - (isSelfLiked ? 1 : 0));
+    }
   });
   const likePts = totalLikesFromOthers * REPUTATION_RULES.RECEIVE_LIKE;
 

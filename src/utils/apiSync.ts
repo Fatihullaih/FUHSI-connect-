@@ -137,21 +137,42 @@ export function mergePosts(a: Post[] = [], b: Post[] = []): Post[] {
     if (!p || !p.id || isDemoPost(p)) return;
     const existing = map.get(p.id);
     if (!existing) {
-      map.set(p.id, { ...p });
+      const likedBy = Array.isArray(p.likedBy) ? p.likedBy : [];
+      const likesCount = likedBy.length > 0 ? likedBy.length : (p.likesCount ?? p.likes ?? 0);
+      map.set(p.id, {
+        ...p,
+        likedBy,
+        likesCount,
+        likes: likesCount,
+      });
     } else {
-      const likesCount = Math.max(existing.likesCount || existing.likes || 0, p.likesCount || p.likes || 0);
-      const bookmarks = Math.max(existing.bookmarks || 0, p.bookmarks || 0);
-      const commentsCount = Math.max(existing.commentsCount || 0, p.commentsCount || 0);
-
-      // Determine which version has newer edits / content
+      // Determine which version has newer edits / content / reaction updates
       const existingUpdatedMs = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
       const pUpdatedMs = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
       const isPNewer = pUpdatedMs >= existingUpdatedMs;
 
-      const base = isPNewer ? { ...existing, ...p } : { ...p, ...existing };
+      const primary = isPNewer ? p : existing;
+      const secondary = isPNewer ? existing : p;
+
+      // Handle likedBy list
+      let mergedLikedBy: string[] = [];
+      if (Array.isArray(primary.likedBy) && (primary.likedBy.length > 0 || isPNewer)) {
+        mergedLikedBy = primary.likedBy;
+      } else if (Array.isArray(secondary.likedBy)) {
+        mergedLikedBy = secondary.likedBy;
+      }
+
+      const likesCount = mergedLikedBy.length > 0
+        ? mergedLikedBy.length
+        : (primary.likesCount !== undefined ? primary.likesCount : (secondary.likesCount ?? 0));
+
+      const bookmarks = Math.max(existing.bookmarks || 0, p.bookmarks || 0);
+      const commentsCount = Math.max(existing.commentsCount || 0, p.commentsCount || 0);
 
       map.set(p.id, {
-        ...base,
+        ...secondary,
+        ...primary,
+        likedBy: mergedLikedBy,
         likes: likesCount,
         likesCount,
         bookmarks,
@@ -180,10 +201,21 @@ export function mergeComments(a: Comment[] = [], b: Comment[] = []): Comment[] {
     if (!c || !c.id || isDemoComment(c)) return;
     const existing = map.get(c.id);
     if (!existing) {
-      map.set(c.id, { ...c });
+      const likedBy = Array.isArray(c.likedBy) ? c.likedBy : [];
+      const likesCount = likedBy.length > 0 ? likedBy.length : (c.likesCount ?? c.likes ?? 0);
+      map.set(c.id, { ...c, likedBy, likes: likesCount, likesCount });
     } else {
-      const likesCount = Math.max(existing.likesCount || existing.likes || 0, c.likesCount || c.likes || 0);
-      map.set(c.id, { ...existing, ...c, likes: likesCount, likesCount });
+      let mergedLikedBy: string[] = [];
+      if (Array.isArray(c.likedBy)) {
+        mergedLikedBy = c.likedBy;
+      } else if (Array.isArray(existing.likedBy)) {
+        mergedLikedBy = existing.likedBy;
+      }
+      const likesCount = mergedLikedBy.length > 0
+        ? mergedLikedBy.length
+        : (c.likesCount !== undefined ? c.likesCount : (existing.likesCount ?? 0));
+
+      map.set(c.id, { ...existing, ...c, likedBy: mergedLikedBy, likes: likesCount, likesCount });
     }
   };
   a.forEach(processComment);

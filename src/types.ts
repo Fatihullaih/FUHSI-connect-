@@ -67,6 +67,7 @@ export interface Comment {
   replyToNickname?: string;
   likesCount?: number;
   likes?: number;
+  likedBy?: string[];
   isLikedByMe?: boolean;
 }
 
@@ -102,6 +103,7 @@ export interface Post {
   timestamp: string;
   likesCount?: number;
   likes?: number;
+  likedBy?: string[];
   upvotes?: number;
   downvotes?: number;
   commentsCount?: number;

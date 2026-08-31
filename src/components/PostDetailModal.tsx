@@ -10,6 +10,7 @@ import { CampusVideoPlayer } from './CampusVideoPlayer';
 import { compressImageFile } from '../utils/imageUtils';
 import { checkIsUserVerified, getUserBadgeInfo } from '../utils/verificationUtils';
 import { findUserByNickname, isGuestAccount } from '../utils/userDbUtils';
+import { isItemLikedByUser, getEffectiveLikesCount } from '../utils/reactionUtils';
 
 interface PostDetailModalProps {
   post: Post;
@@ -238,16 +239,23 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
 
           <div className="flex items-center justify-between pt-2 pl-9 text-[11px] font-bold text-slate-500">
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => onLikeComment?.(comment.id)}
-                className={`flex items-center gap-1 hover:text-rose-600 transition-colors cursor-pointer ${
-                  comment.isLikedByMe ? 'text-rose-600 font-black' : ''
-                }`}
-              >
-                <Heart size={12} className={comment.isLikedByMe ? 'fill-rose-600 text-rose-600' : ''} />
-                <span>{comment.likesCount || 0}</span>
-              </button>
+              {(() => {
+                const isCommentLiked = isItemLikedByUser(comment, userProfile);
+                const commentLikes = getEffectiveLikesCount(comment);
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onLikeComment?.(comment.id)}
+                    className={`flex items-center gap-1 hover:text-rose-600 transition-colors cursor-pointer ${
+                      isCommentLiked ? 'text-rose-600 font-black' : ''
+                    }`}
+                    title={isCommentLiked ? 'Unlike comment' : 'Like comment'}
+                  >
+                    <Heart size={12} className={isCommentLiked ? 'fill-rose-600 text-rose-600' : ''} />
+                    <span>{commentLikes}</span>
+                  </button>
+                );
+              })()}
 
               <button
                 type="button"
@@ -638,15 +646,22 @@ export const PostDetailModal: React.FC<PostDetailModalProps> = ({
             {/* Interaction Bar */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 text-xs font-extrabold text-slate-600">
               <div className="flex items-center gap-4">
-                <button
-                  onClick={() => onToggleLike(post)}
-                  className={`flex items-center gap-1.5 transition-colors ${
-                    post.isLikedByMe ? 'text-rose-600 font-black' : 'hover:text-slate-900'
-                  }`}
-                >
-                  <Heart className={`w-4 h-4 ${post.isLikedByMe ? 'fill-rose-600 text-rose-600' : ''}`} />
-                  <span>{post.likesCount}</span>
-                </button>
+                {(() => {
+                  const isPostLiked = isItemLikedByUser(post, userProfile);
+                  const postLikes = getEffectiveLikesCount(post);
+                  return (
+                    <button
+                      onClick={() => onToggleLike(post)}
+                      className={`flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        isPostLiked ? 'text-rose-600 font-black' : 'hover:text-slate-900'
+                      }`}
+                      title={isPostLiked ? 'Unlike post' : 'Like post'}
+                    >
+                      <Heart className={`w-4 h-4 ${isPostLiked ? 'fill-rose-600 text-rose-600' : ''}`} />
+                      <span>{postLikes}</span>
+                    </button>
+                  );
+                })()}
 
                 <div className="flex items-center gap-1.5 text-teal-800">
                   <MessageSquare className="w-4 h-4 text-teal-600" />

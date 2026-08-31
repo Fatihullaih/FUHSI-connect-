@@ -47,6 +47,7 @@ import {
 import { initTheme, getStoredTheme, setStoredTheme, ThemeMode } from './utils/themeUtils';
 import { UserProfile, Post, Comment, MarketplaceItem, VerificationRequest, Report, BadgeType, PollOption, DirectMessage, FollowRecord } from './types';
 import { getStoredFollows, saveStoredFollows, toggleFollowState } from './utils/followUtils';
+import { toggleUserLike, isItemLikedByUser, getEffectiveLikesCount } from './utils/reactionUtils';
 import { FeedScreen } from './screens/FeedScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
 import { CampusHubScreen } from './screens/CampusHubScreen';
@@ -394,6 +395,11 @@ export const App: React.FC = () => {
       const merged = mergePosts(localPosts, fsPosts);
       localStorage.setItem('fuhsi_posts_db', JSON.stringify(merged));
       setPosts((prev) => (JSON.stringify(prev) !== JSON.stringify(merged) ? merged : prev));
+      setSelectedPost((prev) => {
+        if (!prev) return null;
+        const match = merged.find((p) => p.id === prev.id);
+        return match || prev;
+      });
     });
 
     // 3. Subscribe Comments
@@ -997,22 +1003,33 @@ export const App: React.FC = () => {
 
   // Handlers for Feed
   const handleLikeClick = (post: Post) => {
+    if (!userProfile || isGuestAccount(userProfile)) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    const { nextLikedBy } = toggleUserLike(post.likedBy, userProfile);
+    const nextCount = nextLikedBy.length;
+    const nowIso = new Date().toISOString();
+
+    const updated: Post = {
+      ...post,
+      likedBy: nextLikedBy,
+      likesCount: nextCount,
+      likes: nextCount,
+      updatedAt: nowIso,
+    };
+
     setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === post.id) {
-          const isLiked = !p.isLikedByMe;
-          const currentLikes = p.likesCount || 0;
-          const updated = {
-            ...p,
-            isLikedByMe: isLiked,
-            likesCount: isLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
-          };
-          savePostToFirestore(updated).catch((err) => console.error(err));
-          return updated;
-        }
-        return p;
-      })
+      prev.map((p) => (p.id === post.id ? updated : p))
     );
+
+    if (selectedPost && selectedPost.id === post.id) {
+      setSelectedPost(updated);
+    }
+
+    savePostToFirestore(updated).catch((err) => console.error('Error saving like to Firestore:', err));
+    pushServerDbSync({ posts: [updated] } as any);
   };
 
   const handleBookmarkClick = (post: Post) => {
@@ -1249,6 +1266,8 @@ export const App: React.FC = () => {
       isGhostMode: false,
       timestamp: new Date().toISOString(),
       likesCount: 0,
+      likes: 0,
+      likedBy: [],
       commentsCount: 0,
       isLikedByMe: false,
       isBookmarkedByMe: false,
@@ -1299,6 +1318,8 @@ export const App: React.FC = () => {
       parentId,
       replyToNickname,
       likesCount: 0,
+      likes: 0,
+      likedBy: [],
       isLikedByMe: false,
     };
 
@@ -1319,15 +1340,25 @@ export const App: React.FC = () => {
   };
 
   const handleLikeComment = (commentId: string) => {
+    if (!userProfile || isGuestAccount(userProfile)) {
+      setShowAuthModal(true);
+      return;
+    }
+
     setComments((prev) =>
       prev.map((c) => {
         if (c.id === commentId) {
-          const isLiked = !c.isLikedByMe;
-          return {
+          const { nextLikedBy } = toggleUserLike(c.likedBy, userProfile);
+          const nextCount = nextLikedBy.length;
+          const updated: Comment = {
             ...c,
-            isLikedByMe: isLiked,
-            likesCount: (c.likesCount || 0) + (isLiked ? 1 : -1),
+            likedBy: nextLikedBy,
+            likesCount: nextCount,
+            likes: nextCount,
           };
+          saveCommentToFirestore(updated).catch((err) => console.error('Error saving comment like to Firestore:', err));
+          pushServerDbSync({ comments: [updated] } as any);
+          return updated;
         }
         return c;
       })
